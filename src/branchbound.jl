@@ -1,5 +1,5 @@
-struct Block{T<:Real}
-    ranges::Vector{Vector{T}}
+struct Block{T<:Real, N}
+    ranges::NTuple{N, Tuple{T,T}}
     center::Vector{T}
     lowerbound::T
     upperbound::T
@@ -13,30 +13,21 @@ defining a hypercube, and splits the hypercube into `nsplits` even components al
 Since the space is 6-dimensional, the number of returned sub-cubes will be `nsplits^6`.
 """
 function subranges(ranges, nsplits)
-    splits = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
-    if length(splits) != 6
-        throw(ArgumentError("Need splits for exactly 6 dimensions"))
+    if isodd(nsplits)
+        throw(ArgumentError("`nsplits` must be even"))
     end
-    children = []
-    #TODO: Cartesian indices
-    for i=1:nsplits 
-        for j=1:nsplits
-            for k=1:nsplits
-                for m=1:nsplits
-                    for n=1:nsplits
-                        for p=1:nsplits
-                            child = ((splits[1][i], splits[1][i+1]),
-                                     (splits[2][j], splits[2][j+1]),
-                                     (splits[3][k], splits[3][k+1]),
-                                     (splits[4][m], splits[4][m+1]),
-                                     (splits[5][n], splits[5][n+1]),
-                                     (splits[6][p], splits[6][p+1]))
-                            push!(children, child)
-                        end
-                    end
-                end
-            end
+    ndims = length(ranges)
+    t = eltype(eltype(ranges))
+
+    # calculate even splititng points for each dimension
+    splits = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
+    children =  NTuple{ndims,Tuple{t,t}}[]
+    for I in CartesianIndices(fill(0, fill(nsplits, ndims)...))
+        child = Array{Tuple{t,t}}(fill((NaN,NaN), 2, ndims))
+        for (dim,j) in enumerate(Tuple(I))
+            child[dim] = (splits[dim][j], splits[dim][j+1])
         end
+        push!(children, NTuple{ndims,Tuple{t,t}}(child))
     end
     return children
 end
@@ -44,14 +35,16 @@ end
 function Block(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing)
     # get center and uncertainty region
     if isnothing(ranges)
-        trlim = typemin(promote_type(eltype(gmmx),eltype(gmmy)))
+        t = promote_type(eltype(gmmx),eltype(gmmx))
+        trlim = typemin(t)
         for gaussians in (gmmx.gaussians, gmmy.gaussians)
             if !isempty(gaussians)
                 trlim = max(trlim, maximum(gaussians) do gauss
                         maximum(abs, gauss.μ) end)
                 end
         end
-        ranges = [[-π,π], [-π,π], [-π,π], [-trlim,trlim], [-trlim,trlim], [-trlim,trlim]]
+        pie = t(π)
+        ranges = ((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
     end
     center = [sum(dim)/2 for dim in ranges]
     rwidth = ranges[1][2] - ranges[1][1]      # TO DO: add check to make sure bounds form a cube?
@@ -70,11 +63,19 @@ Finds the globally optimal minimum for alignment between two isotropic Gaussian 
 and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 """
 function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-12, maxblocks=5e8)
+    if isodd(nsplits)
+        throw(ArgumentError("`nsplits` must be even"))
+    end
+    ndims = size(gmmx,2)
+    if ndims != size(gmmy,2)
+        throw(ArgumentError("Dimensionality of the GMMs must be equal"))
+    end
     # initialization
     initblock = Block(gmmx, gmmy)
     ub = initblock.upperbound       # best-so-far objective value
     bestloc = initblock.center      # best-so-far transformation     
-    pq = PriorityQueue{Block,Float64}()
+    t = promote_type(eltype(gmmx), eltype(gmmy))
+    pq = PriorityQueue{Block{t, 2*ndims}, t}()
     enqueue!(pq, initblock, initblock.lowerbound)
 
     ndivisions = 0

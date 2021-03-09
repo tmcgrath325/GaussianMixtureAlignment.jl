@@ -44,7 +44,7 @@ using Test
 end
 
 @testset "divide block" begin
-    blk1 = [[-π,π], [-π,π], [-π,π], [-1,1], [-1,1], [-1,1]]
+    blk1 = NTuple{6,Tuple{Float64,Float64}}(((-π,π), (-π,π), (-π,π), (-1,1), (-1,1), (-1,1)))
     subblks1 = subranges(blk1, 2)
     @test length(subblks1) == 2^6
     for i=1:6
@@ -56,7 +56,7 @@ end
         @test intv == ClosedInterval(blk1[i][1], blk1[i][2])
     end
 
-    blk2 = [[0,π], [0,π], [0,π], [0,1], [0,1], [0,1]]
+    blk2 = NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,1), (0,1), (0,1)))
     subblks2 = subranges(blk2, 4)
     @test length(subblks2) == 4^6
     for i=1:6
@@ -98,11 +98,11 @@ end
     @show bigblock.lowerbound, bigblock.upperbound
     @test bigblock.lowerbound == -length(gmmx.gaussians)^2
 
-    blk = Block(gmmx, gmmx, [[0,π], [0,π], [0,π], [0,2], [0,2], [0,2]])
+    blk = Block(gmmx, gmmx, NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,2), (0,2), (0,2))))
     lb = blk.lowerbound
     ub = blk.upperbound
     for i = 1:20
-        blk = Block(gmmx, gmmx, blk.ranges/2)
+        blk = Block(gmmx, gmmx, subranges(blk.ranges, 2)[1])
         @test blk.lowerbound >= lb
         @test blk.upperbound <= ub
         lb = blk.lowerbound
