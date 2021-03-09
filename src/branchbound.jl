@@ -22,12 +22,31 @@ function subranges(ranges, nsplits)
     # calculate even splititng points for each dimension
     splits = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
     children =  NTuple{ndims,Tuple{t,t}}[]
-    for I in CartesianIndices(fill(0, fill(nsplits, ndims)...))
-        child = Array{Tuple{t,t}}(fill((NaN,NaN), 2, ndims))
-        for (dim,j) in enumerate(Tuple(I))
-            child[dim] = (splits[dim][j], splits[dim][j+1])
+    # for I in CartesianIndices(fill(0, fill(nsplits, ndims)...))
+    #     child = Array{Tuple{t,t}}(fill((NaN,NaN), 2, ndims))
+    #     for (dim,j) in enumerate(Tuple(I))
+    #         child[dim] = (splits[dim][j], splits[dim][j+1])
+    #     end
+    #     push!(children, NTuple{ndims,Tuple{t,t}}(child))
+    # end
+    for i=1:nsplits
+        for j=1:nsplits
+            for k=1:nsplits
+                for m=1:nsplits
+                    for n=1:nsplits
+                        for p=1:nsplits
+                            child = ((splits[1][i], splits[1][i+1]),
+                                     (splits[2][j], splits[2][j+1]),
+                                     (splits[3][k], splits[3][k+1]),
+                                     (splits[4][m], splits[4][m+1]),
+                                     (splits[5][n], splits[5][n+1]),
+                                     (splits[6][p], splits[6][p+1]))
+                            push!(children, child)
+                        end
+                    end
+                end
+            end
         end
-        push!(children, NTuple{ndims,Tuple{t,t}}(child))
     end
     return children
 end
