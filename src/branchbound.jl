@@ -18,18 +18,19 @@ function subranges(ranges, nsplits)
         throw(ArgumentError("Need splits for exactly 6 dimensions"))
     end
     children = []
-    for i=1:nsplits    # TO DO: find a cleaner way to do this, compatible with arbitrary # of dimensions (someone might want 2D)?
+    #TODO: Cartesian indices
+    for i=1:nsplits 
         for j=1:nsplits
             for k=1:nsplits
                 for m=1:nsplits
                     for n=1:nsplits
                         for p=1:nsplits
-                            child = [[splits[1][i], splits[1][i+1]],
-                                     [splits[2][j], splits[2][j+1]],
-                                     [splits[3][k], splits[3][k+1]],
-                                     [splits[4][m], splits[4][m+1]],
-                                     [splits[5][n], splits[5][n+1]],
-                                     [splits[6][p], splits[6][p+1]]]
+                            child = ((splits[1][i], splits[1][i+1]),
+                                     (splits[2][j], splits[2][j+1]),
+                                     (splits[3][k], splits[3][k+1]),
+                                     (splits[4][m], splits[4][m+1]),
+                                     (splits[5][n], splits[5][n+1]),
+                                     (splits[6][p], splits[6][p+1]))
                             push!(children, child)
                         end
                     end
