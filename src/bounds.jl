@@ -27,6 +27,26 @@ function rodrigues(x, rx, ry, rz)
 end
 
 """
+"""
+function rot(rx, ry, rz)
+    # Angle-Axis parameterization
+    angle = √(rx^2 + ry^2 + rz^2) 
+    if angle==0
+        return SMatrix{3,3,typeof(rx)}(I)
+    end
+    # Convert to quaternion
+    qr = cos(angle/2)
+    nrm = angle/sin(angle/2)
+    qx = rx/nrm
+    qy = ry/nrm
+    qz = rz/nrm
+    R = @SMatrix([1 - 2*(qy^2 + qz^2)  2*(qx*qy - qz*qr)    2*(qx*qz + qy*qr);
+                  2*(qx*qy + qz*qr)    1 - 2*(qx^2 + qz^2)  2*(qy*qz - qx*qr);
+                  2*(qx*qz - qy*qr)    2*(qy*qz + qx*qr)    1 - 2*(qx^2 + qy^2)])
+    return R
+end
+
+"""
     lowerbound, upperbound = get_bounds(x, y, rwidth, twidth, X)
 
 Finds the bounds for overlap between two isotropic Gaussian distributions for a particular
@@ -41,7 +61,7 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X)
+function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rot(X[1:3]...), t0=SVector(X[4:6]...))
     rx, ry, rz, tx, ty, tz = X
     
     # return Inf for bounds if the rotation lies outside the π-sphere
@@ -51,8 +71,7 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     end
 
     # prepare positions and angles
-    t0 = SVector(tx,ty,tz)
-    x0 = rodrigues(x.μ,rx,ry,rz)
+    x0 = R0*x.μ
     xnorm, ynorm = norm(x.μ), norm(y.μ-t0)
     if xnorm*ynorm == 0
         cosα = one(promote_type(eltype(x),eltype(y)))
@@ -95,11 +114,14 @@ end
 # end
 
 function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X)
+    rx, ry, rz, tx, ty, tz = X
     lb = 0.
     ub = 0.
+    R0 = rot(rx, ry, rz)
+    t0 = SVector(tx, ty, tz)
     for x in gmmx.gaussians 
         for y in gmmy.gaussians
-            l, u = get_bounds(x, y, rwidth, twidth, X)  
+            l, u = get_bounds(x, y, rwidth, twidth, X, R0, t0)  
             lb, ub = lb+l, ub+u
         end
     end
