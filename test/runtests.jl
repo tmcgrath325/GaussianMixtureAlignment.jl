@@ -112,6 +112,7 @@ end
         end
     end
 
-    # min, bestloc, ndivisions = branch_bound(gmmx, gmmy)
+    # make sure this runs without an error
+    @time min, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
 
 end

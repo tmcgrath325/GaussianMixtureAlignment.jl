@@ -4,6 +4,7 @@ struct Block{T<:Real, N}
     lowerbound::T
     upperbound::T
 end
+Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
 
 const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
 function hash(B::Block, h::UInt)
@@ -98,8 +99,8 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
-    dims = size(gmmx,2)
-    if dims != size(gmmy,2)
+    dims = 2*size(gmmx,2)
+    if dims != 2*size(gmmy,2)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
     # initialization
@@ -107,7 +108,7 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-
     ub = initblock.upperbound       # best-so-far objective value
     bestloc = initblock.center      # best-so-far transformation     
     t = promote_type(eltype(gmmx), eltype(gmmy))
-    pq = PriorityQueue{Block{t, 2*dims}, t}()
+    pq = PriorityQueue{Block{t, dims}, t}()
     enqueue!(pq, initblock, initblock.lowerbound)
 
     ndivisions = 0
@@ -131,14 +132,24 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-
 
         # split up the block into `nsplits` smaller blocks across each dimension
         subrngs = subranges(bl.ranges, nsplits)
-        for srng in subrngs
-            sblk = Block(gmmx, gmmy, srng)
-            # only add sub-blocks to the queue if they present possibility for improvement
+        sblks = fill(Block{t, dims}(), nsplits^dims)
+        Threads.@threads for i=1:length(subrngs)
+            # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
+            sblks[i] = Block(gmmx, gmmy, subrngs[i])
+        end
+
+        # only add sub-blocks to the queue if they present possibility for improvement
+        for sblk in sblks
             if sblk.lowerbound < ub
-                # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
-                enqueue!(pq, sblk, sblk.lowerbound)
+                enqueue!(pq, sblk, sblk.lowerbound)                
             end
         end
+        # for srng in subrngs
+        #     sblk = Block(gmmx, gmmy, srng)
+        #     if sblk.lowerbound < ub
+        #         enqueue!(pq, sblk, sblk.lowerbound)              
+        #     end
+        # end
     end
     # throw(ErrorException("Not supposed to empty the queue without finding the global min"))
     # return the best value so far, `ub`
