@@ -27,6 +27,12 @@ function rodrigues(x, rx, ry, rz)
 end
 
 """
+    rotmatrix = rot(rx, ry, rz)
+
+Takes a rotation defined by an axis specified by `rx`, `ry`, and `rz`, and an angle equal
+to the norm of the axis, and returns a rotation matrix by converting the angle-axis
+parameterization to a [unit quaternion](https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation)
+parametrization.
 """
 function rot(rx, ry, rz)
     # Angle-Axis parameterization
