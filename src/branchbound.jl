@@ -9,7 +9,7 @@ Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntup
 const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
 function hash(B::Block, h::UInt)
     h += hash_block_seed
-    h = hash(B.center, h)
+    h = hash(B.ranges, h)
     return h
 end
 
@@ -21,47 +21,17 @@ defining a hypercube, and splits the hypercube into `nsplits` even components al
 Since the space is 6-dimensional, the number of returned sub-cubes will be `nsplits^6`.
 """
 function subranges(ranges, nsplits::Int)
-    if length(ranges) != 6
-        throw(ArgumentError("`ranges` must have a length of 6"))
-    end
-    if isodd(nsplits)
-        throw(ArgumentError("`nsplits` must be even"))
-    end
     dims = length(ranges)
     t = eltype(eltype(ranges))
 
     # calculate even splititng points for each dimension
-    splits = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
+    splitvals = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
+    splits = [[(splitvals[i][j], splitvals[i][j+1]) for j=1:nsplits] for i=1:dims]
+    f(x) = splits[x[1]][x[2]]
     children = fill(ranges, nsplits^dims)
-    idx = 1
-    for i=1:nsplits
-        for j=1:nsplits
-            for k=1:nsplits
-                for m=1:nsplits
-                    for n=1:nsplits
-                        for p=1:nsplits
-                            child = ((splits[1][i], splits[1][i+1]),
-                                     (splits[2][j], splits[2][j+1]),
-                                     (splits[3][k], splits[3][k+1]),
-                                     (splits[4][m], splits[4][m+1]),
-                                     (splits[5][n], splits[5][n+1]),
-                                     (splits[6][p], splits[6][p+1]))
-                            children[idx] = child
-                            idx += 1
-                        end
-                    end
-                end
-            end
-        end
+    for (i,I) in enumerate(CartesianIndices(NTuple{dims,UnitRange{Int}}(fill(1:nsplits, dims))))
+        children[i] = NTuple{dims,Tuple{t,t}}(map(x->f(x), enumerate(Tuple(I))))
     end
-    # # Arbitrary dimensionality, but somewhat slower
-    # splitvals = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
-    # splits = [[(splitvals[i][j], splitvals[i][j+1]) for j=1:nsplits] for i=1:dims]
-    # f(x) = splits[x[1]][x[2]]
-    # children = fill(ranges, nsplits^dims)
-    # for I in CartesianIndices(NTuple{dims,UnitRange{Int}}(fill(1:nsplits, dims)))
-    #     push!(children, NTuple{dims,Tuple{t,t}}(map(x->f(x), enumerate(Tuple(I)))))
-    # end
     return children
 end
 

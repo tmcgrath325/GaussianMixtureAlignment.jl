@@ -55,6 +55,7 @@ end
         end
         @test intv == ClosedInterval(blk1[i][1], blk1[i][2])
     end
+    @show subblks1[length(subblks1)]
 
     blk2 = NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,1), (0,1), (0,1)))
     subblks2 = subranges(blk2, 4)
