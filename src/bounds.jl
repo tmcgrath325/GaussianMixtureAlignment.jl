@@ -10,22 +10,6 @@ function objectivefun(dist, σx, σy, ϕx, ϕy)
     return -ϕx*ϕy * exp(-dist^2 / (2*(σx^2 + σy^2))) # / sqrt(2π*(σx^2 + σy^2))^dim 
 end
 
-# """ 
-#     xrot = roderigues(x, rx, ry, rz)
-
-# Uses Roderigues' rotation formula to returns the vector `x` rotated by the axis defined 
-# by `rx`, `ry`, and `rz`, and an angle equal to the norm of the axis. 
-# """
-# function rodrigues(x, rx, ry, rz)
-#     angle = √(rx^2 + ry^2 + rz^2) 
-#     if angle == 0
-#         axis = SVector(1,0,0)
-#     else
-#         axis = SVector(rx,ry,rz)/angle
-#     end
-#     return x*cos(angle) + cross(axis, x)*sin(angle) + axis*dot(axis, x)*(1-cos(angle))
-# end
-
 """
     rotmatrix = rot(rx, ry, rz)
 
@@ -82,16 +66,9 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     if xnorm*ynorm == 0
         cosα = one(promote_type(eltype(x),eltype(y)))
     else
-        # α = try acos(dot(x0, y.μ-t0)/(xnorm*ynorm))
-        # catch e
-        #     if isa(e, DomainError)
-        #         acos(copysign(1., dot(x0, y.μ-t0)))
-        #     end
-        # end
         cosα = dot(x0, y.μ-t0)/(xnorm*ynorm)
     end
     cosβ = cos(min(sqrt3*rwidth/2, π))
-    # @show cosα, cosβ
 
     # upper bound distance at hypercube center
     ubdist = norm(x0 + t0 - y.μ)
@@ -106,18 +83,6 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     # evaluate objective function at each distance to get upper and lower bounds
     return objectivefun(lbdist, x.σ, y.σ, x.ϕ, y.ϕ), objectivefun(ubdist, x.σ, y.σ, x.ϕ, y.ϕ)
 end
-
-# function get_bounds(gmmx::MolGMM, gmmy::MolGMM, rwidth, twidth, rx, ry, rz, tx, ty, tz)
-#     lb = 0.
-#     ub = 0.
-#     for atomx in gmmx.atoms
-#         for atomy in gmmy.atoms
-#             l, u = get_bounds(atomx, atomy, rwidth, twidth, rx, ry, rz, tx, ty, tz)  
-#             lb, ub = lb+l, ub+u
-#         end
-#     end
-#     return lb, ub
-# end
 
 function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X)
     rx, ry, rz, tx, ty, tz = X
