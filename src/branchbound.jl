@@ -65,7 +65,7 @@ end
 Finds the globally optimal minimum for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 """
-function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1, maxblocks=5e8)
+function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1, maxblocks=5e8, threads=true)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -98,9 +98,15 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1
         # split up the block into `nsplits` smaller blocks across each dimension
         subrngs = subranges(bl.ranges, nsplits)
         sblks = fill(Block{t, dims}(), nsplits^dims)
-        Threads.@threads for i=1:length(subrngs)
-            # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
-            sblks[i] = Block(gmmx, gmmy, subrngs[i])
+        if threads
+            Threads.@threads for i=1:length(subrngs)
+                sblks[i] = Block(gmmx, gmmy, subrngs[i])
+            end
+        else
+            for i=1:length(subrngs)
+                # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
+                sblks[i] = Block(gmmx, gmmy, subrngs[i])
+            end
         end
 
         # reset the upper bound if appropriate
