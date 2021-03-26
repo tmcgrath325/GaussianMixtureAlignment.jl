@@ -78,22 +78,6 @@ end
     gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
     gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
-    # xposmat = fill(NaN, 3, length(xpts))
-    # for (i,x) in enumerate(xpts)
-    #     xposmat[1:3,i] = x
-    # end
-    # yposmat = fill(NaN, 3, length(xpts))
-    # for (i,y) in enumerate(ypts)
-    #     yposmat[1:3,i] = y
-    # end
-    # tform = SCC.align(yposmat, xposmat)[1]
-    # ϕrot = rotation_angle(RotMatrix(tform.linear))
-    # vrot = rotation_axis(RotMatrix(tform.linear))
-
-    # rmin = vrot/norm(vrot) * ϕrot
-    # tmin = tform.translation
-    # @show rmin, tmin
-
     # aligning a GMM to itself
     bigblock = Block(gmmx, gmmx)
     @show bigblock.lowerbound, bigblock.upperbound
@@ -108,12 +92,9 @@ end
         @test blk.upperbound <= ub
         lb = blk.lowerbound
         ub = blk.upperbound
-        if i%5 == 0
-            @show i, blk.lowerbound, blk.upperbound
-        end
     end
 
     # make sure this runs without an error
-    @time min, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
+    min, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
 
 end

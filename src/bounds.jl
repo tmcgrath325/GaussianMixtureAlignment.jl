@@ -10,22 +10,6 @@ function objectivefun(dist, σx, σy, ϕx, ϕy)
     return -ϕx*ϕy * exp(-dist^2 / (2*(σx^2 + σy^2))) # / sqrt(2π*(σx^2 + σy^2))^dim 
 end
 
-# """ 
-#     xrot = roderigues(x, rx, ry, rz)
-
-# Uses Roderigues' rotation formula to returns the vector `x` rotated by the axis defined 
-# by `rx`, `ry`, and `rz`, and an angle equal to the norm of the axis. 
-# """
-# function rodrigues(x, rx, ry, rz)
-#     angle = √(rx^2 + ry^2 + rz^2) 
-#     if angle == 0
-#         axis = SVector(1,0,0)
-#     else
-#         axis = SVector(rx,ry,rz)/angle
-#     end
-#     return x*cos(angle) + cross(axis, x)*sin(angle) + axis*dot(axis, x)*(1-cos(angle))
-# end
-
 """
     rotmatrix = rot(rx, ry, rz)
 

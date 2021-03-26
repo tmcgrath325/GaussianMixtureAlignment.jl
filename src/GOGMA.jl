@@ -3,10 +3,6 @@ module GOGMA
 using StaticArrays
 using LinearAlgebra
 using DataStructures
-# using SteroidComputationalChemistry
-# using Optim
-# using Distributed
-# using CUDA
 
 export IsotropicGaussian, IsotropicGMM
 export get_bounds, rot

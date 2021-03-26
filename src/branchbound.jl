@@ -65,7 +65,7 @@ end
 Finds the globally optimal minimum for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 """
-function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-12, maxblocks=5e8)
+function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1, maxblocks=5e8)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -89,11 +89,6 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-
         ndivisions = ndivisions + 1
         # take the block with the lowest lower bound
         bl, lb = dequeue_pair!(pq)
-        # update the best solution if this one is better
-        if bl.upperbound < ub
-            ub = bl.upperbound
-            bestloc = bl.center
-        end
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < tol
@@ -108,20 +103,21 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=1e-
             sblks[i] = Block(gmmx, gmmy, subrngs[i])
         end
 
+        # reset the upper bound if appropriate
+        subs = [sblk.upperbound for sblk in sblks]
+        minub, ubidx = findmin(subs)
+        if minub < ub
+            ub = minub
+            bestloc = sblks[ubidx].center
+        end
+
         # only add sub-blocks to the queue if they present possibility for improvement
         for sblk in sblks
             if sblk.lowerbound < ub
                 enqueue!(pq, sblk, sblk.lowerbound)                
             end
         end
-        # for srng in subrngs
-        #     sblk = Block(gmmx, gmmy, srng)
-        #     if sblk.lowerbound < ub
-        #         enqueue!(pq, sblk, sblk.lowerbound)              
-        #     end
-        # end
     end
-    # throw(ErrorException("Not supposed to empty the queue without finding the global min"))
-    # return the best value so far, `ub`
+
     return ub, dequeue_pair!(pq)[2], bestloc, ndivisions
 end
