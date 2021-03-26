@@ -43,32 +43,14 @@ using Test
 
 end
 
-# @testset "divide block" begin
-#     blk1 = NTuple{6,Tuple{Float64,Float64}}(((-π,π), (-π,π), (-π,π), (-1,1), (-1,1), (-1,1)))
-#     subblks1 = subranges(blk1, 2)
-#     @test length(subblks1) == 2^6
-#     for i=1:6
-#         intv = OpenInterval(0,0)
-#         for sblk in subblks1
-#             rng = sblk[i]
-#             intv = union(intv, ClosedInterval(rng[1], rng[2]))
-#         end
-#         @test intv == ClosedInterval(blk1[i][1], blk1[i][2])
-#     end
-#     @show subblks1[length(subblks1)]
-
-#     blk2 = NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,1), (0,1), (0,1)))
-#     subblks2 = subranges(blk2, 4)
-#     @test length(subblks2) == 4^6
-#     for i=1:6
-#         intv = OpenInterval(0,0)
-#         for sblk in subblks2
-#             rng = sblk[i]
-#             intv = union(intv, ClosedInterval(rng[1], rng[2]))
-#         end
-#         @test intv == ClosedInterval(blk2[i][1], blk2[i][2])
-#     end
-# end
+@testset "divide block" begin
+    t = Float64
+    center = NTuple{6,t}(zeros(t,2*dims))
+    rwidth = t(2*π)
+    twidth = one(t)
+    scntrs = GOGMA.subcenters(center, rwidth, twidth, 4)
+    @test length(unique(scntrs)) == 4^6
+end
 
 @testset "gogma" begin
     # two sets of points, each forming a 3-4-5 triangle

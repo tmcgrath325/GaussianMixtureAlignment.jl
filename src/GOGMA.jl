@@ -3,12 +3,10 @@ module GOGMA
 using StaticArrays
 using LinearAlgebra
 using DataStructures
-# using Optim
 using CUDA
-
 export IsotropicGaussian, IsotropicGMM
 export get_bounds
-export subranges, Block
+export subcenters, Block
 export branch_bound
 export get_bounds_gpu
 

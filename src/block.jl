@@ -7,12 +7,12 @@ struct Block{T<:Real, N}
 end
 Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
 
-const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
-function hash(B::Block, h::UInt)
-    h += hash_block_seed
-    h = hash(B.center, h)
-    return h
-end
+# const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
+# function hash(B::Block, h::UInt)
+#     h += hash_block_seed
+#     h = hash(B.center, h)
+#     return h
+# end
 
 """
     scntrs = subcenters(center, rwidth, twidth, nsplits)
@@ -29,8 +29,8 @@ function subcenters(center, rwidth, twidth, nsplits::Int)
     rincr, tincr = t(rwidth/nsplits), t(twidth/nsplits)
     children = Array{NTuple{2*dims,t}}(fill(center, nsplits^(2*dims)))
     for (i,I) in enumerate(CartesianIndices(NTuple{2*dims,UnitRange{Int}}(fill(1:nsplits, 2*dims))))
-        rchild = NTuple{dims,t}(rincr.*(Tuple(I)[1:dims].-0.5))
-        tchild = NTuple{dims,t}(tincr.*(Tuple(I)[dims+1:2*dims].-0.5))
+        rchild = SVector(rincr.*(Tuple(I)[1:dims].-0.5))
+        tchild = SVector(tincr.*(Tuple(I)[dims+1:2*dims].-0.5))
         children[i] = NTuple{2*dims,t}(lowcorner .+ (rchild..., tchild...))
     end
     return children
