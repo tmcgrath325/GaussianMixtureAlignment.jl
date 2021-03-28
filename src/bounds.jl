@@ -1,13 +1,37 @@
 const sqrt3 = √(3)
+const sqrt2pi = √(2π)
+
+function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
+    t = promote_type(eltype(gmmx),eltype(gmmy))
+    pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
+    for (i,gaussx) in enumerate(gmmx.gaussians)
+        for (j,gaussy) in enumerate(gmmy.gaussians)
+            pσ[i,j] = √(gaussx.σ^2 + gaussy.σ^2)
+            pϕ[i,j] = gaussx.ϕ * gaussy.ϕ
+        end
+    end
+    return pσ, pϕ
+end
 
 """
-    val = objectivefun(dist, σx, σy, ϕx, ϕy)
+    val = objectivefun(dist, s, w, ndims)
 
-Calculates the unnormalized overlap between two Gaussian distributions with means
-`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`.
+Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
+weight `w', and squared distance `distsq`, in `ndims`-dimensional space.
 """
-function objectivefun(dist, σx, σy, ϕx, ϕy)
-    return -ϕx*ϕy * exp(-dist^2 / (2*(σx^2 + σy^2))) # / sqrt(2π*(σx^2 + σy^2))^dim 
+function objectivefun(distsq, s, w, ndims)
+    return -w * exp(-distsq / (2*s^2)) / (sqrt2pi * s)^ndims
+end
+
+"""
+    val = objectivefun(dist, σx, σy, ϕx, ϕy, ndims)
+
+Calculates the unnormalized overlap between two Gaussian distributions with variances
+`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, in 
+`ndims`-dimensional space.
+"""
+function objectivefun(dist, σx, σy, ϕx, ϕy, ndims)
+    return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy, ndims)
 end
 
 """
@@ -51,7 +75,7 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rot(X[1:3]...), t0=SVector(X[4:6]...))
+function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rot(X[1:3]...), t0=SVector(X[4:6]...), s=√(x.σ^2 + y.σ^2), w=x.ϕ*y.ϕ)
     rx, ry, rz, tx, ty, tz = X
     
     # return Inf for bounds if the rotation lies outside the π-sphere
@@ -88,30 +112,24 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
-    return objectivefun(lbdist, x.σ, y.σ, x.ϕ, y.ϕ), objectivefun(ubdist, x.σ, y.σ, x.ϕ, y.ϕ)
+    return objectivefun(lbdist^2, s, w, 3), objectivefun(ubdist^2, s, w, 3)
 end
 
-# function get_bounds(gmmx::MolGMM, gmmy::MolGMM, rwidth, twidth, rx, ry, rz, tx, ty, tz)
-#     lb = 0.
-#     ub = 0.
-#     for atomx in gmmx.atoms
-#         for atomy in gmmy.atoms
-#             l, u = get_bounds(atomx, atomy, rwidth, twidth, rx, ry, rz, tx, ty, tz)  
-#             lb, ub = lb+l, ub+u
-#         end
-#     end
-#     return lb, ub
-# end
+function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X, pσ=nothing, pϕ=nothing)
+    # prepare pairwise widths and weights
+    if isnothing(pσ) || isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(gmmx, gmmy)
+    end
 
-function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X)
+    # sum bounds for each pair of points
     rx, ry, rz, tx, ty, tz = X
     lb = 0.
     ub = 0.
     R0 = rot(rx, ry, rz)
     t0 = SVector(tx, ty, tz)
-    for x in gmmx.gaussians 
-        for y in gmmy.gaussians
-            l, u = get_bounds(x, y, rwidth, twidth, X, R0, t0)  
+    for (i,x) in enumerate(gmmx.gaussians) 
+        for (j,y) in enumerate(gmmy.gaussians)
+            l, u = get_bounds(x, y, rwidth, twidth, X, R0, t0, pσ[i,j], pϕ[i,j])  
             lb, ub = lb+l, ub+u
         end
     end

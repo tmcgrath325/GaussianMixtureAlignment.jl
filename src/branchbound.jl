@@ -1,86 +1,29 @@
-struct Block{T<:Real, N}
-    ranges::NTuple{N, Tuple{T,T}}
-    center::NTuple{N,T}
-    lowerbound::T
-    upperbound::T
-end
-Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
-
-const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
-function hash(B::Block, h::UInt)
-    h += hash_block_seed
-    h = hash(B.ranges, h)
-    return h
-end
-
-"""
-    sbrngs = subranges(ranges, nsplits)
-
-Takes `ranges`, a nested array describing intervals for each dimension in rigid-rotation space
-defining a hypercube, and splits the hypercube into `nsplits` even components along each dimension.
-Since the space is 6-dimensional, the number of returned sub-cubes will be `nsplits^6`.
-"""
-function subranges(ranges, nsplits::Int)
-    dims = length(ranges)
-    t = eltype(eltype(ranges))
-
-    # calculate even splititng points for each dimension
-    splitvals = [range(r[1], stop=r[2], length=nsplits+1) |> collect for r in ranges]
-    splits = [[(splitvals[i][j], splitvals[i][j+1]) for j=1:nsplits] for i=1:dims]
-    f(x) = splits[x[1]][x[2]]
-    children = fill(ranges, nsplits^dims)
-    for (i,I) in enumerate(CartesianIndices(NTuple{dims,UnitRange{Int}}(fill(1:nsplits, dims))))
-        children[i] = NTuple{dims,Tuple{t,t}}(map(x->f(x), enumerate(Tuple(I))))
-    end
-    return children
-end
-
-function Block(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing)
-    # get center and uncertainty region
-    t = promote_type(eltype(gmmx),eltype(gmmx))
-    if isnothing(ranges)
-        trlim = typemin(t)
-        for gaussians in (gmmx.gaussians, gmmy.gaussians)
-            if !isempty(gaussians)
-                trlim = max(trlim, maximum(gaussians) do gauss
-                        maximum(abs, gauss.μ) end)
-                end
-        end
-        pie = t(π)
-        ranges = ((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
-    end
-    center = NTuple{length(ranges),t}([sum(dim)/2 for dim in ranges])
-    rwidth = ranges[1][2] - ranges[1][1]
-    twidth = ranges[4][2] - ranges[4][1]
-
-    # calculate objective function bounds for the block
-    lb, ub = get_bounds(gmmx, gmmy, rwidth, twidth, center)
-
-    return Block(ranges, center, lb, ub)
-end
-
 """
     min, pos, n = branch_bound(gmmx, gmmy)
 
 Finds the globally optimal minimum for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 """
-function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1, maxblocks=5e8, threads=true)
+function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; tol=0.05, maxblocks=5e8, threads=true)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
-    dims = 2*size(gmmx,2)
-    if dims != 2*size(gmmy,2)
+    ndims = 2*size(gmmx,2)
+    if ndims != 2*size(gmmy,2)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
+
+    # prepare pairwise widths and weights
+    pσ, pϕ = pairwise_consts(gmmx, gmmy)
+
     # initialization
     initblock = Block(gmmx, gmmy)
-    ub = initblock.upperbound       # best-so-far objective value
-    bestloc = initblock.center      # best-so-far transformation     
+    ub, bestloc = local_align(gmmx, gmmy, initblock, pσ, pϕ)    # best-so-far objective value and transformation
     t = promote_type(eltype(gmmx), eltype(gmmy))
-    pq = PriorityQueue{Block{t, dims}, t}()
-    enqueue!(pq, initblock, initblock.lowerbound)
-
+    pq = PriorityQueue{Block{t, ndims}, Tuple{t,t}}()
+    enqueue!(pq, initblock, (initblock.lowerbound, initblock.upperbound))
+    
+    # split cubes until convergence
     ndivisions = 0
     while !isempty(pq)
         if length(pq) - ndivisions > maxblocks
@@ -88,7 +31,12 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1
         end
         ndivisions = ndivisions + 1
         # take the block with the lowest lower bound
-        bl, lb = dequeue_pair!(pq)
+        bl, (lb, blub) = dequeue_pair!(pq)
+
+        # display current 
+        if mod(ndivisions, 100) == 0
+            @show lb, ub, ndivisions
+        end
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < tol
@@ -97,15 +45,15 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1
 
         # split up the block into `nsplits` smaller blocks across each dimension
         subrngs = subranges(bl.ranges, nsplits)
-        sblks = fill(Block{t, dims}(), nsplits^dims)
+        sblks = fill(Block{t, ndims}(), nsplits^ndims)
         if threads
             Threads.@threads for i=1:length(subrngs)
-                sblks[i] = Block(gmmx, gmmy, subrngs[i])
+                sblks[i] = Block(gmmx, gmmy, subrngs[i], pσ, pϕ)
             end
         else
             for i=1:length(subrngs)
                 # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
-                sblks[i] = Block(gmmx, gmmy, subrngs[i])
+                sblks[i] = Block(gmmx, gmmy, subrngs[i], pσ, pϕ)
             end
         end
 
@@ -113,17 +61,16 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=4; tol=0.1
         subs = [sblk.upperbound for sblk in sblks]
         minub, ubidx = findmin(subs)
         if minub < ub
-            ub = minub
-            bestloc = sblks[ubidx].center
+            ub, bestloc = local_align(gmmx, gmmy, sblks[ubidx], pσ, pϕ)
         end
 
         # only add sub-blocks to the queue if they present possibility for improvement
         for sblk in sblks
             if sblk.lowerbound < ub
-                enqueue!(pq, sblk, sblk.lowerbound)                
+                enqueue!(pq, sblk, (sblk.lowerbound, sblk.upperbound))
             end
         end
     end
 
-    return ub, dequeue_pair!(pq)[2], bestloc, ndivisions
+    return ub, dequeue_pair!(pq)[2][1], bestloc, ndivisions
 end
