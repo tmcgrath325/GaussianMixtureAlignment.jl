@@ -1,18 +1,17 @@
 using GOGMA
 
-function testsplit(blocks, gmmx, gmmy)
+function testsplit(blocks, gmmx, gmmy, ub=Inf)
+    lb=Inf
     sblocks = []
-    lb = Inf
-    ub = -Inf
     for (i,blk) in enumerate(blocks)
         for rng in subranges(blk.ranges, 2)
             sblk = Block(gmmx, gmmy, rng)
-            if sblk.lowerbound < globalmin
+            if sblk.lowerbound < ub
                 push!(sblocks, sblk)
                 if sblk.lowerbound < lb
                     lb = sblk.lowerbound
                 end
-                if sblk.upperbound > ub
+                if sblk.upperbound < ub
                     ub = sblk.upperbound
                 end
             end
@@ -39,20 +38,19 @@ lowestlb = bigblock.lowerbound      # lower bound is case where all points have 
 
 # first divisions along each dimension, giving 2^6 subcubes
 blocks = []
-lb1 = Inf
-@time blocks, lb1, ub1 = testsplit([bigblock], gmmx, gmmy)
+blocks, lb, ub = testsplit([bigblock], gmmx, gmmy)
 
 # further subdividing each subcube, giving (2^6)^2 subcubes if none are excluded
-@time sblocks2, lb2, ub2 = testsplit(blocks, gmmx, gmmy)
+sblocks2, lb, ub = testsplit(blocks, gmmx, gmmy, ub)
 
 # further subdividing each subcube, giving (2^6)^3 subcubes if none are excluded
-@time sblocks3, lb3, ub3 = testsplit(sblocks2, gmmx, gmmy)
+sblocks3, lb, ub = testsplit(sblocks2, gmmx, gmmy, ub)
 
 # ... and so on
-@time sblocks4, lb4, ub4 = testsplit(sblocks3, gmmx, gmmy)
-@time sblocks5, lb5, ub5 = testsplit(sblocks4, gmmx, gmmy)
-@time sblocks6, lb6, ub6 = testsplit(sblocks5, gmmx, gmmy)
-@time sblocks7, lb7, ub7 = testsplit(sblocks6, gmmx, gmmy)
-@time sblocks8, lb8, ub8 = testsplit(sblocks7, gmmx, gmmy)
-@time sblocks9, lb9, ub9 = testsplit(sblocks8, gmmx, gmmy)
-@time sblocks10, lb10, ub10 = testsplit(sblocks9, gmmx, gmmy);
+sblocks4, lb, ub = testsplit(sblocks3, gmmx, gmmy, ub)
+sblocks5, lb, ub = testsplit(sblocks4, gmmx, gmmy, ub)
+sblocks6, lb, ub = testsplit(sblocks5, gmmx, gmmy, ub)
+sblocks7, lb, ub = testsplit(sblocks6, gmmx, gmmy, ub)
+sblocks8, lb, ub = testsplit(sblocks7, gmmx, gmmy, ub)
+sblocks9, lb, ub = testsplit(sblocks8, gmmx, gmmy, ub)
+sblocks10, lb, ub = testsplit(sblocks9, gmmx, gmmy, ub);
