@@ -1,3 +1,9 @@
+"""
+    tgmm = tivgmm(gmm, n)
+
+Returns a new GMM containing `n` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
+TIVs are chosen to maximize length multiplied by the weights of the connected distributions. 
+"""
 function tivgmm(gmm::IsotropicGMM, n)
     t = eltype(gmm)
     npts, ndims = size(gmm)
@@ -29,6 +35,19 @@ function planefit(pts)
     return decomp.U[:, nvecidx], dist
 end
 
+"""
+    min, lb, pos, n = tiv_branch_bound(gmmx, gmmy, nx, ny, nsplits=2, rot=nothing;
+                                       rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+
+Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
+and `gmmy`, using a modified GOGMA algorithm that performs rotational and translational optimization separately
+by making use of translation invariant vectors (TIVs).
+
+`nx` and `ny` are the number of TIVs used to represent`gmmx` and `gmmy` respectively during rotational alignment. 
+`nsplits` is the number of splits performed along each dimension during branching. Returns the overlap
+between the GMMs, the lower bound on the overlap, and the transformation vector for the best transformation,
+as well as the number of objective evaluations. 
+"""
 function tiv_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nx=length(gmmx), ny=length(gmmy), nsplits=2;
                           rtol=0.05, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false) #, szc=0.25)
     # align TIVs

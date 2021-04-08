@@ -37,6 +37,11 @@ function trl_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=
     return alignment_objective((rot..., X...), gmmx, gmmy, pσ, pϕ)
 end
 
+"""
+    obj, pos = local_align(gmmx, gmmy, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
+
+Performs local alignment within the specified `block` using L-BFGS to minimize objective function `objfun` for the provided GMMs, `gmmx` and `gmmy`.
+"""
 function local_align(gmmx::IsotropicGMM, gmmy::IsotropicGMM, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
     # prepare pairwise widths and weights
     if isnothing(pσ) || isnothing(pϕ)
