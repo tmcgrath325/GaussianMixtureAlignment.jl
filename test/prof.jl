@@ -8,8 +8,10 @@ gmmx = IsotropicGMM([IsotropicGaussian(x, 1, 1) for x in xpts])
 gmmy = IsotropicGMM([IsotropicGaussian(y, 1, 1) for y in ypts])
 
 @time branch_bound(gmmx, gmmy, maxblocks=1e3)
+@time tiv_branch_bound(gmmx, gmmy, maxblocks=1e3)
 
-@time @ProfileView.profview branch_bound(gmmx, gmmy, maxblocks=1e5)
+@ProfileView.profview branch_bound(gmmx, gmmy, maxblocks=1e5)
+@ProfileView.profview tiv_branch_bound(gmmx, gmmy)
 
 # steroid-sized problem
 xpts = [10*rand(3).-6 for i in 1:50]
@@ -18,5 +20,7 @@ gmmx = IsotropicGMM([IsotropicGaussian(x, 1, 1) for x in xpts])
 gmmy = IsotropicGMM([IsotropicGaussian(y, 1, 1) for y in ypts])
 
 @time branch_bound(gmmx, gmmy, maxblocks=1e3)
+@time tiv_branch_bound(gmmx, gmmy, maxblocks=1e3)
 
-@time @ProfileView.profview branch_bound(gmmx, gmmy, maxblocks=1e4)
+@ProfileView.profview branch_bound(gmmx, gmmy, maxblocks=1e4)
+@ProfileView.profview tiv_branch_bound(gmmx, gmmy, maxblocks=1e4)

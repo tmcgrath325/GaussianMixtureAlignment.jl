@@ -35,14 +35,14 @@ function objectivefun(dist, σx, σy, ϕx, ϕy, ndims)
 end
 
 """
-    rotmatrix = rot(rx, ry, rz)
+    rotmatrix = rotmat(rx, ry, rz)
 
 Takes a rotation defined by an axis specified by `rx`, `ry`, and `rz`, and an angle equal
 to the norm of the axis, and returns a rotation matrix by converting the angle-axis
 parameterization to a [unit quaternion](https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation)
 parametrization.
 """
-function rot(rx, ry, rz)
+function rotmat(rx, ry, rz)
     # Angle-Axis parameterization
     angle = √(rx^2 + ry^2 + rz^2) 
     if angle==0
@@ -60,6 +60,52 @@ function rot(rx, ry, rz)
     return R
 end
 
+function rotmat_to_params(mat)
+    qx, qy, qz, qr = NaN, NaN, NaN, NaN
+    if mat[3,3] < 0
+        if mat[1,1] > mat[2,2]
+            t = 1 + mat[1,1] - mat[2,2] - mat[3,3]
+            qx = √(t)/2
+            qy = (mat[1,2] + mat[2,1])/(4*qx)
+            qz = (mat[3,1] + mat[1,3])/(4*qx)
+            qr = -(mat[2,3] - mat[3,2])/(4*qx)
+            # println("x form")
+        else
+            t = 1 - mat[1,1] + mat[2,2] - mat[3,3]
+            qy = √(t)/2
+            qx = (mat[1,2] + mat[2,1])/(4*qy)
+            qz = (mat[2,3] + mat[3,2])/(4*qy)
+            qr = -(mat[3,1] - mat[1,3])/(4*qy)
+            # println("y form")
+        end
+    else
+        if mat[1,1] < -mat[2,2]
+            t = 1 - mat[1,1] - mat[2,2] + mat[3,3]
+            qz = √(t)/2
+            qx = (mat[3,1] + mat[1,3])/(4*qz)
+            qy = (mat[2,3] + mat[3,2])/(4*qz)
+            qr = -(mat[1,2] - mat[2,1])/(4*qz)
+            # println("z form")
+        else
+            t = 1 + mat[1,1] + mat[2,2] + mat[3,3]
+            qr = √(t)/2
+            qx = -(mat[2,3] - mat[3,2])/(4*qr)
+            qy = -(mat[3,1] - mat[1,3])/(4*qr)
+            qz = -(mat[1,2] - mat[2,1])/(4*qr)
+            # println("r form")
+        end            
+    end
+    angle = 2*acos(qr)
+    nrm = angle/sin(angle/2)
+    rx, ry, rz = qx*nrm, qy*nrm, qz*nrm
+    if angle > π
+        rvec = [rx, ry, rz]
+        rx, ry, rz = rvec * (2π/angle - 1)
+    end
+    return rx, ry, rz
+end
+
+
 """
     lowerbound, upperbound = get_bounds(x, y, rwidth, twidth, X)
 
@@ -75,7 +121,7 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rot(X[1:3]...), t0=SVector(X[4:6]...), s=√(x.σ^2 + y.σ^2), w=x.ϕ*y.ϕ)
+function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rotmat(X[1:3]...), t0=SVector(X[4:6]...), s=√(x.σ^2 + y.σ^2), w=x.ϕ*y.ϕ)
     rx, ry, rz, tx, ty, tz = X
     
     # return Inf for bounds if the rotation lies outside the π-sphere
@@ -90,16 +136,9 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     if xnorm*ynorm == 0
         cosα = one(promote_type(eltype(x),eltype(y)))
     else
-        # α = try acos(dot(x0, y.μ-t0)/(xnorm*ynorm))
-        # catch e
-        #     if isa(e, DomainError)
-        #         acos(copysign(1., dot(x0, y.μ-t0)))
-        #     end
-        # end
         cosα = dot(x0, y.μ-t0)/(xnorm*ynorm)
     end
     cosβ = cos(min(sqrt3*rwidth/2, π))
-    # @show cosα, cosβ
 
     # upper bound distance at hypercube center
     ubdist = norm(x0 + t0 - y.μ)
@@ -125,7 +164,7 @@ function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X, p
     rx, ry, rz, tx, ty, tz = X
     lb = 0.
     ub = 0.
-    R0 = rot(rx, ry, rz)
+    R0 = rotmat(rx, ry, rz)
     t0 = SVector(tx, ty, tz)
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)

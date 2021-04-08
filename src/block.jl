@@ -5,12 +5,18 @@ struct Block{T<:Real, N}
     upperbound::T
 end
 Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
+Base.size(blk::Block{T,N}) where T where N = N
 
 const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
 function hash(B::Block, h::UInt)
     h += hash_block_seed
     h = hash(B.ranges, h)
     return h
+end
+
+function boxranges(center::Union{Tuple, NTuple, AbstractArray}, widths::Union{Tuple, NTuple, AbstractArray})
+    t = eltype(center)
+    return NTuple{length(center),Tuple{t,t}}([(center[i]-widths[i], center[i]+widths[i]) for i=1:length(center)])
 end
 
 """
@@ -35,17 +41,22 @@ function subranges(ranges, nsplits::Int)
     return children
 end
 
-function Block(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing)
+function translation_limit(gmmx, gmmy)
+    trlim = typemin(promote_type(eltype(gmmx),eltype(gmmy)))
+    for gaussians in (gmmx.gaussians, gmmy.gaussians)
+        if !isempty(gaussians)
+            trlim = max(trlim, maximum(gaussians) do gauss
+                    maximum(abs, gauss.μ) end)
+        end
+    end
+    return trlim
+end
+
+function fullBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
-        trlim = typemin(t)
-        for gaussians in (gmmx.gaussians, gmmy.gaussians)
-            if !isempty(gaussians)
-                trlim = max(trlim, maximum(gaussians) do gauss
-                        maximum(abs, gauss.μ) end)
-                end
-        end
+        trlim = translation_limit(gmmx, gmmy)
         pie = t(π)
         ranges = ((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
     end
@@ -55,6 +66,47 @@ function Block(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothi
 
     # calculate objective function bounds for the block
     lb, ub = get_bounds(gmmx, gmmy, rwidth, twidth, center, pσ, pϕ)
+
+    return Block(ranges, center, lb, ub)
+end
+
+function rotBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+    # get center and uncertainty region
+    t = promote_type(eltype(gmmx),eltype(gmmy))
+    if isnothing(ranges)
+        pie = t(π)
+        ranges = ((-pie,pie), (-pie,pie), (-pie,pie))
+    end
+    center = NTuple{length(ranges),t}([sum(dim)/2 for dim in ranges])
+    rwidth = ranges[1][2] - ranges[1][1]
+
+    # calculate objective function bounds for the block
+    zro = zero(t)
+    if isnothing(trl)
+        trl = (zro, zro, zro)
+    end
+    lb, ub = get_bounds(gmmx, gmmy, rwidth, zro, (center..., trl...), pσ, pϕ)
+
+    return Block(ranges, center, lb, ub)
+end
+
+function trlBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+    # get center and uncertainty region
+    t = promote_type(eltype(gmmx),eltype(gmmy))
+    if isnothing(ranges)
+        trlim = translation_limit(gmmx, gmmy)
+        ranges = ((-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
+    end
+    center = NTuple{length(ranges),t}([sum(dim)/2 for dim in ranges])
+    twidth = ranges[1][2] - ranges[1][1]
+
+    # calculate objective function bounds for the block
+    zro = zero(t)
+    if isnothing(rot)
+        rot = (zro, zro, zro)
+    end
+    zro = zero(t)
+    lb, ub = get_bounds(gmmx, gmmy, zro, twidth, (rot..., center...), pσ, pϕ)
 
     return Block(ranges, center, lb, ub)
 end

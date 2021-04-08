@@ -4,12 +4,13 @@
 Finds the globally optimal minimum for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 """
-function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.05, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=true)
+function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, initblock=nothing, 
+                      rot=nothing, trl=nothing; blockfun=fullBlock, objfun=alignment_objective,
+                      rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
-    ndims = 2*size(gmmx,2)
-    if ndims != 2*size(gmmy,2)
+    if size(gmmx,2) != size(gmmy,2)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
 
@@ -17,8 +18,12 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.
     pσ, pϕ = pairwise_consts(gmmx, gmmy)
 
     # initialization
-    initblock = Block(gmmx, gmmy)
-    ub, bestloc = local_align(gmmx, gmmy, initblock, pσ, pϕ)    # best-so-far objective value and transformation
+    if isnothing(initblock)
+        initblock = blockfun(gmmx, gmmy, nothing, pσ, pϕ, rot, trl)
+    end
+    ndims = size(initblock)
+    ub, bestloc = initblock.upperbound, initblock.center # local_align(gmmx, gmmy, initblock, pσ, pϕ)    # best-so-far objective value and transformation
+    lb = Inf
     t = promote_type(eltype(gmmx), eltype(gmmy))
     pq = PriorityQueue{Block{t, ndims}, Tuple{t,t}}()
     enqueue!(pq, initblock, (initblock.lowerbound, initblock.upperbound))
@@ -36,10 +41,10 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.
         # take the block with the lowest lower bound
         bl, (lb, blub) = dequeue_pair!(pq)
 
-        # display current 
-        if mod(ndivisions, 2500) == 1
-            @show lb, ub, ndivisions
-        end
+        # # display current bounds
+        # if mod(ndivisions, 1000) == 1
+        #     @show lb, ub, ndivisions
+        # end
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol
@@ -51,12 +56,12 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.
         sblks = fill(Block{t, ndims}(), nsplits^ndims)
         if threads
             Threads.@threads for i=1:length(subrngs)
-                sblks[i] = Block(gmmx, gmmy, subrngs[i], pσ, pϕ)
+                sblks[i] = blockfun(gmmx, gmmy, subrngs[i], pσ, pϕ, rot, trl)
             end
         else
             for i=1:length(subrngs)
                 # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
-                sblks[i] = Block(gmmx, gmmy, subrngs[i], pσ, pϕ)
+                sblks[i] = blockfun(gmmx, gmmy, subrngs[i], pσ, pϕ, rot, trl)
             end
         end
 
@@ -64,7 +69,7 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.
         subs = [sblk.upperbound for sblk in sblks]
         minub, ubidx = findmin(subs)
         if minub < ub
-            ub, bestloc = local_align(gmmx, gmmy, sblks[ubidx], pσ, pϕ)
+            ub, bestloc = local_align(gmmx, gmmy, sblks[ubidx], pσ, pϕ, objfun=objfun, rot=rot, trl=trl)
             sinceimprove = 0
         end
 
@@ -75,5 +80,21 @@ function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2; rtol=0.
             end
         end
     end
-    return ub, dequeue_pair!(pq)[2][1], bestloc, ndivisions
+    if isempty(pq)
+        return ub, lb, bestloc, ndivisions
+    else
+        return ub, dequeue_pair!(pq)[2][1], bestloc, ndivisions
+    end
+end
+
+function rot_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, trl=nothing, initblock=nothing;
+                          rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+    return branch_bound(gmmx, gmmy, nsplits, initblock, nothing, trl, blockfun=rotBlock, objfun=rot_alignment_objective,
+                        rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+end
+
+function trl_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, rot=nothing, initblock=nothing;
+                          rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+    return branch_bound(gmmx, gmmy, nsplits, initblock, rot, nothing, blockfun=trlBlock, objfun=trl_alignment_objective,
+                        rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
 end

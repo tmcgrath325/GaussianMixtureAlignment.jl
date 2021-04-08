@@ -11,35 +11,37 @@ using Test
     μx = [3,0,0]
     μy = [-4,0,0]
     σ = ϕ = 1
+    ndims = 3
+    sqrt2 = √2
 
     x, y = IsotropicGaussian(μx, σ, ϕ), IsotropicGaussian(μy, σ, ϕ)
 
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = get_bounds(x,y,2π,0,zeros(6))
-    @test lb ≈ GOGMA.objectivefun(1,σ,σ,ϕ,ϕ) atol=1e-16
-    @test ub ≈ GOGMA.objectivefun(7,σ,σ,ϕ,ϕ)
+    @test lb ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ,ndims) atol=1e-16
+    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ,ndims)
     lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
-    @test lb ≈ ub ≈ GOGMA.objectivefun(1,σ,σ,ϕ,ϕ)
+    @test lb ≈ ub ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ,ndims)
     # spheres with closest alignment at 90 degree rotation
     lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
-    @test lb ≈ GOGMA.objectivefun(5,σ,σ,ϕ,ϕ)
+    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ,ndims)
     lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
-    @test lb ≈ GOGMA.objectivefun(5,σ,σ,ϕ,ϕ) 
+    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ,ndims) 
     
     # translation distance, no rotation
     # centered at origin
     lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
-    @test lb ≈ GOGMA.objectivefun(6,σ,σ,ϕ,ϕ)
-    @test ub ≈ GOGMA.objectivefun(7,σ,σ,ϕ,ϕ)
+    @test lb ≈ GOGMA.objectivefun(6^2,sqrt2*σ,ϕ*ϕ,ndims)
+    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ,ndims)
     # centered with translation of 1 in +x
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
-    @test lb ≈ GOGMA.objectivefun(7,σ,σ,ϕ,ϕ)
-    @test ub ≈ GOGMA.objectivefun(8,σ,σ,ϕ,ϕ)
+    @test lb ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ,ndims)
+    @test ub ≈ GOGMA.objectivefun(8^2,sqrt2*σ,ϕ*ϕ,ndims)
     # centered with translation of 3 in +y 
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
-    @test lb ≈ GOGMA.objectivefun(√(58)-1,σ,σ,ϕ,ϕ)
-    @test ub ≈ GOGMA.objectivefun(√(58),σ,σ,ϕ,ϕ)
+    @test lb ≈ GOGMA.objectivefun((√(58)-1)^2,sqrt2*σ,ϕ*ϕ,ndims)
+    @test ub ≈ GOGMA.objectivefun(58,sqrt2*σ,ϕ*ϕ,ndims)
 
 end
 
@@ -55,7 +57,7 @@ end
         end
         @test intv == ClosedInterval(blk1[i][1], blk1[i][2])
     end
-    @show subblks1[length(subblks1)]
+    # @show subblks1[length(subblks1)]
 
     blk2 = NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,1), (0,1), (0,1)))
     subblks2 = subranges(blk2, 4)
@@ -79,15 +81,15 @@ end
     gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
     # aligning a GMM to itself
-    bigblock = Block(gmmx, gmmx)
-    @show bigblock.lowerbound, bigblock.upperbound
-    @test bigblock.lowerbound == -length(gmmx.gaussians)^2
+    bigblock = fullBlock(gmmx, gmmx)
+    # @show bigblock.lowerbound, bigblock.upperbound
+    @test bigblock.lowerbound ≈ -length(gmmx.gaussians)^2 / √(4π)^3
 
-    blk = Block(gmmx, gmmx, NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,2), (0,2), (0,2))))
+    blk = fullBlock(gmmx, gmmx, NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,2), (0,2), (0,2))))
     lb = blk.lowerbound
     ub = blk.upperbound
     for i = 1:20
-        blk = Block(gmmx, gmmx, subranges(blk.ranges, 2)[1])
+        blk = fullBlock(gmmx, gmmx, subranges(blk.ranges, 2)[1])
         @test blk.lowerbound >= lb
         @test blk.upperbound <= ub
         lb = blk.lowerbound
@@ -96,5 +98,8 @@ end
 
     # make sure this runs without an error
     min, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
+    @show min
+    min, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmx, gmmy)
+    @show min
 
 end

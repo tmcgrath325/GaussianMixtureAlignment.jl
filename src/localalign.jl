@@ -1,8 +1,8 @@
-function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, pσ=nothing, pϕ=nothing)
+function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
     t = promote_type(eltype(gmmx), eltype(gmmy))
     rx, ry, rz, tx, ty, tz = X
     # prepare transformation
-    R = rot(rx, ry, rz)
+    R = rotmat(rx, ry, rz)
     tr = SVector(tx, ty, tz)
 
     # prepare pairwise widths and weights
@@ -21,7 +21,23 @@ function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, pσ=noth
     return objval
 end
 
-function local_align(gmmx::IsotropicGMM, gmmy::IsotropicGMM, block::Block=Block(gmmx,gmmy), pσ=nothing, pϕ=nothing; rtol=1e-9, maxevals=250)
+function rot_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
+    if isnothing(trl)
+        zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
+        trl = (zro, zro, zro)
+    end
+    return alignment_objective((X..., trl...), gmmx, gmmy, pσ, pϕ)
+end
+
+function trl_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
+    if isnothing(rot)
+        zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
+        rot = (zro, zro, zro)
+    end
+    return alignment_objective((rot..., X...), gmmx, gmmy, pσ, pϕ)
+end
+
+function local_align(gmmx::IsotropicGMM, gmmy::IsotropicGMM, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
     # prepare pairwise widths and weights
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -35,7 +51,7 @@ function local_align(gmmx::IsotropicGMM, gmmy::IsotropicGMM, block::Block=Block(
     initial_X = [x for x in block.center]
 
     # local optimization within the block
-    f(X) = alignment_objective(X, gmmx, gmmy, pσ, pϕ)
-    res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals))
-    return Optim.minimum(res), Optim.minimizer(res)
+    f(X) = objfun(X, gmmx, gmmy, rot, trl, pσ, pϕ)
+    res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
+    return Optim.minimum(res), tuple(Optim.minimizer(res)...)
 end
