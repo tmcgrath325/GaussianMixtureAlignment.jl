@@ -21,7 +21,21 @@ function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=noth
     return objval
 end
 
-function rot_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
+function alignment_objective(X, mgmmx::MultiGMM, mgmmy::MultiGMM, rot=nothing, trl=nothing, mpσ=nothing, mpϕ=nothing)
+    # prepare pairwise widths and weights
+    if isnothing(mpσ) || isnothing(mpϕ)
+        mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
+    end 
+    
+    # sum overlap values for gmms of each feature
+     objval = zero(promote_type(eltype(mgmmx), eltype(mgmmy)))
+     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        objval += alignment_objective(X, mgmmx.gmms[key], mgmmy.gmms[key], rot, trl, mpσ[key], mpϕ[key])
+     end
+     return objval
+end
+
+function rot_alignment_objective(X, gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
     if isnothing(trl)
         zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
         trl = (zro, zro, zro)
@@ -29,7 +43,7 @@ function rot_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=
     return alignment_objective((X..., trl...), gmmx, gmmy, pσ, pϕ)
 end
 
-function trl_alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
+function trl_alignment_objective(X, gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
     if isnothing(rot)
         zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
         rot = (zro, zro, zro)
@@ -42,7 +56,7 @@ end
 
 Performs local alignment within the specified `block` using L-BFGS to minimize objective function `objfun` for the provided GMMs, `gmmx` and `gmmy`.
 """
-function local_align(gmmx::IsotropicGMM, gmmy::IsotropicGMM, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
+function local_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
     # prepare pairwise widths and weights
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)

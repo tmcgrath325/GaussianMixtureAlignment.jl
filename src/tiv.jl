@@ -1,12 +1,13 @@
 """
-    tgmm = tivgmm(gmm, n)
+    tgmm = tivgmm(gmm, c)
 
-Returns a new GMM containing `n` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
+Returns a new GMM containing `c*length(gmm)` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
 TIVs are chosen to maximize length multiplied by the weights of the connected distributions. 
 """
-function tivgmm(gmm::IsotropicGMM, n)
+function tivgmm(gmm::IsotropicGMM, c=2)
     t = eltype(gmm)
     npts, ndims = size(gmm)
+    n = ceil(c*npts)
     if npts^2 < n
         n = npts^2
     end
@@ -28,6 +29,14 @@ function tivgmm(gmm::IsotropicGMM, n)
     return IsotropicGMM(tivgaussians)
 end
 
+function tivgmm(mgmm::MultiGMM, c)
+    gmms = Dict{Symbol, IsotropicGMM{eltype(mgmm),size(mgmm,2)}}()
+    for key in keys(mgmm.gmms)
+        push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
+    end
+    return MultiGMM(gmms)
+end
+
 # fit a plane to a set of points, returning the normal vector
 function planefit(pts)
     decomp = svd(pts .- sum(pts, dims=2))
@@ -35,25 +44,47 @@ function planefit(pts)
     return decomp.U[:, nvecidx], dist
 end
 
+function planefit(gmm::IsotropicGMM, R)
+    ptsmat = fill(zero(eltype(gmm)), 3, length(gmm))
+    for (i,gauss) in enumerate(gmm.gaussians)
+        ptsmat[:,i] = gauss.μ
+    end
+    return planefit(R * ptsmat)
+end
+
+function planefit(mgmm::MultiGMM, R)
+    len = sum([length(gmm) for gmm in values(mgmm.gmms)])
+    ptsmat = fill(zero(eltype(mgmm)), 3, len)
+    idx = 1
+    for gmm in values(mgmm.gmms)
+        for gauss in gmm.gaussians
+            ptsmat[:,idx] = gauss.μ
+            idx += 1
+        end
+    end
+    return planefit(R * ptsmat)
+end
+
 """
-    min, lb, pos, n = tiv_branch_bound(gmmx, gmmy, nx, ny, nsplits=2, rot=nothing;
+    min, lb, pos, n = tiv_branch_bound(gmmx, gmmy, cx, cy, nsplits=2, rot=nothing;
                                        rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
 
 Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using a modified GOGMA algorithm that performs rotational and translational optimization separately
 by making use of translation invariant vectors (TIVs).
 
-`nx` and `ny` are the number of TIVs used to represent`gmmx` and `gmmy` respectively during rotational alignment. 
+`cx` and `cy` are the ratios between number of TIVs used to represent a GMM and the number of Gaussians it contains, 
+for `gmmx` and `gmmy` respectively, during rotational alignment. 
 `nsplits` is the number of splits performed along each dimension during branching. Returns the overlap
 between the GMMs, the lower bound on the overlap, and the transformation vector for the best transformation,
 as well as the number of objective evaluations. 
 """
-function tiv_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nx=length(gmmx), ny=length(gmmy), nsplits=2;
+function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=2, cy=2, nsplits=2;
                           rtol=0.05, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false) #, szc=0.25)
     # align TIVs
     t = promote_type(eltype(gmmx),eltype(gmmy))
     pie = t(π)
-    tivgmmx, tivgmmy = tivgmm(gmmx, nx), tivgmm(gmmy, ny)
+    tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
     rotatn = rot_branch_bound(tivgmmx, tivgmmy, nsplits,
                            rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
     rotblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotatn[3], zero(t), zero(t))
@@ -61,11 +92,7 @@ function tiv_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nx=length(gmmx
 
     # spin the moving tivgmm around to check for a better rotation
     R = rotmat(rotatn[3]...)
-    ptsmat = fill(zero(t), 3, length(tivgmmx))
-    for (i,gauss) in enumerate(tivgmmx.gaussians)
-        ptsmat[:,i] = gauss.μ
-    end
-    spinvec, dist = planefit(R * ptsmat)
+    spinvec, dist = planefit(tivgmmx, R)
     spinblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotmat_to_params(rotmat(π*spinvec...) * R), zero(t), zero(t))
     spinscore, spinrotvec = local_align(tivgmmx, tivgmmy, spinblock, objfun=rot_alignment_objective)
     if spinscore < rotscore

@@ -41,7 +41,7 @@ function subranges(ranges, nsplits::Int)
     return children
 end
 
-function translation_limit(gmmx, gmmy)
+function translation_limit(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     trlim = typemin(promote_type(eltype(gmmx),eltype(gmmy)))
     for gaussians in (gmmx.gaussians, gmmy.gaussians)
         if !isempty(gaussians)
@@ -52,7 +52,15 @@ function translation_limit(gmmx, gmmy)
     return trlim
 end
 
-function fullBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function translation_limit(mgmmx::MultiGMM, mgmmy::MultiGMM)
+    trlim = typemin(promote_type(eltype(mgmmx),eltype(mgmmy)))
+    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
+    end
+    return trlim
+end
+
+function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
@@ -70,7 +78,7 @@ function fullBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=n
     return Block(ranges, center, lb, ub)
 end
 
-function rotBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
@@ -90,7 +98,7 @@ function rotBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=no
     return Block(ranges, center, lb, ub)
 end
 
-function trlBlock(gmmx::IsotropicGMM, gmmy::IsotropicGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function trlBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)

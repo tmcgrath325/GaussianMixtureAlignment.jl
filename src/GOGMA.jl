@@ -6,7 +6,7 @@ using DataStructures
 using Optim
 using PlotlyJS
 
-export IsotropicGaussian, IsotropicGMM
+export IsotropicGaussian, IsotropicGMM, MultiGMM
 export get_bounds, rot
 export subranges, fullBlock, rotBlock, trlBlock
 export local_align

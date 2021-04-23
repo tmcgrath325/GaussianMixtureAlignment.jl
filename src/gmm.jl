@@ -20,3 +20,11 @@ Base.eltype(gmm::IsotropicGMM{T,N}) where T where N = T
 Base.length(gmm::IsotropicGMM) = length(gmm.gaussians)
 Base.size(gmm::IsotropicGMM{T,N}) where T where N = (length(gmm.gaussians), N)
 Base.size(gmm::IsotropicGMM{T,N}, idx::Int) where T where N = (length(gmm.gaussians), N)[idx]
+
+struct MultiGMM{T<:Real,N}
+    gmms::Dict{Symbol, IsotropicGMM{T,N}}
+end
+Base.eltype(mgmm::MultiGMM{T,N}) where T where N = T
+Base.length(mgmm::MultiGMM) = length(mgmm.gmms)
+Base.size(mgmm::MultiGMM{T,N}) where T where N = (length(mgmm.gmms), N)
+Base.size(mgmm::MultiGMM{T,N}, idx::Int) where T where N = (length(mgmm.gmms), N)[idx]

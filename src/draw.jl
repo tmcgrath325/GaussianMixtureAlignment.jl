@@ -27,7 +27,8 @@ function draw3d(gmms, tformvecs=fill(zeros(6),length(gmms)); sizecoef=1)
     end
     layout = Layout(autosize=false, width=800, height=600,
                     scene_aspectmode="data",
-                    margin=attr(l=0, r=0, b=0, t=65))
+                    margin=attr(l=0, r=0, b=0, t=65),
+                    showaxis = false)
     plt = plot(traces, layout)
     return plt
 end

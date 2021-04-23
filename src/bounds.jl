@@ -13,6 +13,17 @@ function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return pσ, pϕ
 end
 
+function pairwise_consts(mgmmx::MultiGMM, mgmmy::MultiGMM)
+    t = promote_type(eltype(mgmmx),eltype(mgmmy))
+    mpσ, mpϕ = Dict{Any, Matrix{t}}(), Dict{Any, Matrix{t}}()
+    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        pσ, pϕ = pairwise_consts(mgmmx.gmms[key], mgmmy.gmms[key])
+        push!(mpσ, Pair(key, pσ))
+        push!(mpϕ, Pair(key, pϕ))
+    end
+    return mpσ, mpϕ
+end
+
 """
     val = objectivefun(dist, s, w, ndims)
 
@@ -20,7 +31,7 @@ Calculates the unnormalized overlap between two Gaussian distributions with widt
 weight `w', and squared distance `distsq`, in `ndims`-dimensional space.
 """
 function objectivefun(distsq, s, w, ndims)
-    return -w * exp(-distsq / (2*s^2)) / (sqrt2pi * s)^ndims
+    return -w * exp(-distsq / (2*s^2)) # / (sqrt2pi * s)^ndims
 end
 
 """
@@ -147,7 +158,10 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     if cosα >= cosβ
         lbdist = max(abs(xnorm-ynorm) - sqrt3*twidth/2, 0)
     else
-        lbdist = max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*twidth/2, 0)  # law of cosines
+        lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*twidth/2, 0)  # law of cosines
+        catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
+            0
+        end
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
@@ -171,6 +185,25 @@ function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X, p
             l, u = get_bounds(x, y, rwidth, twidth, X, R0, t0, pσ[i,j], pϕ[i,j])  
             lb, ub = lb+l, ub+u
         end
+    end
+    return lb, ub
+end
+
+function get_bounds(mgmmx::MultiGMM, mgmmy::MultiGMM, rwidth, twidth, X, mpσ=nothing, mpϕ=nothing)
+    # prepare pairwise widths and weights
+    if isnothing(mpσ) || isnothing(mpϕ)
+        mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
+    end
+
+    # sum bounds for each pair of points
+    rx, ry, rz, tx, ty, tz = X
+    lb = 0.
+    ub = 0.
+    R0 = rotmat(rx, ry, rz)
+    t0 = SVector(tx, ty, tz)
+    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        l, u = get_bounds(mgmmx.gmms[key], mgmmy.gmms[key], rwidth, twidth, X, mpσ[key], mpϕ[key])
+        lb, ub = lb+l, ub+u
     end
     return lb, ub
 end

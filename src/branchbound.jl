@@ -9,7 +9,7 @@ of splits performed along each dimension during branching. Returns the overlap b
 lower bound on the overlap, and the transformation vector for the best transformation, as well as the 
 number of objective evaluations.  
 """
-function branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, initblock=nothing, 
+function branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, initblock=nothing, 
                       rot=nothing, trl=nothing; blockfun=fullBlock, objfun=alignment_objective,
                       rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     if isodd(nsplits)
@@ -102,7 +102,7 @@ and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150), for a
 between the GMMs, the lower bound on the overlap, and the transformation vector for the best rotation,
 as well as the number of objective evaluations. 
 """
-function rot_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, trl=nothing, initblock=nothing;
+function rot_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, trl=nothing, initblock=nothing;
                           rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     return branch_bound(gmmx, gmmy, nsplits, initblock, nothing, trl, blockfun=rotBlock, objfun=rot_alignment_objective,
                         rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
@@ -118,7 +118,7 @@ and `gmmy`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150), for a
 between the GMMs, the lower bound on the overlap, and the transformation vector for the best translation,
 as well as the number of objective evaluations. 
 """
-function trl_branch_bound(gmmx::IsotropicGMM, gmmy::IsotropicGMM, nsplits=2, rot=nothing, initblock=nothing;
+function trl_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, rot=nothing, initblock=nothing;
                           rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     return branch_bound(gmmx, gmmy, nsplits, initblock, rot, nothing, blockfun=trlBlock, objfun=trl_alignment_objective,
                         rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)

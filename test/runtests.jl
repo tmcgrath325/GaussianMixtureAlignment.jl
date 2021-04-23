@@ -98,8 +98,12 @@ end
 
     # make sure this runs without an error
     min, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
-    @show min
     min, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmx, gmmy)
-    @show min
 
+    mgmmx = MultiGMM(Dict(:x => gmmx, :y => gmmy))
+    mgmmy = MultiGMM(Dict(:y => gmmx, :x => gmmy))
+    min, lowerbound, bestloc, ndivisions = branch_bound(mgmmx, mgmmy, maxblocks=1E5)
+    @show min
+    min, lowerbound, bestloc, ndivisions = tiv_branch_bound(mgmmx, mgmmy)
+    @show min
 end
