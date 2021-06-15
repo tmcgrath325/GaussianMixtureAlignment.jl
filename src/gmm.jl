@@ -9,9 +9,9 @@ Base.length(ig::IsotropicGaussian{T,N}) where T where N = N
 Base.size(ig::IsotropicGaussian{T,N}) where T where N = (N,)
 Base.size(gmm::IsotropicGaussian{T,N}, idx::Int) where T where N = (N,)[idx]
 
-function IsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real, dirs::AbstractArray=SVector{length(μ),Int}[])
+function IsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real, dirs::AbstractArray=SVector{length(μ),eltype(μ)}[])
     t = promote_type(eltype(μ), typeof(σ), typeof(ϕ), eltype(eltype(dirs)))
-    return IsotropicGaussian(SVector{length(μ),t}(μ), t(σ), t(ϕ), [SVector{length(μ),t}(dir) for dir in dirs])
+    return IsotropicGaussian(SVector{length(μ),t}(μ), t(σ), t(ϕ), SVector{length(μ),t}[SVector{length(μ),t}(dir/norm(dir)) for dir in dirs])
 end
 
 struct IsotropicGMM{T<:Real,N}

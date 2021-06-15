@@ -19,29 +19,29 @@ using Test
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = get_bounds(x,y,2π,0,zeros(6))
-    @test lb ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ) atol=1e-16
-    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ, 1.) atol=1e-16
+    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ, 1.)
     lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
-    @test lb ≈ ub ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ ub ≈ GOGMA.objectivefun(1,sqrt2*σ,ϕ*ϕ, 1.)
     # spheres with closest alignment at 90 degree rotation
     lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
-    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ, 1.)
     lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
-    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ) 
+    @test lb ≈ GOGMA.objectivefun(5^2,sqrt2*σ,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # centered at origin
     lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
-    @test lb ≈ GOGMA.objectivefun(6^2,sqrt2*σ,ϕ*ϕ)
-    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ GOGMA.objectivefun(6^2,sqrt2*σ,ϕ*ϕ, 1.)
+    @test ub ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
-    @test lb ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ)
-    @test ub ≈ GOGMA.objectivefun(8^2,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ GOGMA.objectivefun(7^2,sqrt2*σ,ϕ*ϕ, 1.)
+    @test ub ≈ GOGMA.objectivefun(8^2,sqrt2*σ,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
-    @test lb ≈ GOGMA.objectivefun((√(58)-1)^2,sqrt2*σ,ϕ*ϕ)
-    @test ub ≈ GOGMA.objectivefun(58,sqrt2*σ,ϕ*ϕ)
+    @test lb ≈ GOGMA.objectivefun((√(58)-1)^2,sqrt2*σ,ϕ*ϕ, 1.)
+    @test ub ≈ GOGMA.objectivefun(58,sqrt2*σ,ϕ*ϕ, 1.)
 
 end
 
@@ -117,8 +117,8 @@ end
     x = IsotropicGaussian(xpt, σ, ϕ, [xdir])
     y = IsotropicGaussian(ypt, σ, ϕ, [ydir])
     @test get_bounds(x,y,0.,0.,zeros(6)) == (-0.5,-0.5)
-    @test get_bounds(x,y,π/(3*sqrt3),0.,zeros(6)) == (-0.75,-0.5)
-    @test get_bounds(x,y,π/sqrt3,0.,zeros(6)) == (-1.0,-0.5)
+    @test get_bounds(x,y,π/(3*GOGMA.sqrt3),0.,zeros(6)) == (-0.75,-0.5)
+    @test get_bounds(x,y,π/GOGMA.sqrt3,0.,zeros(6)) == (-1.0,-0.5)
 
     xpt = [1.,0.,0.]
     ypt = [1.,0.,0.]
@@ -135,14 +135,20 @@ end
     σ = ϕ = 1.
     xdirs = [[0.,-1.,0], [1.,0.,0.], [0.,1.,0.]]
     ydirs = [[0.,0.,1.], [0.,-1.,0.], [0.,0.,-1]]
-    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i]]) for (i,x) in enumerate(xpts)])
-    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
-    objminxy, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmx, gmmy)
-    objminxx, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmx, gmmx)
-    objminyy, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmy, gmmy)
+    dgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i]]) for (i,x) in enumerate(xpts)])
+    dgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
+    objminxy, lowerbound, bestloc, ndivisions = tiv_branch_bound(dgmmx, dgmmy)
+    objminxx, lowerbound, bestloc, ndivisions = tiv_branch_bound(dgmmx, dgmmx)
+    objminyy, lowerbound, bestloc, ndivisions = tiv_branch_bound(dgmmy, dgmmy)
     @test objminxy ≈ objminxx ≈ objminyy
 
-    randydirs = [[2*rand(3).-1] for i=1:3]
-    randgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, randydirs[i]/norm(randydirs[i])) for (i,y) in enumerate(ypts)])
-    randobjminxy = tiv_branch_bound(gmmx, randgmmy)[1]
+    randdgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [2*rand(3).-1]) for (i,y) in enumerate(ypts)])
+    randobjminxy = tiv_branch_bound(dgmmx, randdgmmy)[1]
+    @test randobjminxy > objminxy
+
+    randxdirs = [2*rand(3).-1 for i=1:3]
+    ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
+    ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
+    ddobjmin = tiv_branch_bound(ddgmmx, ddgmmy)[1]
+    ddobjmin ≈ objminxy
 end

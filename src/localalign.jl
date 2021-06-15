@@ -16,11 +16,19 @@ function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=noth
         for (j,y) in enumerate(gmmy.gaussians)
             distsq = sum(abs2, R*x.μ+tr - y.μ)
             if length(x.dirs)==0 || length(y.dirs)==0
-                dirdot = 1.
+                dirdot = one(t)
             else
-                dirdot = maximum([dot(xdir, ydir) for xdir in x.dirs for ydir in y.dirs])
+                # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
+                # xdirs = [R*xdir for xdir in x.dirs]
+                dirdot = -one(t)
+                for xdir in x.dirs
+                    for ydir in y.dirs
+                        dirdot = max(dirdot, dot(R*xdir,ydir))
+                    end
+                end
+                # dirdot = maximum([dot(xdir, ydir) for xdir in xdirs for ydir in y.dirs])
             end
-            objval += 0.5(1+dirdot)*objectivefun(distsq, pσ[i,j], pϕ[i,j]) # , 3)
+            objval += objectivefun(distsq, pσ[i,j], pϕ[i,j], dirdot) # , 3)
         end
     end
     return objval
