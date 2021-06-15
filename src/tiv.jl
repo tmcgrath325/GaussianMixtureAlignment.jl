@@ -24,7 +24,7 @@ function tivgmm(gmm::IsotropicGMM, c=Inf)
         i = Int(floor((idx-1)/npts)+1)
         j = mod(idx-1, npts)+1
         x, y = gmm.gaussians[i], gmm.gaussians[j]
-        push!(tivgaussians, IsotropicGaussian(x.μ-y.μ, √(x.σ*y.σ), √(x.ϕ*y.ϕ)))
+        push!(tivgaussians, IsotropicGaussian(x.μ-y.μ, √(x.σ*y.σ), √(x.ϕ*y.ϕ), x.dirs))
     end
     return IsotropicGMM(tivgaussians)
 end

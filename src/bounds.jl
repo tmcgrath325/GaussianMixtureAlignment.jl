@@ -164,8 +164,32 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
         end
     end
 
+    # upperbound of dot product between directional constraints (minimizes objective)
+    if length(x.dirs) == 0 || length(y.dirs) == 0
+        cosγ = 1.
+    else
+        # cosγ, closeidx = findmax([dot(xdir, ydir) for xdir in xdirs for ydir in ydirs])
+        xdirs = [R0*xdir for xdir in x.dirs]
+        cosγ = maximum([dot(xdir, ydir) for xdir in xdirs for ydir in y.dirs])   # no need to divide by lengths since xdir, ydir should be unit vectors
+    end
+
+    if cosγ >= cosβ
+        lbdot = 1.
+    else
+        # sinβ = sin(min(sqrt3*rwidth/w, π))
+        # sinγ = norm(cross(xdirs[Int(floor((closeidx-1)/length(ydirs))+1)], ydirs[mod(closeidx-1, length(ydirs))+1]))
+        lbdot = try cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
+        catch e
+            @show cosγ, cosβ
+            cosγ*cosβ
+        end
+    end
+
+    # lowerbound of dot product between directional constraints (at center of tform block)
+    # ubdot = cosγ
+
     # evaluate objective function at each distance to get upper and lower bounds
-    return objectivefun(lbdist^2, s, w), objectivefun(ubdist^2, s, w)
+    return 0.5*(1+lbdot)*objectivefun(lbdist^2, s, w), 0.5*(1+cosγ)*objectivefun(ubdist^2, s, w)
     # return objectivefun(lbdist^2, s, w, 3), objectivefun(ubdist^2, s, w, 3)
 end
 

@@ -2,15 +2,16 @@ struct IsotropicGaussian{T<:Real,N}
     μ::SVector{N,T}
     σ::T
     ϕ::T
+    dirs::Vector{SVector{N,T}}
 end
 Base.eltype(ig::IsotropicGaussian{T,N}) where T where N = T
 Base.length(ig::IsotropicGaussian{T,N}) where T where N = N
 Base.size(ig::IsotropicGaussian{T,N}) where T where N = (N,)
 Base.size(gmm::IsotropicGaussian{T,N}, idx::Int) where T where N = (N,)[idx]
 
-function IsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real)
-    t = promote_type(eltype(μ), typeof(σ), typeof(ϕ))
-    return IsotropicGaussian(SVector{length(μ),t}(μ), t(σ), t(ϕ))
+function IsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real, dirs::AbstractArray=SVector{length(μ),Int}[])
+    t = promote_type(eltype(μ), typeof(σ), typeof(ϕ), eltype(eltype(dirs)))
+    return IsotropicGaussian(SVector{length(μ),t}(μ), t(σ), t(ϕ), [SVector{length(μ),t}(dir) for dir in dirs])
 end
 
 struct IsotropicGMM{T<:Real,N}
