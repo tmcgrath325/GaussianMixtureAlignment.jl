@@ -150,5 +150,14 @@ end
     ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
     ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
     ddobjmin = tiv_branch_bound(ddgmmx, ddgmmy)[1]
-    ddobjmin ≈ objminxy
+    @test ddobjmin ≈ objminxy 
+
+    mgmmx = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
+                          :two => IsotropicGMM([IsotropicGaussian(xpts[2], σ, ϕ, [xdirs[2]])]),
+                          :three => IsotropicGMM([IsotropicGaussian(xpts[3], σ, ϕ, [xdirs[3]])])))
+    mgmmy = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
+                          :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
+                          :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
+    mobjminxy = tiv_branch_bound(mgmmx, mgmmy)[1]
+    @test mobjminxy ≈ -3.0
 end
