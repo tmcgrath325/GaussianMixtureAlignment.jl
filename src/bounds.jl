@@ -25,10 +25,10 @@ function pairwise_consts(mgmmx::MultiGMM, mgmmy::MultiGMM)
 end
 
 """
-    val = objectivefun(dist, s, w)
+    val = objectivefun(distsq, s, w, dirdot)
 
 Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
-weight `w', and squared distance `distsq`.
+weight `w', and squared distance `distsq`, and geometric scaling factor `dirdot`.
 """
 function objectivefun(distsq, s, w, dirdot) # , ndims)
     return -w * 0.5*(1+dirdot) * exp(-distsq / (2*s^2)) # / (sqrt2pi * s)^ndims
@@ -38,8 +38,8 @@ end
     val = objectivefun(dist, σx, σy, ϕx, ϕy, dirdot)
 
 Calculates the unnormalized overlap between two Gaussian distributions with variances
-`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, in 
-`ndims`-dimensional space.
+`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, scaled
+by the dot product obtained from geometric constraints `dirdot`.
 """
 function objectivefun(dist, σx, σy, ϕx, ϕy, dirdot) # , ndims)
     return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy, dirdot) # , ndims)
