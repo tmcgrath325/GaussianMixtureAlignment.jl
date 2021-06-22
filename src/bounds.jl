@@ -6,7 +6,7 @@ function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
         for (j,gaussy) in enumerate(gmmy.gaussians)
-            pσ[i,j] = √(gaussx.σ^2 + gaussy.σ^2)
+            pσ[i,j] = gaussx.σ^2 + gaussy.σ^2
             pϕ[i,j] = gaussx.ϕ * gaussy.ϕ
         end
     end
@@ -31,7 +31,7 @@ Calculates the unnormalized overlap between two Gaussian distributions with widt
 weight `w', and squared distance `distsq`, and geometric scaling factor `dirdot`.
 """
 function objectivefun(distsq, s, w, dirdot) # , ndims)
-    return -w * 0.5*(1+dirdot) * exp(-distsq / (2*s^2)) # / (sqrt2pi * s)^ndims
+    return -w * 0.5*(1+dirdot) * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
 end
 
 """
@@ -42,7 +42,7 @@ Calculates the unnormalized overlap between two Gaussian distributions with vari
 by the dot product obtained from geometric constraints `dirdot`.
 """
 function objectivefun(dist, σx, σy, ϕx, ϕy, dirdot) # , ndims)
-    return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy, dirdot) # , ndims)
+    return objectivefun(dist^2, σx^2 + σy^2, ϕx*ϕy, dirdot) # , ndims)
 end
 
 """
@@ -132,7 +132,7 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rotmat(X[1:3]...), t0=SVector(X[4:6]...), s=√(x.σ^2 + y.σ^2), w=x.ϕ*y.ϕ)
+function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rotmat(X[1:3]...), t0=SVector(X[4:6]...), s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ)
     rx, ry, rz, tx, ty, tz = X
     
     # return Inf for bounds if the rotation lies outside the π-sphere
