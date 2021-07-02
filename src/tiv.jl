@@ -4,7 +4,7 @@
 Returns a new GMM containing `c*length(gmm)` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
 TIVs are chosen to maximize length multiplied by the weights of the connected distributions. 
 """
-function tivgmm(gmm::IsotropicGMM, c=2)
+function tivgmm(gmm::IsotropicGMM, c=Inf)
     t = eltype(gmm)
     npts, ndims = size(gmm)
     n = ceil(c*npts)
@@ -20,7 +20,7 @@ function tivgmm(gmm::IsotropicGMM, c=2)
     
     tivgaussians = IsotropicGaussian{t, ndims}[]
     order = sortperm(vec(scores), rev=true)
-    for idx in order[1:n]
+    for idx in order[1:Int(n)]
         i = Int(floor((idx-1)/npts)+1)
         j = mod(idx-1, npts)+1
         x, y = gmm.gaussians[i], gmm.gaussians[j]
@@ -29,7 +29,7 @@ function tivgmm(gmm::IsotropicGMM, c=2)
     return IsotropicGMM(tivgaussians)
 end
 
-function tivgmm(mgmm::MultiGMM, c)
+function tivgmm(mgmm::MultiGMM, c=Inf)
     gmms = Dict{Symbol, IsotropicGMM{eltype(mgmm),size(mgmm,2)}}()
     for key in keys(mgmm.gmms)
         push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
@@ -67,7 +67,7 @@ end
 
 """
     min, lb, pos, n = tiv_branch_bound(gmmx, gmmy, cx, cy, nsplits=2, rot=nothing;
-                                       rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+                                       atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
 
 Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using a modified GOGMA algorithm that performs rotational and translational optimization separately
@@ -79,29 +79,28 @@ for `gmmx` and `gmmy` respectively, during rotational alignment.
 between the GMMs, the lower bound on the overlap, and the transformation vector for the best transformation,
 as well as the number of objective evaluations. 
 """
-function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=2, cy=2, nsplits=2;
-                          rtol=0.05, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false) #, szc=0.25)
+function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=Inf, cy=Inf, nsplits=2;
+                          atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     # align TIVs
     t = promote_type(eltype(gmmx),eltype(gmmy))
     pie = t(π)
     tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
     rotatn = rot_branch_bound(tivgmmx, tivgmmy, nsplits,
-                           rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+                              atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
     rotblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotatn[3], zero(t), zero(t))
     rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock, objfun=rot_alignment_objective)
-
     # spin the moving tivgmm around to check for a better rotation
     R = rotmat(rotatn[3]...)
     spinvec, dist = planefit(tivgmmx, R)
     spinblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotmat_to_params(rotmat(π*spinvec...) * R), zero(t), zero(t))
-    spinscore, spinrotvec = local_align(tivgmmx, tivgmmy, spinblock, objfun=rot_alignment_objective)
+    spinscore, spinrotpos = local_align(tivgmmx, tivgmmy, spinblock, objfun=rot_alignment_objective)
     if spinscore < rotscore
-        rotpos = spinrotvec
+        rotpos = spinrotpos
     end
 
     # perform translation alignment
     transl = trl_branch_bound(gmmx, gmmy, nsplits, rotpos,
-                              rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+                              atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
 
     # perform local alignment in the full transformation space
     pos = NTuple{6, t}([rotpos..., transl[3]...])
@@ -109,15 +108,10 @@ function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{Isotro
     localblock = Block(((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, zero(t), zero(t))
     localopt = local_align(gmmx, gmmy, localblock)
    
-    # figs = []
-    # push!(figs, draw3d([gmmx, gmmy], sizecoef=szc))
-    # push!(figs, draw3d([tivgmmx, tivgmmy], sizecoef=szc))
-    # push!(figs, draw3d([tivgmmx, tivgmmy], [[rotatn[3]..., 0.,0.,0.], zeros(6)], sizecoef=szc))
-    # push!(figs, draw3d([tivgmmx, tivgmmy], [[spinrotvec..., 0.,0.,0.], zeros(6)], sizecoef=szc))
-    # push!(figs, draw3d([gmmx, gmmy],[[rotatn[3]..., 0.,0.,0.], zeros(6)], sizecoef=szc))
-    # push!(figs, draw3d([gmmx, gmmy],[[spinrotvec..., 0.,0.,0.], zeros(6)], sizecoef=szc))
-    # push!(figs, draw3d([gmmx, gmmy],[pos, zeros(6)], sizecoef=szc))
-    # push!(figs, draw3d([gmmx, gmmy],[localopt[2], zeros(6)], sizecoef=szc))
+    tforms = []
+    push!(tforms, (rotmat(rotpos...), SVector(0.,0.,0.)))
+    push!(tforms, (rotmat(rotpos...), SVector(transl[3]...)))
+    push!(tforms, (rotmat(localopt[2][1:3]...), SVector(localopt[2][4:6]...)))
 
-    return localopt[1], transl[2], localopt[2], transl[4]+rotatn[4] # , figs
+    return localopt[1], transl[2], localopt[2], transl[4]+rotatn[4], tforms
 end
