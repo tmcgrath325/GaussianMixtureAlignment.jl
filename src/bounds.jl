@@ -30,7 +30,7 @@ end
 Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
 weight `w', and squared distance `distsq`, in `ndims`-dimensional space.
 """
-function objectivefun(distsq, s, w, ndims)
+function objectivefun(distsq, s, w) # , ndims)
     return -w * exp(-distsq / (2*s^2)) # / (sqrt2pi * s)^ndims
 end
 
@@ -41,8 +41,8 @@ Calculates the unnormalized overlap between two Gaussian distributions with vari
 `σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, in 
 `ndims`-dimensional space.
 """
-function objectivefun(dist, σx, σy, ϕx, ϕy, ndims)
-    return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy, ndims)
+function objectivefun(dist, σx, σy, ϕx, ϕy) # , ndims)
+    return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy) # , ndims)
 end
 
 """
@@ -165,7 +165,8 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
-    return objectivefun(lbdist^2, s, w, 3), objectivefun(ubdist^2, s, w, 3)
+    return objectivefun(lbdist^2, s, w), objectivefun(ubdist^2, s, w)
+    # return objectivefun(lbdist^2, s, w, 3), objectivefun(ubdist^2, s, w, 3)
 end
 
 function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X, pσ=nothing, pϕ=nothing)
@@ -182,8 +183,7 @@ function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X, p
     t0 = SVector(tx, ty, tz)
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            l, u = get_bounds(x, y, rwidth, twidth, X, R0, t0, pσ[i,j], pϕ[i,j])  
-            lb, ub = lb+l, ub+u
+            lb, ub = (lb, ub) .+ get_bounds(x, y, rwidth, twidth, X, R0, t0, pσ[i,j], pϕ[i,j])  
         end
     end
     return lb, ub
@@ -202,8 +202,7 @@ function get_bounds(mgmmx::MultiGMM, mgmmy::MultiGMM, rwidth, twidth, X, mpσ=no
     R0 = rotmat(rx, ry, rz)
     t0 = SVector(tx, ty, tz)
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        l, u = get_bounds(mgmmx.gmms[key], mgmmy.gmms[key], rwidth, twidth, X, mpσ[key], mpϕ[key])
-        lb, ub = lb+l, ub+u
+        lb, ub = (lb, ub) .+ get_bounds(mgmmx.gmms[key], mgmmy.gmms[key], rwidth, twidth, X, mpσ[key], mpϕ[key])
     end
     return lb, ub
 end

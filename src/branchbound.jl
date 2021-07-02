@@ -11,7 +11,7 @@ number of objective evaluations.
 """
 function branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, initblock=nothing, 
                       rot=nothing, trl=nothing; blockfun=fullBlock, objfun=alignment_objective,
-                      rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+                      atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -43,16 +43,12 @@ function branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicG
         end
         ndivisions += 1
         sinceimprove += 1
+
         # take the block with the lowest lower bound
         bl, (lb, blub) = dequeue_pair!(pq)
 
-        # # display current bounds
-        # if mod(ndivisions, 1000) == 1
-        #     @show lb, ub, ndivisions
-        # end
-
         # if the best solution so far is close enough to the best possible solution, end
-        if abs((ub - lb)/lb) < rtol
+        if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
             return ub, lb, bestloc, ndivisions
         end
 
@@ -65,7 +61,6 @@ function branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicG
             end
         else
             for i=1:length(subrngs)
-                # TODO: local alignment with L-BFGS-B to reduce upperbounds in each box added to the queue
                 sblks[i] = blockfun(gmmx, gmmy, subrngs[i], pσ, pϕ, rot, trl)
             end
         end
@@ -103,9 +98,9 @@ between the GMMs, the lower bound on the overlap, and the transformation vector 
 as well as the number of objective evaluations. 
 """
 function rot_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, trl=nothing, initblock=nothing;
-                          rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+                          atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     return branch_bound(gmmx, gmmy, nsplits, initblock, nothing, trl, blockfun=rotBlock, objfun=rot_alignment_objective,
-                        rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+                        atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
 end
 
 """
@@ -119,7 +114,7 @@ between the GMMs, the lower bound on the overlap, and the transformation vector 
 as well as the number of objective evaluations. 
 """
 function trl_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, nsplits=2, rot=nothing, initblock=nothing;
-                          rtol=0.01, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+                          atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     return branch_bound(gmmx, gmmy, nsplits, initblock, rot, nothing, blockfun=trlBlock, objfun=trl_alignment_objective,
-                        rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+                        atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
 end
