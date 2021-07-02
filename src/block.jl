@@ -22,7 +22,7 @@ end
 """
     sbrngs = subranges(ranges, nsplits)
 
-Takes `ranges`, a nested array describing intervals for each dimension in rigid-rotation space
+Takes `ranges`, a nested tuple describing intervals for each dimension in rigid-rotation space
 defining a hypercube, and splits the hypercube into `nsplits` even components along each dimension.
 Since the space is 6-dimensional, the number of returned sub-cubes will be `nsplits^6`.
 """
@@ -65,8 +65,7 @@ function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
         trlim = translation_limit(gmmx, gmmy)
-        pie = t(π)
-        ranges = ((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
+        ranges = ((-t(π),t(π)), (-t(π),t(π)), (-t(π),t(π)), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
     end
     center = NTuple{length(ranges),t}([sum(dim)/2 for dim in ranges])
     rwidth = ranges[1][2] - ranges[1][1]
@@ -82,18 +81,16 @@ function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM,
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
-        pie = t(π)
-        ranges = ((-pie,pie), (-pie,pie), (-pie,pie))
+        ranges = ((-t(π),t(π)), (-t(π),t(π)), (-t(π),t(π)))
     end
     center = NTuple{length(ranges),t}([sum(dim)/2 for dim in ranges])
     rwidth = ranges[1][2] - ranges[1][1]
 
     # calculate objective function bounds for the block
-    zro = zero(t)
     if isnothing(trl)
-        trl = (zro, zro, zro)
+        trl = (zero(t), zero(t), zero(t))
     end
-    lb, ub = get_bounds(gmmx, gmmy, rwidth, zro, (center..., trl...), pσ, pϕ)
+    lb, ub = get_bounds(gmmx, gmmy, rwidth, zero(t), (center..., trl...), pσ, pϕ)
 
     return Block(ranges, center, lb, ub)
 end
@@ -109,12 +106,10 @@ function trlBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM,
     twidth = ranges[1][2] - ranges[1][1]
 
     # calculate objective function bounds for the block
-    zro = zero(t)
     if isnothing(rot)
-        rot = (zro, zro, zro)
+        rot = (zero(t), zero(t), zero(t))
     end
-    zro = zero(t)
-    lb, ub = get_bounds(gmmx, gmmy, zro, twidth, (rot..., center...), pσ, pϕ)
+    lb, ub = get_bounds(gmmx, gmmy, zero(t), twidth, (rot..., center...), pσ, pϕ)
 
     return Block(ranges, center, lb, ub)
 end
