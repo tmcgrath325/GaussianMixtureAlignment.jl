@@ -11,7 +11,7 @@ const colors =
     "#17becf"]   # blue-teal
 
 
-function draw3d(gmms, tformvecs=fill(zeros(6),length(gmms)); sizecoef=1)
+function draw3d(gmms, tformvecs=fill(zeros(6),length(gmms)); sizecoef=1.0)
     traces = AbstractTrace[]
     for i=1:length(gmms)
         color = colors[mod(i-1, length(colors))+1]
@@ -25,15 +25,19 @@ function draw3d(gmms, tformvecs=fill(zeros(6),length(gmms)); sizecoef=1)
             push!(traces, drawgaussian(gmm.gaussians[i], R, T, opacities[i], color; sizecoef=sizecoef))
         end
     end
-    layout = Layout(autosize=false, width=800, height=600,
-                    scene_aspectmode="data",
-                    margin=attr(l=0, r=0, b=0, t=65),
-                    showaxis = false)
-    plt = plot(traces, layout)
-    return plt
+    return traces
+    # layout = Layout(autosize=false, width=800, height=600,
+    #                 margin=attr(l=0, r=0, b=0, t=65),
+    #                 scene=attr(
+    #                     aspectmode="data",
+    #                     xaxis=attr(visible=false),
+    #                     yaxis=attr(visible=false),
+    #                     zaxis=attr(visible=false)))
+    # plt = plot(traces, layout)
+    # return plt
 end
 
-function drawgaussian(gauss, R, T, op=0.5, color=nothing; sizecoef=1, npts=10)
+function drawgaussian(gauss, R, T, op=0.5, color=nothing; sizecoef=1.0, npts=10)
     pos = R * gauss.μ + T
     r = gauss.σ * sizecoef
     ϕs = range(0, stop=2π, length=npts)
