@@ -6,7 +6,7 @@ function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
         for (j,gaussy) in enumerate(gmmy.gaussians)
-            pσ[i,j] = √(gaussx.σ^2 + gaussy.σ^2)
+            pσ[i,j] = gaussx.σ^2 + gaussy.σ^2
             pϕ[i,j] = gaussx.ϕ * gaussy.ϕ
         end
     end
@@ -25,24 +25,24 @@ function pairwise_consts(mgmmx::MultiGMM, mgmmy::MultiGMM)
 end
 
 """
-    val = objectivefun(dist, s, w, ndims)
+    val = objectivefun(distsq, s, w, dirdot)
 
 Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
-weight `w', and squared distance `distsq`, in `ndims`-dimensional space.
+weight `w', and squared distance `distsq`, and geometric scaling factor `dirdot`.
 """
-function objectivefun(distsq, s, w) # , ndims)
-    return -w * exp(-distsq / (2*s^2)) # / (sqrt2pi * s)^ndims
+function objectivefun(distsq, s, w, dirdot) # , ndims)
+    return -w * 0.5*(1+dirdot) * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
 end
 
 """
-    val = objectivefun(dist, σx, σy, ϕx, ϕy, ndims)
+    val = objectivefun(dist, σx, σy, ϕx, ϕy, dirdot)
 
 Calculates the unnormalized overlap between two Gaussian distributions with variances
-`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, in 
-`ndims`-dimensional space.
+`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, scaled
+by the dot product obtained from geometric constraints `dirdot`.
 """
-function objectivefun(dist, σx, σy, ϕx, ϕy) # , ndims)
-    return objectivefun(dist^2, sqrt(σx^2 + σy^2), ϕx*ϕy) # , ndims)
+function objectivefun(dist, σx, σy, ϕx, ϕy, dirdot) # , ndims)
+    return objectivefun(dist^2, σx^2 + σy^2, ϕx*ϕy, dirdot) # , ndims)
 end
 
 """
@@ -132,7 +132,7 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rotmat(X[1:3]...), t0=SVector(X[4:6]...), s=√(x.σ^2 + y.σ^2), w=x.ϕ*y.ϕ)
+function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, R0=rotmat(X[1:3]...), t0=SVector(X[4:6]...), s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ)
     rx, ry, rz, tx, ty, tz = X
     
     # return Inf for bounds if the rotation lies outside the π-sphere
@@ -164,8 +164,35 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
         end
     end
 
+    # upperbound of dot product between directional constraints (minimizes objective)
+    if length(x.dirs) == 0 || length(y.dirs) == 0
+        cosγ = 1.
+    else
+        # cosγ, closeidx = findmax([dot(xdir, ydir) for xdir in xdirs for ydir in ydirs])
+        # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
+        # xdirs = [R0*xdir for xdir in x.dirs]
+        cosγ = -1
+        for xdir in x.dirs
+            for ydir in y.dirs
+                cosγ = max(cosγ, dot(R0*xdir, ydir))
+            end
+        end
+        # cosγ = maximum([dot(xdir, ydir) for xdir in xdirs for ydir in y.dirs])   # no need to divide by lengths since xdir, ydir should be unit vectors
+    end
+
+    if cosγ >= cosβ
+        lbdot = 1.
+    else
+        # sinβ = sin(min(sqrt3*rwidth/w, π))
+        # sinγ = norm(cross(xdirs[Int(floor((closeidx-1)/length(ydirs))+1)], ydirs[mod(closeidx-1, length(ydirs))+1]))
+        lbdot = cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
+    end
+
+    # lowerbound of dot product between directional constraints (at center of tform block)
+    # ubdot = cosγ
+
     # evaluate objective function at each distance to get upper and lower bounds
-    return objectivefun(lbdist^2, s, w), objectivefun(ubdist^2, s, w)
+    return objectivefun(lbdist^2, s, w, lbdot), objectivefun(ubdist^2, s, w, cosγ)
     # return objectivefun(lbdist^2, s, w, 3), objectivefun(ubdist^2, s, w, 3)
 end
 

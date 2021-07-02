@@ -24,7 +24,7 @@ function tivgmm(gmm::IsotropicGMM, c=Inf)
         i = Int(floor((idx-1)/npts)+1)
         j = mod(idx-1, npts)+1
         x, y = gmm.gaussians[i], gmm.gaussians[j]
-        push!(tivgaussians, IsotropicGaussian(x.μ-y.μ, √(x.σ*y.σ), √(x.ϕ*y.ϕ)))
+        push!(tivgaussians, IsotropicGaussian(x.μ-y.μ, √(x.σ*y.σ), √(x.ϕ*y.ϕ), x.dirs))
     end
     return IsotropicGMM(tivgaussians)
 end
@@ -107,11 +107,6 @@ function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{Isotro
     trlim = translation_limit(gmmx, gmmy)
     localblock = Block(((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, zero(t), zero(t))
     localopt = local_align(gmmx, gmmy, localblock)
-   
-    tforms = []
-    push!(tforms, (rotmat(rotpos...), SVector(0.,0.,0.)))
-    push!(tforms, (rotmat(rotpos...), SVector(transl[3]...)))
-    push!(tforms, (rotmat(localopt[2][1:3]...), SVector(localopt[2][4:6]...)))
 
-    return localopt[1], transl[2], localopt[2], transl[4]+rotatn[4], tforms
+    return localopt[1], transl[2], localopt[2], transl[4]+rotatn[4]
 end
