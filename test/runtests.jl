@@ -150,7 +150,6 @@ end
     ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
     ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
     ddobjmin, ddlb, ddbestloc, ddndivisions = tiv_branch_bound(ddgmmx, ddgmmy)
-    @show bestlocxy, ddbestloc
     @test ddobjmin ≈ -3.0
 
     mgmmx = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),

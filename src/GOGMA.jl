@@ -21,5 +21,6 @@ include("localalign.jl")
 include("branchbound.jl")
 include("tiv.jl")
 include("draw.jl")
+include("combine.jl")
 
 end

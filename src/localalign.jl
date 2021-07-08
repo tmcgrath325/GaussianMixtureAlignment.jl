@@ -87,3 +87,6 @@ function local_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGM
     res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
     return Optim.minimum(res), tuple(Optim.minimizer(res)...)
 end
+
+local_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmys::Union{AbstractVector{IsotropicGMM},AbstractVector{MultiGMM}}, block,  pσ=nothing, pϕ=nothing; kwargs...) = 
+    local_align(gmmx, combine(gmmys), block, pσ, pϕ; kwargs...)
