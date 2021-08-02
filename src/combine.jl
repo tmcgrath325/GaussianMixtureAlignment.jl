@@ -1,3 +1,11 @@
+"""
+    gmm = combine(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
+    mgmm = combine(mgmmx::MultiGMM, mgmmy::MultiGMM)
+    gmm = combine(gmms::Union{AbstractVector{<:IsotropicGMM},AbstractVector{<:MultiGMM}})
+
+Creates a new `IsotropicGMM` or `MultiGMM` by concatenating the vectors of `IsotroicGaussian`s in
+the input GMMs. 
+"""
 function combine(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     if size(gmmx,2) != size(gmmy,2)
         throw(ArgumentError("GMMs must have the same dimensionality"))
