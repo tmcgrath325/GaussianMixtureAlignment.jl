@@ -1,8 +1,11 @@
 """
-    tgmm = tivgmm(gmm, c)
+    tgmm = tivgmm(gmm::IsotropicGMM, c=Inf)
+    tgmm = tivgmm(mgmm::MultiGMM, c=Inf)
 
-Returns a new GMM containing `c*length(gmm)` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
+Returns a new `IsotropicGMM` or `MultiGMM` containing up to `c*length(gmm)` translation invariant vectors (TIVs) connecting Gaussian means in `gmm`.
 TIVs are chosen to maximize length multiplied by the weights of the connected distributions. 
+
+See [Li et. al. (2019)](https://arxiv.org/abs/1812.11307) for a description of TIV construction.
 """
 function tivgmm(gmm::IsotropicGMM, c=Inf)
     t = eltype(gmm)
@@ -66,7 +69,7 @@ function planefit(mgmm::MultiGMM, R)
 end
 
 """
-    min, lb, pos, n = tiv_branch_bound(gmmx, gmmy, cx, cy, nsplits=2, rot=nothing;
+    min, lb, pos, n = tiv_gogma_align(gmmx, gmmy, cx, cy, nsplits=2, rot=nothing;
                                        atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
 
 Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
@@ -79,13 +82,13 @@ for `gmmx` and `gmmy` respectively, during rotational alignment.
 between the GMMs, the lower bound on the overlap, and the transformation vector for the best transformation,
 as well as the number of objective evaluations. 
 """
-function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=Inf, cy=Inf, nsplits=2;
+function tiv_gogma_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=Inf, cy=Inf, nsplits=2;
                           atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
     # align TIVs
     t = promote_type(eltype(gmmx),eltype(gmmy))
     pie = t(π)
     tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
-    rotatn = rot_branch_bound(tivgmmx, tivgmmy, nsplits,
+    rotatn = rot_gogma_align(tivgmmx, tivgmmy, nsplits,
                               atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
     rotblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotatn[3], zero(t), zero(t))
     rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock, objfun=rot_alignment_objective)
@@ -99,7 +102,7 @@ function tiv_branch_bound(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{Isotro
     end
 
     # perform translation alignment
-    transl = trl_branch_bound(gmmx, gmmy, nsplits, rotpos,
+    transl = trl_gogma_align(gmmx, gmmy, nsplits, rotpos,
                               atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
 
     # perform local alignment in the full transformation space

@@ -72,7 +72,7 @@ end
     end
 end
 
-@testset "gogma" begin
+@testset "GOGMA" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
@@ -97,15 +97,13 @@ end
     end
 
     # make sure this runs without an error
-    objmin, lowerbound, bestloc, ndivisions = branch_bound(gmmx, gmmy, maxblocks=1E5)
-    objmin, lowerbound, bestloc, ndivisions = tiv_branch_bound(gmmx, gmmy)
+    objmin, lowerbound, bestloc, ndivisions = gogma_align(gmmx, gmmy, maxblocks=1E5)
+    objmin, lowerbound, bestloc, ndivisions = tiv_gogma_align(gmmx, gmmy)
 
     mgmmx = MultiGMM(Dict(:x => gmmx, :y => gmmy))
     mgmmy = MultiGMM(Dict(:y => gmmx, :x => gmmy))
-    objmin, lowerbound, bestloc, ndivisions = branch_bound(mgmmx, mgmmy, maxblocks=1E5)
-    @show objmin
-    objmin, lowerbound, bestloc, ndivisions = tiv_branch_bound(mgmmx, mgmmy)
-    @show objmin
+    objmin, lowerbound, bestloc, ndivisions = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
+    objmin, lowerbound, bestloc, ndivisions = tiv_gogma_align(mgmmx, mgmmy)
 end
 
 @testset "directional GOGMA" begin
@@ -137,20 +135,19 @@ end
     ydirs = [[0.,0.,1.], [0.,-1.,0.], [0.,0.,-1]]
     dgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i]]) for (i,x) in enumerate(xpts)])
     dgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
-    objminxy, lowerbound, bestlocxy, ndivisions = tiv_branch_bound(dgmmx, dgmmy)
-    objminxx, lowerbound, bestlocxx, ndivisions = tiv_branch_bound(dgmmx, dgmmx)
-    objminyy, lowerbound, bestlocyy, ndivisions = tiv_branch_bound(dgmmy, dgmmy)
+    objminxy, lowerbound, bestlocxy, ndivisions = tiv_gogma_align(dgmmx, dgmmy)
+    objminxx, lowerbound, bestlocxx, ndivisions = tiv_gogma_align(dgmmx, dgmmx)
+    objminyy, lowerbound, bestlocyy, ndivisions = tiv_gogma_align(dgmmy, dgmmy)
     @test objminxy ≈ objminxx ≈ objminyy
 
     randdgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [2*rand(3).-1]) for (i,y) in enumerate(ypts)])
-    randobjminxy = tiv_branch_bound(dgmmx, randdgmmy)[1]
+    randobjminxy = tiv_gogma_align(dgmmx, randdgmmy)[1]
     @test randobjminxy > objminxy
 
     σ = 0.001
     ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
     ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
-    ddobjmin, ddlb, ddbestloc, ddndivisions = tiv_branch_bound(ddgmmx, ddgmmy)
-    @show bestlocxy, ddbestloc
+    ddobjmin, ddlb, ddbestloc, ddndivisions = tiv_gogma_align(ddgmmx, ddgmmy)
     @test ddobjmin ≈ -3.0
 
     mgmmx = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
@@ -159,6 +156,6 @@ end
     mgmmy = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
                           :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
                           :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
-    mobjminxy = tiv_branch_bound(mgmmx, mgmmy)[1]
+    mobjminxy = tiv_gogma_align(mgmmx, mgmmy)[1]
     @test mobjminxy ≈ -3.0
 end

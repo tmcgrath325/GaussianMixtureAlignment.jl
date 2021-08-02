@@ -1,6 +1,7 @@
 const sqrt3 = √(3)
 const sqrt2pi = √(2π)
 
+# prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
 function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     t = promote_type(eltype(gmmx),eltype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
@@ -71,6 +72,11 @@ function rotmat(rx, ry, rz)
     return R
 end
 
+"""
+    rx, ry, rz = rotmat_to_params(mat)
+
+Computes the angle-axis parameters `rx`, `ry`, and `rz`, from a rotation matrix `mat`. 
+"""
 function rotmat_to_params(mat)
     qx, qy, qz, qr = NaN, NaN, NaN, NaN
     if mat[3,3] < 0
@@ -118,11 +124,13 @@ end
 
 
 """
-    lowerbound, upperbound = get_bounds(x, y, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(mgmmx::MultiGMM, gmmy::MultiGMM, rwidth, twidth, X)
 
-Finds the bounds for overlap between two isotropic Gaussian distributions for a particular
-region in 6-dimensional rigid rotation space, defined by `rwidth`, `twidth`, and feature
-vector `X`.
+Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of 
+labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `rwidth`, `twidth`, 
+and feature vector `X`.
 
 `X` is a feature vector containing rotation axis components (`rx`, `ry`, and `rz`), and
 translation components (`tx`, `ty`, and `tz`).

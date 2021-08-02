@@ -18,7 +18,7 @@ function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=noth
             if length(x.dirs)==0 || length(y.dirs)==0
                 dirdot = one(t)
             else
-                # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
+                # NOTE: Avoids list comprehension (slow), but performs more matrix multiplications
                 # xdirs = [R*xdir for xdir in x.dirs]
                 dirdot = -one(t)
                 for xdir in x.dirs
@@ -34,6 +34,7 @@ function alignment_objective(X, gmmx::IsotropicGMM, gmmy::IsotropicGMM, rot=noth
     return objval
 end
 
+# alignment objective for `MultiGMM`s
 function alignment_objective(X, mgmmx::MultiGMM, mgmmy::MultiGMM, rot=nothing, trl=nothing, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights
     if isnothing(mpσ) || isnothing(mpϕ)
@@ -48,6 +49,7 @@ function alignment_objective(X, mgmmx::MultiGMM, mgmmy::MultiGMM, rot=nothing, t
      return objval
 end
 
+# alignment objective for rigid rotation (i.e. the first stage of TIV-GOGMA)
 function rot_alignment_objective(X, gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
     if isnothing(trl)
         zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
@@ -56,6 +58,7 @@ function rot_alignment_objective(X, gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Un
     return alignment_objective((X..., trl...), gmmx, gmmy, pσ, pϕ)
 end
 
+# alignment objective for translation (i.e. the second stage of TIV-GOGMA)
 function trl_alignment_objective(X, gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
     if isnothing(rot)
         zro = zero(promote_type(eltype(gmmx), eltype(gmmy)))
@@ -87,3 +90,6 @@ function local_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGM
     res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
     return Optim.minimum(res), tuple(Optim.minimizer(res)...)
 end
+
+local_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmys::Union{AbstractVector{IsotropicGMM},AbstractVector{MultiGMM}}, block,  pσ=nothing, pϕ=nothing; kwargs...) = 
+    local_align(gmmx, combine(gmmys), block, pσ, pϕ; kwargs...)
