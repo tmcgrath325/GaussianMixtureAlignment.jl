@@ -1,4 +1,4 @@
-using GOGMA
+using GaussianMixtureAlignment
 # Note: ProfileView is not added by this package
 using ProfileView
 

@@ -1,8 +1,9 @@
-using GOGMA
+using GaussianMixtureAlignment
 using Test
 using IntervalSets
 using LinearAlgebra
 
+const GMA = GaussianMixtureAlignment
 @testset "get bounds" begin
     μx = [3,0,0]
     μy = [-4,0,0]
@@ -15,29 +16,29 @@ using LinearAlgebra
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = get_bounds(x,y,2π,0,zeros(6))
-    @test lb ≈ GOGMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
-    @test ub ≈ GOGMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
+    @test ub ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
     lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
-    @test lb ≈ ub ≈ GOGMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ ub ≈ GMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.)
     # spheres with closest alignment at 90 degree rotation
     lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
-    @test lb ≈ GOGMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.)
     lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
-    @test lb ≈ GOGMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.) 
+    @test lb ≈ GMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # centered at origin
     lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
-    @test lb ≈ GOGMA.objectivefun(6^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GOGMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.objectivefun(6^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
-    @test lb ≈ GOGMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GOGMA.objectivefun(8^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.objectivefun(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
-    @test lb ≈ GOGMA.objectivefun((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GOGMA.objectivefun(58,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.objectivefun((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.objectivefun(58,2*σ^2,ϕ*ϕ, 1.)
 
 end
 
@@ -111,8 +112,8 @@ end
     x = IsotropicGaussian(xpt, σ, ϕ, [xdir])
     y = IsotropicGaussian(ypt, σ, ϕ, [ydir])
     @test get_bounds(x,y,0.,0.,zeros(6)) == (-0.5,-0.5)
-    @test get_bounds(x,y,π/(3*GOGMA.sqrt3),0.,zeros(6)) == (-0.75,-0.5)
-    @test get_bounds(x,y,π/GOGMA.sqrt3,0.,zeros(6)) == (-1.0,-0.5)
+    @test get_bounds(x,y,π/(3*GMA.sqrt3),0.,zeros(6)) == (-0.75,-0.5)
+    @test get_bounds(x,y,π/GMA.sqrt3,0.,zeros(6)) == (-1.0,-0.5)
 
     xpt = [1.,0.,0.]
     ypt = [1.,0.,0.]

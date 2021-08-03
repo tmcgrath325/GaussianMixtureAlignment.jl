@@ -1,4 +1,4 @@
-module GOGMA
+module GaussianMixtureAlignment
 
 using StaticArrays
 using LinearAlgebra
