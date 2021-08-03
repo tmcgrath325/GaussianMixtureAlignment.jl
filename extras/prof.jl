@@ -1,4 +1,5 @@
 using GOGMA
+# Note: ProfileView is not added by this package
 using ProfileView
 
 # small problem
