@@ -1,7 +1,7 @@
 using GOGMA
+using Test
 using IntervalSets
 using LinearAlgebra
-using Test
 
 @testset "get bounds" begin
     μx = [3,0,0]
