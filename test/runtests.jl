@@ -2,10 +2,6 @@ using GOGMA
 using IntervalSets
 using LinearAlgebra
 using Test
-# using SteroidComputationalChemistry
-# using Rotations
-
-# const SCC = SteroidComputationalChemistry
 
 @testset "get bounds" begin
     μx = [3,0,0]
