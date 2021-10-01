@@ -1,6 +1,6 @@
 abstract type AlignmentResults end
 
-struct GMAlignmentResult{T,D,N,X<:GMM{T,D},Y<:GMM{T,D}} <: AlignmentResults
+struct GMAlignmentResult{T,D,N,X<:AbstractGMM{T,D},Y<:AbstractGMM{T,D}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -38,7 +38,7 @@ Returns a `GMAlignmentResult` that contains the maximized overlap of the two GMM
 a lower bound on the alignment objective function, an `AffineMap` which aligns `gmmx` with `gmmy`, and information about the
 number of evaluations during the alignment procedure. 
 """ 
-function gogma_align(gmmx::GMM, gmmy::GMM;
+function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
                      nsplits=2, initblock=nothing, rot=nothing, trl=nothing,
                      blockfun=fullBlock, objfun=alignment_objective,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, threads=false)
@@ -126,7 +126,7 @@ That is, only rigid translation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function rot_gogma_align(gmmx::GMM, gmmy::GMM; kwargs...)
+function rot_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
     return gogma_align(gmmx, gmmy; blockfun=rotBlock, objfun=rot_alignment_objective, kwargs...)
 end
 
@@ -139,6 +139,6 @@ That is, only rigid rotation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function trl_gogma_align(gmmx::GMM, gmmy::GMM; kwargs...)
+function trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
     return gogma_align(gmmx, gmmy; blockfun=trlBlock, objfun=trl_alignment_objective, kwargs...)
 end

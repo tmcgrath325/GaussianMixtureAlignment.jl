@@ -1,4 +1,4 @@
-struct TIVAlignmentResult{T,D,N,M,X<:GMM{T,D},Y<:GMM{T,D}} <: AlignmentResults
+struct TIVAlignmentResult{T,D,N,M,X<:AbstractGMM{T,D},Y<:AbstractGMM{T,D}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -47,12 +47,12 @@ function tivgmm(gmm::IsotropicGMM, c=Inf)
     return IsotropicGMM(tivgaussians)
 end
 
-function tivgmm(mgmm::MultiGMM, c=Inf)
+function tivgmm(mgmm::IsotropicMultiGMM, c=Inf)
     gmms = Dict{Symbol, IsotropicGMM{eltype(mgmm),size(mgmm,2)}}()
     for key in keys(mgmm.gmms)
         push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
     end
-    return MultiGMM(gmms)
+    return IsotropicMultiGMM(gmms)
 end
 
 # fit a plane to a set of points, returning the normal vector
@@ -70,7 +70,7 @@ function planefit(gmm::IsotropicGMM, R)
     return planefit(R * ptsmat)
 end
 
-function planefit(mgmm::MultiGMM, R)
+function planefit(mgmm::IsotropicMultiGMM, R)
     len = sum([length(gmm) for gmm in values(mgmm.gmms)])
     ptsmat = fill(zero(eltype(mgmm)), 3, len)
     idx = 1
@@ -95,7 +95,7 @@ for `gmmx` and `gmmy` respectively, during rotational alignment.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function tiv_gogma_align(gmmx::GMM, gmmy::GMM, cx=Inf, cy=Inf; kwargs...)
+function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; kwargs...)
     t = promote_type(eltype(gmmx),eltype(gmmy))
     p = t(π)
     z = zero(t)

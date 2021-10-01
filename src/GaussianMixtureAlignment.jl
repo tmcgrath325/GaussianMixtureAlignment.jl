@@ -7,11 +7,10 @@ using Rotations
 using CoordinateTransformations
 using Optim
 
-export IsotropicGaussian, IsotropicGMM, MultiGMM, GMM
+export AbstractGMM, AbstractSingleGMM, AbstractMultiGMM
+export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
 export rotmat
-export overlap
-export get_bounds
-export subranges, fullBlock, rotBlock, trlBlock
+export overlap, distance, tanimoto
 export local_align
 export gogma_align, rot_gogma_align, trl_gogma_align
 export tivgmm, tiv_gogma_align

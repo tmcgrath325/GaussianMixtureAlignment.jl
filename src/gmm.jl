@@ -1,6 +1,12 @@
 import Base: eltype, length, size, convert, promote_rule
 
-abstract type GMM{T<:Real,N} end
+
+abstract type AbstractGaussian{T<:Real,N} end
+# leaving the possibility open for adding anisotropic Gaussians
+
+abstract type AbstractGMM{T<:Real,N} end
+abstract type AbstractSingleGMM{T<:Real,N} <: AbstractGMM{T,N} end
+abstract type AbstractMultiGMM{T<:Real,N,K} <: AbstractGMM{T,N} end
 
 """
 A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`, 
@@ -9,7 +15,7 @@ and scaling factor `ϕ`.
 An `IsotropicGaussian` can also be assigned directions `dirs` which enforce a penalty for misalignment with the `dirs` of 
 another `IsotropicGaussian`.
 """
-struct IsotropicGaussian{T<:Real,N}
+struct IsotropicGaussian{T<:Real,N} <: AbstractGaussian{T,N}
     μ::SVector{N,T}
     σ::T
     ϕ::T
@@ -33,7 +39,7 @@ promote_rule(::Type{IsotropicGaussian{T,N}}, ::Type{IsotropicGaussian{S,N}}) whe
 """
 A collection of `IsotropicGaussian`s, making up a Gaussian Mixture Model (GMM).
 """
-struct IsotropicGMM{T<:Real,N} <: GMM{T,N}
+struct IsotropicGMM{T<:Real,N} <: AbstractSingleGMM{T,N}
     gaussians::Vector{IsotropicGaussian{T,N}}
 end
 eltype(::IsotropicGMM{T,N}) where {T,N} = T
@@ -49,19 +55,20 @@ promote_rule(::Type{IsotropicGMM{T,N}}, ::Type{IsotropicGMM{S,N}}) where {T,S,N}
 A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is, 
 only alignment scores between `IsotropicGMM`s with the same key are considered when aligning two `MultiGMM`s. 
 """
-struct MultiGMM{T<:Real,N,K} <: GMM{T,N}
+struct IsotropicMultiGMM{T<:Real,N,K} <: AbstractMultiGMM{T,N,K}
     gmms::Dict{K, IsotropicGMM{T,N}}
 end
-eltype(::MultiGMM{T,N,K}) where {T,N,K} = T
-length(mgmm::MultiGMM) = length(mgmm.gmms)
-size(mgmm::MultiGMM{T,N,K}) where {T,N,K} = (length(mgmm.gmms), N)
-size(mgmm::MultiGMM{T,N,K}, idx::Int) where {T,N,K} = (length(mgmm.gmms), N)[idx]
+eltype(::IsotropicMultiGMM{T,N,K}) where {T,N,K} = T
+length(mgmm::IsotropicMultiGMM) = length(mgmm.gmms)
+size(mgmm::IsotropicMultiGMM{T,N,K}) where {T,N,K} = (length(mgmm.gmms), N)
+size(mgmm::IsotropicMultiGMM{T,N,K}, idx::Int) where {T,N,K} = (length(mgmm.gmms), N)[idx]
 
-convert(t::Type{MultiGMM{T,N,K}}, mgmm::MultiGMM) where {T,N,K} = t(mgmm.gmms)
-MultiGMM{T,N,K}(mgmm::MultiGMM) where {T,N,K} = convert(MultiGMM{T,N}, mgmm)
-promote_rule(::Type{MultiGMM{T,N,K}}, ::Type{MultiGMM{S,N,K}}) where {T,S,N,K} = MultiGMM{promote_type(T,S),N,K}
+convert(t::Type{IsotropicMultiGMM{T,N,K}}, mgmm::IsotropicMultiGMM) where {T,N,K} = t(mgmm.gmms)
+IsotropicMultiGMM{T,N,K}(mgmm::IsotropicMultiGMM) where {T,N,K} = convert(IsotropicMultiGMM{T,N}, mgmm)
+promote_rule(::Type{IsotropicMultiGMM{T,N,K}}, ::Type{IsotropicMultiGMM{S,N,K}}) where {T,S,N,K} = IsotropicMultiGMM{promote_type(T,S),N,K}
 
 # descriptive display
+# TODO update to display type parameters, make use of supertypes, etc
 
 Base.show(io::IO, g::IsotropicGaussian) = println(io,
     "IsotropicGaussian with mean $(g.μ), standard deviation $(g.σ), and weight $(g.ϕ),\n",
@@ -72,6 +79,6 @@ Base.show(io::IO, gmm::IsotropicGMM) = println(io,
     "IsotropicGMM with $(length(gmm)) Gaussian distributions."
 )
 
-Base.show(io::IO, mgmm::MultiGMM) = println(io,
+Base.show(io::IO, mgmm::IsotropicMultiGMM) = println(io,
     "MultiGMM with $(length(mgmm)) IsotropicGMMs and a total of $(sum([length(gmm) for (key,gmm) in mgmm.gmms])) IsotropicGaussians."
 )

@@ -23,11 +23,11 @@ function (tform::AffineMap)(x::IsotropicGMM)
     return IsotropicGMM([tform(g) for g in x.gaussians])
 end
 
-function (tform::AffineMap)(x::MultiGMM)
+function (tform::AffineMap)(x::IsotropicMultiGMM)
     tformgmms = [tform(x.gmms[key]) for key in keys(x.gmms)]
     gmmdict = Dict{eltype(keys(x.gmms)),eltype(tformgmms)}()
     for (i,key) in enumerate(keys(x.gmms))
         push!(gmmdict, key=>tformgmms[i])
     end
-    return MultiGMM(gmmdict)
+    return IsotropicMultiGMM(gmmdict)
 end

@@ -53,7 +53,7 @@ end
 Calculates the unnormalized overlap between two `IsotropicGMM` objects, after applying a rigid transformation 
 `xtform` to the first GMM `x`.
 """
-function overlap(x::IsotropicGMM, y::IsotropicGMM, pσ=nothing, pϕ=nothing)
+function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
@@ -75,7 +75,7 @@ end
 Calculates the unnormalized overlap between two `MultiGMM` objects, after applying a rigid transformation 
 `xtform` to the first GMM `x`.
 """
-function overlap(x::MultiGMM, y::MultiGMM, mpσ=nothing, mpϕ=nothing)
+function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(x, y)
@@ -88,17 +88,13 @@ function overlap(x::MultiGMM, y::MultiGMM, mpσ=nothing, mpϕ=nothing)
     end
     return ovlp
 end
-
-overlap(x::Union{IsotropicGaussian,IsotropicGMM,MultiGMM}, y::Union{IsotropicGaussian,IsotropicGMM,MultiGMM}, tform::Union{AffineMap, typeof(identity)}
-    ) = overlap(tform(x), y)
-
     
 """
 l2dist = distance(x, y)
 
 Calculates the L2 distance between two GMMs made up of spherical Gaussian distributions.
 """
-function distance(x::GMM, y::GMM)
+function distance(x::AbstractGMM, y::AbstractGMM)
     return overlap(x,x) + overlap(y,y) - 2*overlap(x,y)
 end
 
@@ -107,7 +103,7 @@ tani = tanimoto(x, y)
 
 Calculates the tanimoto distance based on Gaussian overlap between two GMMs.
 """
-function tanimoto(x::GMM, y::GMM)
+function tanimoto(x::AbstractGMM, y::AbstractGMM)
     o = overlap(x,y)
     return o / (overlap(x,x) + overlap(y,y) - o)
 end

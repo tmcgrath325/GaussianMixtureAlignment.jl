@@ -6,7 +6,7 @@
 Creates a new `IsotropicGMM` or `MultiGMM` by concatenating the vectors of `IsotroicGaussian`s in
 the input GMMs. 
 """
-function combine(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
+function combine(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
     if size(gmmx,2) != size(gmmy,2)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
@@ -14,7 +14,7 @@ function combine(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return t(vcat(gmmx.gaussians, gmmy.gaussians))
 end
 
-function combine(mgmmx::MultiGMM, mgmmy::MultiGMM)
+function combine(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
     if size(mgmmx,2) != size(mgmmy,2)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
@@ -33,7 +33,7 @@ function combine(mgmmx::MultiGMM, mgmmy::MultiGMM)
     return promote_type(typeof(mgmmx), typeof(mgmmy))(gmms)
 end
 
-function combine(gmms::Union{AbstractVector{<:IsotropicGMM},AbstractVector{<:MultiGMM}})
+function combine(gmms::Union{AbstractVector{<:AbstractSingleGMM},AbstractVector{<:AbstractMultiGMM}})
     if length(gmms) > 1
         return combine([combine(gmms[1],gmms[2]), gmms[3:end]...])
     elseif length(gmms) == 1

@@ -14,7 +14,7 @@ function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return pσ, pϕ
 end
 
-function pairwise_consts(mgmmx::MultiGMM, mgmmy::MultiGMM)
+function pairwise_consts(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
     t = promote_type(eltype(mgmmx),eltype(mgmmy))
     mpσ, mpϕ = Dict{Any, Matrix{t}}(), Dict{Any, Matrix{t}}()
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
@@ -100,10 +100,10 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     # return overlap(lbdist^2, s, w, 3), overlap(ubdist^2, s, w, 3)
 end
 
-get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, tform::AffineMap, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
+get_bounds(x::AbstractGaussian, y::AbstractGaussian, rwidth, twidth, tform::AffineMap, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
     ) = get_bounds(x, y, rwidth, twidth, tform.linear.theta, RotMatrix(tform.linear), tform.translation, s, w)
 
-get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
+get_bounds(x::AbstractGaussian, y::AbstractGaussian, rwidth, twidth, X, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
     ) = get_bounds(x, y, rwidth, twidth, AffineMap(X...), s, w)
 
 function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, θ::Real, R0, t0, pσ=nothing, pϕ=nothing)
@@ -123,7 +123,7 @@ function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, θ::
     return lb, ub
 end
 
-function get_bounds(mgmmx::MultiGMM, mgmmy::MultiGMM, rwidth, twidth, θ::Real, R0, t0, mpσ=nothing, mpϕ=nothing)
+function get_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, rwidth, twidth, θ::Real, R0, t0, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
@@ -138,8 +138,8 @@ function get_bounds(mgmmx::MultiGMM, mgmmy::MultiGMM, rwidth, twidth, θ::Real, 
     return lb, ub
 end
 
-get_bounds(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rwidth, twidth, tform::AffineMap, pσ=nothing, pϕ=nothing
+get_bounds(gmmx::AbstractGMM, gmmy::AbstractGMM, rwidth, twidth, tform::AffineMap, pσ=nothing, pϕ=nothing
     ) = get_bounds(gmmx, gmmy, rwidth, twidth, tform.linear.theta, RotMatrix(tform.linear), tform.translation, pσ, pϕ)
 
-get_bounds(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, rwidth, twidth, X, pσ=nothing, pϕ=nothing
+get_bounds(gmmx::AbstractGMM, gmmy::AbstractGMM, rwidth, twidth, X, pσ=nothing, pϕ=nothing
     ) = get_bounds(gmmx, gmmy, rwidth, twidth, AffineMap(X...), pσ, pϕ)

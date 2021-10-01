@@ -54,7 +54,7 @@ end
 
 Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
 """
-function translation_limit(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
+function translation_limit(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
     trlim = typemin(promote_type(eltype(gmmx),eltype(gmmy)))
     for gaussians in (gmmx.gaussians, gmmy.gaussians)
         if !isempty(gaussians)
@@ -65,7 +65,7 @@ function translation_limit(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return trlim
 end
 
-function translation_limit(mgmmx::MultiGMM, mgmmy::MultiGMM)
+function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
     trlim = typemin(promote_type(eltype(mgmmx),eltype(mgmmy)))
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
         trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
@@ -74,7 +74,7 @@ function translation_limit(mgmmx::MultiGMM, mgmmy::MultiGMM)
 end
 
 # Block for GOGMA procedure in full transformational space
-function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function fullBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
@@ -92,7 +92,7 @@ function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM
 end
 
 # Block for rotational space only (i.e. the first stage of TIV-GOGMA)
-function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function rotBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)
@@ -111,7 +111,7 @@ function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM,
 end
 
 # Block for translational space only (i.e. the second stage of TIV-GOGMA)
-function trlBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function trlBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
     t = promote_type(eltype(gmmx),eltype(gmmy))
     if isnothing(ranges)

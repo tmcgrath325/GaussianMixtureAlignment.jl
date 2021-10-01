@@ -4,6 +4,8 @@ using IntervalSets
 using LinearAlgebra
 using CoordinateTransformations
 
+using GaussianMixtureAlignment: get_bounds, subranges, fullBlock
+
 const GMA = GaussianMixtureAlignment
 @testset "get bounds" begin
     μx = [3,0,0]
@@ -98,8 +100,8 @@ end
     res = gogma_align(gmmx, gmmy, maxblocks=1E5)
     res = tiv_gogma_align(gmmx, gmmy)
 
-    mgmmx = MultiGMM(Dict(:x => gmmx, :y => gmmy))
-    mgmmy = MultiGMM(Dict(:y => gmmx, :x => gmmy))
+    mgmmx = IsotropicMultiGMM(Dict(:x => gmmx, :y => gmmy))
+    mgmmy = IsotropicMultiGMM(Dict(:y => gmmx, :x => gmmy))
     res = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
     res = tiv_gogma_align(mgmmx, mgmmy)
 end
@@ -149,12 +151,12 @@ end
     ddobjmin = tiv_gogma_align(ddgmmx, ddgmmy).upperbound
     @test ddobjmin ≈ -3.0
 
-    mgmmx = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
-                          :two => IsotropicGMM([IsotropicGaussian(xpts[2], σ, ϕ, [xdirs[2]])]),
-                          :three => IsotropicGMM([IsotropicGaussian(xpts[3], σ, ϕ, [xdirs[3]])])))
-    mgmmy = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
-                          :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
-                          :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
+    mgmmx = IsotropicMultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
+                                   :two => IsotropicGMM([IsotropicGaussian(xpts[2], σ, ϕ, [xdirs[2]])]),
+                                   :three => IsotropicGMM([IsotropicGaussian(xpts[3], σ, ϕ, [xdirs[3]])])))
+    mgmmy = IsotropicMultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
+                                   :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
+                                   :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
     mobjminxy = tiv_gogma_align(mgmmx, mgmmy).upperbound
     @test mobjminxy ≈ -3.0
 end
