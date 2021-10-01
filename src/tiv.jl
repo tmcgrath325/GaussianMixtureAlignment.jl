@@ -1,3 +1,18 @@
+struct TIVAlignmentResult{T,D,N,M,X<:GMM{T,D},Y<:GMM{T,D}} <: AlignmentResults
+    x::X
+    y::Y
+    upperbound::T
+    lowerbound::T
+    tform_params::NTuple{N,T}
+    obj_calls::Int
+    num_splits::Int
+    num_blocks::Int
+    stagnant_splits::Int
+    rotation_result::GMAlignmentResult{T,D,M,X,Y}
+    translation_result::GMAlignmentResult{T,D,M,X,Y}
+end
+
+
 """
     tgmm = tivgmm(gmm::IsotropicGMM, c=Inf)
     tgmm = tivgmm(mgmm::MultiGMM, c=Inf)
@@ -69,8 +84,7 @@ function planefit(mgmm::MultiGMM, R)
 end
 
 """
-    min, lb, pos, n = tiv_gogma_align(gmmx, gmmy, cx, cy, nsplits=2, rot=nothing;
-                                       atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
+    result = tiv_gogma_align(gmmx, gmmy, cx, cy; kwargs...)
 
 Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
 and `gmmy`, using a modified GOGMA algorithm that performs rotational and translational optimization separately
@@ -78,38 +92,40 @@ by making use of translation invariant vectors (TIVs).
 
 `cx` and `cy` are the ratios between number of TIVs used to represent a GMM and the number of Gaussians it contains, 
 for `gmmx` and `gmmy` respectively, during rotational alignment. 
-`nsplits` is the number of splits performed along each dimension during branching. Returns the overlap
-between the GMMs, the lower bound on the overlap, and the transformation vector for the best transformation,
-as well as the number of objective evaluations. 
+
+For details about keyword arguments, see `gogma_align()`.
 """
-function tiv_gogma_align(gmmx::Union{IsotropicGMM,MultiGMM}, gmmy::Union{IsotropicGMM,MultiGMM}, cx=Inf, cy=Inf, nsplits=2;
-                          atol=0.1, rtol=0, maxblocks=5e8, maxevals=Inf, maxstagnant=Inf, threads=false)
-    # align TIVs
+function tiv_gogma_align(gmmx::GMM, gmmy::GMM, cx=Inf, cy=Inf; kwargs...)
     t = promote_type(eltype(gmmx),eltype(gmmy))
-    pie = t(π)
+    p = t(π)
+    z = zero(t)
+    
+    # align TIVs
     tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
-    rotatn = rot_gogma_align(tivgmmx, tivgmmy, nsplits,
-                              atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
-    rotblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotatn[3], zero(t), zero(t))
+    rot_res = rot_gogma_align(tivgmmx, tivgmmy; kwargs...)
+    rotblock = Block(((-p,p), (-p,p), (-p,p)), rot_res.tform_params, z, z)
     rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock, objfun=rot_alignment_objective)
-    # spin the moving tivgmm around to check for a better rotation
-    R = rotmat(rotatn[3]...)
+
+    # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
+    R = AngleAxis(rot_res.tform_params...)
     spinvec, dist = planefit(tivgmmx, R)
-    spinblock = Block(((-pie,pie), (-pie,pie), (-pie,pie)), rotmat_to_params(rotmat(π*spinvec...) * R), zero(t), zero(t))
+    spinblock = Block(((-p,p), (-p,p), (-p,p)), rot_to_axis(AngleAxis(π*spinvec...) * R), z, z)
     spinscore, spinrotpos = local_align(tivgmmx, tivgmmy, spinblock, objfun=rot_alignment_objective)
     if spinscore < rotscore
         rotpos = spinrotpos
     end
 
     # perform translation alignment
-    transl = trl_gogma_align(gmmx, gmmy, nsplits, rotpos,
-                              atol=atol, rtol=rtol, maxblocks=maxblocks, maxevals=maxevals, maxstagnant=maxstagnant, threads=threads)
+    trl_res = trl_gogma_align(gmmx, gmmy; rot=rotpos, kwargs...)
 
     # perform local alignment in the full transformation space
-    pos = NTuple{6, t}([rotpos..., transl[3]...])
+    pos = NTuple{6, t}([rotpos..., trl_res.tform_params...])
     trlim = translation_limit(gmmx, gmmy)
-    localblock = Block(((-pie,pie), (-pie,pie), (-pie,pie), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, zero(t), zero(t))
+    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, z, z)
     localopt = local_align(gmmx, gmmy, localblock)
 
-    return localopt[1], transl[2], localopt[2], transl[4]+rotatn[4]
+    return TIVAlignmentResult(gmmx, gmmy, localopt[1], trl_res.lowerbound, localopt[2], 
+                             rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
+                             rot_res.num_blocks+trl_res.num_blocks, rot_res.stagnant_splits+trl_res.stagnant_splits,
+                             rot_res, trl_res)
 end

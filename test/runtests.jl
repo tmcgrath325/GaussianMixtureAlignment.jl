@@ -2,6 +2,7 @@ using GaussianMixtureAlignment
 using Test
 using IntervalSets
 using LinearAlgebra
+using CoordinateTransformations
 
 const GMA = GaussianMixtureAlignment
 @testset "get bounds" begin
@@ -16,29 +17,29 @@ const GMA = GaussianMixtureAlignment
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = get_bounds(x,y,2π,0,zeros(6))
-    @test lb ≈ GMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
-    @test ub ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
+    @test ub ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
-    @test lb ≈ ub ≈ GMA.objectivefun(1,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ ub ≈ GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
     # spheres with closest alignment at 90 degree rotation
     lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
-    @test lb ≈ GMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
     lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
-    @test lb ≈ GMA.objectivefun(5^2,2*σ^2,ϕ*ϕ, 1.) 
+    @test lb ≈ GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # centered at origin
     lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
-    @test lb ≈ GMA.objectivefun(6^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
-    @test lb ≈ GMA.objectivefun(7^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.objectivefun(8^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
-    @test lb ≈ GMA.objectivefun((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.objectivefun(58,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
 
 end
 
@@ -94,13 +95,13 @@ end
     end
 
     # make sure this runs without an error
-    objmin, lowerbound, bestloc, ndivisions = gogma_align(gmmx, gmmy, maxblocks=1E5)
-    objmin, lowerbound, bestloc, ndivisions = tiv_gogma_align(gmmx, gmmy)
+    res = gogma_align(gmmx, gmmy, maxblocks=1E5)
+    res = tiv_gogma_align(gmmx, gmmy)
 
     mgmmx = MultiGMM(Dict(:x => gmmx, :y => gmmy))
     mgmmy = MultiGMM(Dict(:y => gmmx, :x => gmmy))
-    objmin, lowerbound, bestloc, ndivisions = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
-    objmin, lowerbound, bestloc, ndivisions = tiv_gogma_align(mgmmx, mgmmy)
+    res = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
+    res = tiv_gogma_align(mgmmx, mgmmy)
 end
 
 @testset "directional GOGMA" begin
@@ -132,19 +133,20 @@ end
     ydirs = [[0.,0.,1.], [0.,-1.,0.], [0.,0.,-1]]
     dgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i]]) for (i,x) in enumerate(xpts)])
     dgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
-    objminxy, lowerbound, bestlocxy, ndivisions = tiv_gogma_align(dgmmx, dgmmy)
-    objminxx, lowerbound, bestlocxx, ndivisions = tiv_gogma_align(dgmmx, dgmmx)
-    objminyy, lowerbound, bestlocyy, ndivisions = tiv_gogma_align(dgmmy, dgmmy)
+    objminxy = tiv_gogma_align(dgmmx, dgmmy).upperbound
+    objminxx = tiv_gogma_align(dgmmx, dgmmx).upperbound
+    objminyy = tiv_gogma_align(dgmmy, dgmmy).upperbound
     @test objminxy ≈ objminxx ≈ objminyy
 
     randdgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [2*rand(3).-1]) for (i,y) in enumerate(ypts)])
-    randobjminxy = tiv_gogma_align(dgmmx, randdgmmy)[1]
+    randobjminxy = tiv_gogma_align(dgmmx, randdgmmy).upperbound
     @test randobjminxy > objminxy
 
+    # when σ is very small, only very well aligned Gaussians will contribute to the overlap
     σ = 0.001
     ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
     ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
-    ddobjmin, ddlb, ddbestloc, ddndivisions = tiv_gogma_align(ddgmmx, ddgmmy)
+    ddobjmin = tiv_gogma_align(ddgmmx, ddgmmy).upperbound
     @test ddobjmin ≈ -3.0
 
     mgmmx = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
@@ -153,6 +155,19 @@ end
     mgmmy = MultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
                           :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
                           :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
-    mobjminxy = tiv_gogma_align(mgmmx, mgmmy)[1]
+    mobjminxy = tiv_gogma_align(mgmmx, mgmmy).upperbound
     @test mobjminxy ≈ -3.0
+end
+
+@testset "TIV-GOGMA with larger GMMs" begin
+    for i=1:10
+        randpts = 10*rand(3,50)
+        randtform = AffineMap(10*rand(6)...)
+        gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
+        gmmy = randtform(gmmx)
+        min_overlap_score = overlap(gmmx,gmmx)
+        res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E3)
+        @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
+        @test isapprox(overlap(AffineMap(res.tform_params...)(gmmx), gmmy), min_overlap_score; rtol=0.01)
+    end
 end

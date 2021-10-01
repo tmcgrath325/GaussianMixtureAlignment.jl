@@ -9,7 +9,7 @@ struct Block{T<:Real, N}
     upperbound::T
 end
 Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
-Base.size(blk::Block{T,N}) where T where N = N
+Base.size(::Block{T,N}) where T where N = (N,)
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
@@ -18,6 +18,8 @@ function hash(B::Block, h::UInt)
     h = hash(B.ranges, h)
     return h
 end
+
+CoordinateTransformations.AffineMap(bl::Block) = AffineMap(bl.center)
 
 # 
 function boxranges(center::Union{Tuple, NTuple, AbstractArray}, widths::Union{Tuple, NTuple, AbstractArray})
