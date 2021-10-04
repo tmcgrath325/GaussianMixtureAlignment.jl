@@ -1,4 +1,4 @@
-struct TIVAlignmentResult{T,D,N,M,X<:AbstractGMM{T,D},Y<:AbstractGMM{T,D}} <: AlignmentResults
+struct TIVAlignmentResult{T,D,N,M,V<:AbstractGMM{D,T},W<:AbstractGMM{D,T},X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -8,7 +8,7 @@ struct TIVAlignmentResult{T,D,N,M,X<:AbstractGMM{T,D},Y<:AbstractGMM{T,D}} <: Al
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    rotation_result::GMAlignmentResult{T,D,M,X,Y}
+    rotation_result::GMAlignmentResult{T,D,M,V,W}
     translation_result::GMAlignmentResult{T,D,M,X,Y}
 end
 
@@ -22,8 +22,8 @@ TIVs are chosen to maximize length multiplied by the weights of the connected di
 
 See [Li et. al. (2019)](https://arxiv.org/abs/1812.11307) for a description of TIV construction.
 """
-function tivgmm(gmm::IsotropicGMM, c=Inf)
-    t = eltype(gmm)
+function tivgmm(gmm::AbstractIsotropicGMM, c=Inf)
+    t = numbertype(gmm)
     npts, ndims = size(gmm)
     n = ceil(c*npts)
     if npts^2 < n
@@ -36,7 +36,7 @@ function tivgmm(gmm::IsotropicGMM, c=Inf)
         end
     end
     
-    tivgaussians = IsotropicGaussian{t, ndims}[]
+    tivgaussians = IsotropicGaussian{ndims,t}[]
     order = sortperm(vec(scores), rev=true)
     for idx in order[1:Int(n)]
         i = Int(floor((idx-1)/npts)+1)
@@ -47,8 +47,8 @@ function tivgmm(gmm::IsotropicGMM, c=Inf)
     return IsotropicGMM(tivgaussians)
 end
 
-function tivgmm(mgmm::IsotropicMultiGMM, c=Inf)
-    gmms = Dict{Symbol, IsotropicGMM{eltype(mgmm),size(mgmm,2)}}()
+function tivgmm(mgmm::AbstractIsotropicMultiGMM, c=Inf)
+    gmms = Dict{Symbol, IsotropicGMM{dims(mgmm),numbertype(mgmm)}}()
     for key in keys(mgmm.gmms)
         push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
     end
@@ -62,17 +62,17 @@ function planefit(pts)
     return decomp.U[:, nvecidx], dist
 end
 
-function planefit(gmm::IsotropicGMM, R)
-    ptsmat = fill(zero(eltype(gmm)), 3, length(gmm))
+function planefit(gmm::AbstractIsotropicGMM, R)
+    ptsmat = fill(zero(numbertype(gmm)), 3, length(gmm))
     for (i,gauss) in enumerate(gmm.gaussians)
         ptsmat[:,i] = gauss.μ
     end
     return planefit(R * ptsmat)
 end
 
-function planefit(mgmm::IsotropicMultiGMM, R)
+function planefit(mgmm::AbstractIsotropicMultiGMM, R)
     len = sum([length(gmm) for gmm in values(mgmm.gmms)])
-    ptsmat = fill(zero(eltype(mgmm)), 3, len)
+    ptsmat = fill(zero(numbertype(mgmm)), 3, len)
     idx = 1
     for gmm in values(mgmm.gmms)
         for gauss in gmm.gaussians
@@ -96,7 +96,7 @@ for `gmmx` and `gmmy` respectively, during rotational alignment.
 For details about keyword arguments, see `gogma_align()`.
 """
 function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; kwargs...)
-    t = promote_type(eltype(gmmx),eltype(gmmy))
+    t = promote_type(numbertype(gmmx),numbertype(gmmy))
     p = t(π)
     z = zero(t)
     

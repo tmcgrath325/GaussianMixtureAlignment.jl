@@ -5,7 +5,7 @@ Calculates the unnormalized overlap between two Gaussian distributions with widt
 weight `w', and squared distance `distsq`, and geometric scaling factor `dirdot`.
 """
 function overlap(distsq::Real, s::Real, w::Real, dirdot::Real)
-    return -w * 0.5*(1+dirdot) * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
+    return w * 0.5*(1+dirdot) * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
     # Note, the normalization term for the Gaussians is left out, since it is not required that the total "volume" of each Gaussian
     # is equal to 1 (e.g. satisfying the requirements for a probability distribution)
 end
@@ -17,17 +17,16 @@ Calculates the unnormalized overlap between two Gaussian distributions with vari
 `σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, scaled
 by the dot product obtained from geometric constraints `dirdot`.
 """
-function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real, dirdot::Real) # , ndims)
-    return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy, dirdot) # , ndims)
+function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real, dirdot::Real) 
+    return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy, dirdot)
 end
 
 """
     ovlp = overlap(x::IsotropicGaussian, y::IsotropicGaussian, xtform=identity)
 
-Calculates the unnormalized overlap between two `IsotropicGaussian` objects, after applying a rigid transformation 
-`xtform` to the first Gaussian `x`.
+Calculates the unnormalized overlap between two `IsotropicGaussian` objects.
 """
-function overlap(x::IsotropicGaussian, y::IsotropicGaussian, s=nothing, w=nothing)
+function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=nothing, w=nothing)
     if isnothing(s)
         s = x.σ^2 + y.σ^2
     end
@@ -48,10 +47,9 @@ function overlap(x::IsotropicGaussian, y::IsotropicGaussian, s=nothing, w=nothin
 end
 
 """
-    ovlp = overlap(x::IsotropicGMM, y::IsotropicGMM, xtform=identity)
+    ovlp = overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, xtform=identity)
 
-Calculates the unnormalized overlap between two `IsotropicGMM` objects, after applying a rigid transformation 
-`xtform` to the first GMM `x`.
+Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
 """
 function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
     # prepare pairwise widths and weights, if not provided
@@ -60,20 +58,19 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
     end
     
     # sum overlaps for all pairwise combinations of Gaussians between x and y
-    ovlp = zero(promote_type(eltype(x),eltype(y)))
+    ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for (i,gx) in enumerate(x.gaussians)
         for (j,gy) in enumerate(y.gaussians)
-            ovlp += overlap(gx, gy, pσ[i], pϕ[j])
+            ovlp += overlap(gx, gy, pσ[i,j], pϕ[i,j])
         end
     end
     return ovlp
 end
 
 """
-    ovlp = overlap(x::MultiGMM, y::MultiGMM, xtform=identity)
+    ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, xtform=identity)
 
-Calculates the unnormalized overlap between two `MultiGMM` objects, after applying a rigid transformation 
-`xtform` to the first GMM `x`.
+Calculates the unnormalized overlap between two `AbstractMultiGMM` objects.
 """
 function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights, if not provided
@@ -82,8 +79,8 @@ function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=no
     end
     
     # sum overlaps from each keyed pairs of GMM
-    ovlp = zero(promote_type(eltype(x),eltype(y)))
-    for k in keys(x.gmms)∩keys(y.gmms)
+    ovlp = zero(promote_type(numbertype(x),numbertype(y)))
+    for k in keys(x.gmms) ∩ keys(y.gmms)
         ovlp += overlap(x.gmms[k], y.gmms[k], mpσ[k], mpϕ[k])
     end
     return ovlp

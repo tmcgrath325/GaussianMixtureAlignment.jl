@@ -2,8 +2,8 @@ const sqrt3 = √(3)
 const sqrt2pi = √(2π)
 
 # prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
-function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
-    t = promote_type(eltype(gmmx),eltype(gmmy))
+function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM)
+    t = promote_type(numbertype(gmmx),numbertype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
         for (j,gaussy) in enumerate(gmmy.gaussians)
@@ -14,9 +14,9 @@ function pairwise_consts(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return pσ, pϕ
 end
 
-function pairwise_consts(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
-    t = promote_type(eltype(mgmmx),eltype(mgmmy))
-    mpσ, mpϕ = Dict{Any, Matrix{t}}(), Dict{Any, Matrix{t}}()
+function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}) where {N,T,S,K}
+    t = promote_type(numbertype(mgmmx),numbertype(mgmmy))
+    mpσ, mpϕ = Dict{K, Matrix{t}}(), Dict{K, Matrix{t}}()
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
         pσ, pϕ = pairwise_consts(mgmmx.gmms[key], mgmmy.gmms[key])
         push!(mpσ, Pair(key, pσ))
@@ -27,9 +27,9 @@ end
 
 
 """
-    lowerbound, upperbound = get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, X)
-    lowerbound, upperbound = get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, X)
-    lowerbound, upperbound = get_bounds(mgmmx::MultiGMM, gmmy::MultiGMM, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, rwidth, twidth, X)
+    lowerbound, upperbound = get_bounds(mgmmx::AbstractMultiGMM, gmmy::AbstractMultiGMM, rwidth, twidth, X)
 
 Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of 
 labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `rwidth`, `twidth`, 
@@ -43,10 +43,10 @@ around the point defined by `X`.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, θ::Real, R0, t0, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ)
+function get_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, rwidth, twidth, θ::Real, R0, t0, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ)
     # return Inf for bounds if the rotation lies outside the π-sphere
     if θ > π
-        inf = typemax(promote_type(eltype(x),eltype(y)))
+        inf = typemax(promote_type(numbertype(x),numbertype(y)))
         return inf, inf
     end
 
@@ -54,7 +54,7 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
     x0 = R0*x.μ
     xnorm, ynorm = norm(x.μ), norm(y.μ-t0)
     if xnorm*ynorm == 0
-        cosα = one(promote_type(eltype(x),eltype(y)))
+        cosα = one(promote_type(numbertype(x),numbertype(y)))
     else
         cosα = dot(x0, y.μ-t0)/(xnorm*ynorm)
     end
@@ -90,14 +90,12 @@ function get_bounds(x::IsotropicGaussian, y::IsotropicGaussian, rwidth, twidth, 
         lbdot = 1.
     else
         lbdot = cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
+        # lbdot = cosγ*cosβ + √(1 - cosγ^2 - cosβ^2 + cosγ^2*cosβ^2)
     end
 
-    # lowerbound of dot product between directional constraints (at center of tform block)
-    # ubdot = cosγ
-
     # evaluate objective function at each distance to get upper and lower bounds
-    return overlap(lbdist^2, s, w, lbdot), overlap(ubdist^2, s, w, cosγ)
-    # return overlap(lbdist^2, s, w, 3), overlap(ubdist^2, s, w, 3)
+    return -overlap(lbdist^2, s, w, lbdot), -overlap(ubdist^2, s, w, cosγ)
+
 end
 
 get_bounds(x::AbstractGaussian, y::AbstractGaussian, rwidth, twidth, tform::AffineMap, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
@@ -106,7 +104,7 @@ get_bounds(x::AbstractGaussian, y::AbstractGaussian, rwidth, twidth, tform::Affi
 get_bounds(x::AbstractGaussian, y::AbstractGaussian, rwidth, twidth, X, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ
     ) = get_bounds(x, y, rwidth, twidth, AffineMap(X...), s, w)
 
-function get_bounds(gmmx::IsotropicGMM, gmmy::IsotropicGMM, rwidth, twidth, θ::Real, R0, t0, pσ=nothing, pϕ=nothing)
+function get_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, rwidth, twidth, θ::Real, R0, t0, pσ=nothing, pϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)

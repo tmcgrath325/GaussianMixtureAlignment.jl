@@ -19,29 +19,29 @@ const GMA = GaussianMixtureAlignment
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = get_bounds(x,y,2π,0,zeros(6))
-    @test lb ≈ GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
-    @test ub ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
+    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
-    @test lb ≈ ub ≈ GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
     # spheres with closest alignment at 90 degree rotation
     lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
-    @test lb ≈ GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
     lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
-    @test lb ≈ GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
+    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # centered at origin
     lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
-    @test lb ≈ GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
-    @test lb ≈ GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
     lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
-    @test lb ≈ GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
+    @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
 
 end
 
@@ -167,9 +167,22 @@ end
         randtform = AffineMap(10*rand(6)...)
         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
         gmmy = randtform(gmmx)
-        min_overlap_score = overlap(gmmx,gmmx)
+        min_overlap_score = -overlap(gmmx,gmmx)
         res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E3)
         @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
-        @test isapprox(overlap(AffineMap(res.tform_params...)(gmmx), gmmy), min_overlap_score; rtol=0.01)
+        @test isapprox(overlap(AffineMap(res.tform_params...)(gmmx), gmmy), -min_overlap_score; rtol=0.01)
+    end
+end
+
+@testset "ROCS alignment" begin
+    for i=1:10
+        randpts = 10*rand(3,50)
+        randtform = AffineMap(10*rand(6)...)
+        gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
+        gmmy = randtform(gmmx)
+        min_overlap_score = -overlap(gmmx,gmmx)
+        ovlp, tform = rocs_align(gmmx,gmmy)
+        @test isapprox(ovlp, min_overlap_score; atol=1E-12)
+        @test isapprox(overlap(tform(gmmx), gmmy), -min_overlap_score; atol=1E-12)
     end
 end

@@ -7,7 +7,7 @@ Creates a new `IsotropicGMM` or `MultiGMM` by concatenating the vectors of `Isot
 the input GMMs. 
 """
 function combine(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
-    if size(gmmx,2) != size(gmmy,2)
+    if dims(gmmx) != dims(gmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
     t = promote_type(typeof(gmmx), typeof(gmmy))
@@ -15,10 +15,10 @@ function combine(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
 end
 
 function combine(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
-    if size(mgmmx,2) != size(mgmmy,2)
+    if dims(gmmx) != dims(mgmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
-    t = IsotropicGMM{promote_type(eltype(mgmmx), eltype(mgmmy)),size(mgmmx,2)}
+    t = IsotropicGMM{dims(gmmx),promote_type(numbertype(mgmmx), numbertype(mgmmy))}
     gmms = Dict{Symbol, t}()
     xkeys, ykeys = keys(mgmmx.gmms), keys(mgmmy.gmms)
     for key in xkeys ∪ ykeys

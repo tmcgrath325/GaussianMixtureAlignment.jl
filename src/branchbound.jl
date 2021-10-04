@@ -1,6 +1,6 @@
 abstract type AlignmentResults end
 
-struct GMAlignmentResult{T,D,N,X<:AbstractGMM{T,D},Y<:AbstractGMM{T,D}} <: AlignmentResults
+struct GMAlignmentResult{T,D,N,X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -45,9 +45,13 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
-    if size(gmmx,2) != size(gmmy,2)
+    if dims(gmmx) != dims(gmmy)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
+
+    # REMOVE THIS, only for debugging
+    rot2 = isnothing(rot) ? (0,0,0) : rot
+    trl2 = isnothing(trl) ? (0,0,0) : trl
 
     # prepare pairwise widths and weights
     pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -56,11 +60,11 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
     if isnothing(initblock)
         initblock = blockfun(gmmx, gmmy, nothing, pσ, pϕ, rot, trl)
     end
-    ndims = size(initblock)[1]
+    ndims = dims(initblock)
     ub, bestloc = initblock.upperbound, initblock.center # local_align(gmmx, gmmy, initblock, pσ, pϕ)    # best-so-far objective value and transformation
     lb = Inf
-    t = promote_type(eltype(gmmx), eltype(gmmy))
-    pq = PriorityQueue{Block{t, ndims}, Tuple{t,t}}()
+    t = promote_type(numbertype(gmmx), numbertype(gmmy))
+    pq = PriorityQueue{Block{ndims, t}, Tuple{t,t}}()
     enqueue!(pq, initblock, (initblock.lowerbound, initblock.upperbound))
     
     # split cubes until convergence
@@ -84,7 +88,7 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
 
         # split up the block into `nsplits` smaller blocks across each dimension
         subrngs = subranges(bl.ranges, nsplits)
-        sblks = fill(Block{t, ndims}(), nsplits^ndims)
+        sblks = fill(Block{ndims,t}(), nsplits^ndims)
         if threads
             Threads.@threads for i=1:length(subrngs)
                 sblks[i] = blockfun(gmmx, gmmy, subrngs[i], pσ, pϕ, rot, trl)
@@ -96,10 +100,9 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
         end
 
         # reset the upper bound if appropriate
-        subs = [sblk.upperbound for sblk in sblks]
-        minub, ubidx = findmin(subs)
+        minub, ubidx = findmin([sblk.upperbound for sblk in sblks])
         if minub < ub
-            ub, bestloc = local_align(gmmx, gmmy, sblks[ubidx], pσ, pϕ, objfun=objfun, rot=rot, trl=trl)
+            ub, bestloc = local_align(gmmx, gmmy, sblks[ubidx], pσ, pϕ; objfun=objfun, rot=rot, trl=trl)
             sinceimprove = 0
         end
 
