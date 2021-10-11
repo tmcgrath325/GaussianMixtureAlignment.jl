@@ -1,15 +1,16 @@
-struct TIVAlignmentResult{T,D,N,M,V<:AbstractGMM{D,T},W<:AbstractGMM{D,T},X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
+struct TIVAlignmentResult{T,D,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:AbstractAffineMap,V<:AbstractGMM{D,T},W<:AbstractGMM{D,T},X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
     lowerbound::T
+    tform::F
     tform_params::NTuple{N,T}
     obj_calls::Int
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    rotation_result::GMAlignmentResult{T,D,M,V,W}
-    translation_result::GMAlignmentResult{T,D,M,X,Y}
+    rotation_result::GMAlignmentResult{T,D,M,G,V,W}
+    translation_result::GMAlignmentResult{T,D,M,H,X,Y}
 end
 
 
@@ -124,7 +125,7 @@ function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; k
     localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, z, z)
     localopt = local_align(gmmx, gmmy, localblock)
 
-    return TIVAlignmentResult(gmmx, gmmy, localopt[1], trl_res.lowerbound, localopt[2], 
+    return TIVAlignmentResult(gmmx, gmmy, localopt[1], trl_res.lowerbound, AffineMap(localopt[2]...), localopt[2], 
                              rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
                              rot_res.num_blocks+trl_res.num_blocks, rot_res.stagnant_splits+trl_res.stagnant_splits,
                              rot_res, trl_res)

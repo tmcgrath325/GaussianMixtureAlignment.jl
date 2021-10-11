@@ -37,12 +37,15 @@ dims(::AbstractGMM{N,T}) where {N,T} = N
 
 length(gmm::AbstractSingleGMM) = length(gmm.gaussians)
 getindex(gmm::AbstractSingleGMM, idx) = gmm.gaussians[idx]
+iterate(gmm::AbstractSingleGMM) = iterate(gmm.gaussians)
+iterate(gmm::AbstractSingleGMM, i) = iterate(gmm.gaussians, i)
 size(gmm::AbstractSingleGMM{N,T}) where {N,T} = (length(gmm.gaussians), N)
 size(gmm::AbstractSingleGMM{N,T}, idx::Int) where {N,T} = (length(gmm.gaussians), N)[idx]
 
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
 iterate(mgmm::AbstractMultiGMM) = iterate(mgmm.gmms)
+iterate(mgmm::AbstractMultiGMM, i) = iterate(mgmm.gmms, i)
 size(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = (length(mgmm.gmms), N)
 size(mgmm::AbstractMultiGMM{N,T,K}, idx::Int) where {N,T,K} = (length(mgmm.gmms), N)[idx]
 
@@ -69,7 +72,7 @@ end
 
 IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, g.ϕ, g.dirs)
 
-convert(t::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ), Vector{SVector{N,T}}(g.dirs))
+convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ), Vector{SVector{N,T}}(g.dirs))
 promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)} 
 
 
@@ -82,7 +85,7 @@ end
 
 IsotropicGMM(gmm::AbstractIsotropicGMM) = IsotropicGMM(gmm.gaussians)
 
-eltype(::IsotropicGMM{N,T}) where {N,T} = IsotropicGaussian{N,T}
+eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 convert(t::Type{IsotropicGMM}, gmm::AbstractIsotropicGMM) = t(gmm.gaussians)
 promote_rule(::Type{IsotropicGMM{N,T}}, ::Type{IsotropicGMM{N,S}}) where {T,S,N} = IsotropicGMM{N,promote_type(T,S)}
 
@@ -96,7 +99,7 @@ end
 
 IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
 
-eltype(::IsotropicMultiGMM{N,T,K}) where {N,T,K} = IsotropicGMM{N,T}
+eltype(::Type{IsotropicMultiGMM{N,T,K}}) where {N,T,K} = Pair{K, IsotropicGMM{N,T}}
 convert(t::Type{IsotropicMultiGMM}, mgmm::AbstractIsotropicMultiGMM) = t(mgmm.gmms)
 promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}}) where {N,T,S,K} = IsotropicMultiGMM{N,promote_type(T,S),K}
 

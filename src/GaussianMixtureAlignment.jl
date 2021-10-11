@@ -8,6 +8,7 @@ using CoordinateTransformations
 using Optim
 using PlotlyJS
 
+export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
 export rotmat
 export overlap, distance, tanimoto

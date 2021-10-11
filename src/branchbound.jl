@@ -1,10 +1,11 @@
 abstract type AlignmentResults end
 
-struct GMAlignmentResult{T,D,N,X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
+struct GMAlignmentResult{T,D,N,F<:AbstractAffineMap,X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
     lowerbound::T
+    tform::F
     tform_params::NTuple{N,T}
     obj_calls::Int
     num_splits::Int
@@ -40,7 +41,7 @@ number of evaluations during the alignment procedure.
 """ 
 function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
                      nsplits=2, initblock=nothing, rot=nothing, trl=nothing,
-                     blockfun=fullBlock, objfun=alignment_objective,
+                     blockfun=fullBlock, objfun=alignment_objective, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, threads=false)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
@@ -48,10 +49,6 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
     if dims(gmmx) != dims(gmmy)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
-
-    # REMOVE THIS, only for debugging
-    rot2 = isnothing(rot) ? (0,0,0) : rot
-    trl2 = isnothing(trl) ? (0,0,0) : trl
 
     # prepare pairwise widths and weights
     pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -61,7 +58,7 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
         initblock = blockfun(gmmx, gmmy, nothing, pσ, pϕ, rot, trl)
     end
     ndims = dims(initblock)
-    ub, bestloc = initblock.upperbound, initblock.center # local_align(gmmx, gmmy, initblock, pσ, pϕ)    # best-so-far objective value and transformation
+    ub, bestloc = initblock.upperbound, initblock.center    # best-so-far objective value and transformation
     lb = Inf
     t = promote_type(numbertype(gmmx), numbertype(gmmy))
     pq = PriorityQueue{Block{ndims, t}, Tuple{t,t}}()
@@ -83,7 +80,7 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            return GMAlignmentResult(gmmx, gmmy, ub, lb, bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+            return GMAlignmentResult(gmmx, gmmy, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -114,9 +111,9 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
         end
     end
     if isempty(pq)
-        return GMAlignmentResult(gmmx, gmmy, ub, lb, bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GMAlignmentResult(gmmx, gmmy, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
     else
-        return GMAlignmentResult(gmmx, gmmy, ub, dequeue_pair!(pq)[2][1], bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GMAlignmentResult(gmmx, gmmy, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
     end
 end
 
@@ -130,7 +127,7 @@ That is, only rigid translation is allowed.
 For details about keyword arguments, see `gogma_align()`.
 """
 function rot_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
-    return gogma_align(gmmx, gmmy; blockfun=rotBlock, objfun=rot_alignment_objective, kwargs...)
+    return gogma_align(gmmx, gmmy; blockfun=rotBlock, objfun=rot_alignment_objective, tformfun=LinearMap, kwargs...)
 end
 
 """
@@ -142,6 +139,6 @@ That is, only rigid rotation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
-    return gogma_align(gmmx, gmmy; blockfun=trlBlock, objfun=trl_alignment_objective, kwargs...)
+function trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;  kwargs...)
+    return gogma_align(gmmx, gmmy; blockfun=trlBlock, objfun=trl_alignment_objective, tformfun=Translation, kwargs...)
 end

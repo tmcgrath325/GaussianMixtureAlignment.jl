@@ -12,6 +12,8 @@ center_of_mass(gaussians::AbstractVector{<:AbstractIsotropicGaussian}) =
 
 center_of_mass(gmm::AbstractIsotropicGMM) = center_of_mass(gmm.gaussians)
 
+center_of_mass(mgmm::AbstractMultiGMM) = center_of_mass(collect(Iterators.flatten([gmm.gaussians for (k,gmm) in mgmm])))
+
 """ 
     m = second_moment(gmm, center, dim1, dim2)
 
@@ -88,8 +90,14 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
     end
 end
 
+inertial_transforms(gaussians; kwargs...
+    ) = inertial_transforms(hcat([g.μ for g in gaussians]...), [g.σ for g in gaussians], [g.ϕ for g in gaussians]; kwargs...)
+
 inertial_transforms(gmm::AbstractIsotropicGMM; kwargs...
-    ) = return inertial_transforms(hcat([g.μ for g in gmm.gaussians]...), [g.σ for g in gmm.gaussians], [g.ϕ for g in gmm.gaussians]; kwargs...)
+    ) = inertial_transforms(gmm.gaussians; kwargs...)
+
+inertial_transforms(mgmm::AbstractMultiGMM; kwargs...
+    ) = inertial_transforms(collect(Iterators.flatten([gmm.gaussians for (k,gmm) in mgmm])); kwargs...)
 
 """
     score, tform, nevals = rocs_align_gmms(gmmfixed, gmmmoving; maxevals=1000)
@@ -97,7 +105,7 @@ inertial_transforms(gmm::AbstractIsotropicGMM; kwargs...
 Finds the optimal alignment between the two supplied GMMs using steric multipoles,
 based on the [ROCS alignment algorithm.](https://docs.eyesopen.com/applications/rocs/theory/shape_shape.html)
 """
-function rocs_align(gmmmoving::AbstractIsotropicGMM, gmmfixed::AbstractIsotropicGMM; kwargs...)
+function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
     # align both GMMs to their inertial frames
     tformfixed = inertial_transforms(gmmfixed)[1]    # Only need one alignment for the fixed GMM
     tformsmoving = inertial_transforms(gmmmoving)    # Take all 4 rotations for the GMM to be aligned

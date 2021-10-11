@@ -17,7 +17,10 @@ function affinemap_to_params(tform::AffineMap)
     return (rot_to_axis(tform.linear)..., tform.translation)
 end
 
-CoordinateTransformations.AffineMap(rx,ry,rz,tx,ty,tz) = AffineMap(AngleAxis(rx,ry,rz), SVector(tx,ty,tz))
+CoordinateTransformations.LinearMap(rx,ry,rz) = CoordinateTransformations.LinearMap(AngleAxis(rx,ry,rz))
+CoordinateTransformations.AffineMap(rx,ry,rz,tx,ty,tz) = CoordinateTransformations.AffineMap(AngleAxis(rx,ry,rz), SVector(tx,ty,tz))
+
+# There is some concern about the inferability of the functions below. Using Test.@inferred did not throw any errors
 
 function (tform::AffineMap)(x::AbstractIsotropicGaussian)
     T = typeof(x)

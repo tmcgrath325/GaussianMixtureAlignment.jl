@@ -104,6 +104,9 @@ end
     mgmmy = IsotropicMultiGMM(Dict(:y => gmmx, :x => gmmy))
     res = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
     res = tiv_gogma_align(mgmmx, mgmmy)
+
+    # ROCS alignment should work perfectly
+    @test isapprox(rocs_align(gmmx, gmmy)[1], -overlap(gmmx,gmmx); atol=1E-12)
 end
 
 @testset "directional GOGMA" begin
@@ -161,7 +164,7 @@ end
     @test mobjminxy ≈ -3.0
 end
 
-@testset "TIV-GOGMA with larger GMMs" begin
+@testset "TIV-GOGMA with larger GMMs (perfect alignment)" begin
     for i=1:10
         randpts = 10*rand(3,50)
         randtform = AffineMap(10*rand(6)...)
@@ -170,11 +173,23 @@ end
         min_overlap_score = -overlap(gmmx,gmmx)
         res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E3)
         @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
-        @test isapprox(overlap(AffineMap(res.tform_params...)(gmmx), gmmy), -min_overlap_score; rtol=0.01)
+        @test isapprox(overlap(res.tform(gmmx), gmmy), -min_overlap_score; rtol=0.01)
     end
+
+    for i=1:10
+        randpts = 10*rand(3,50)
+        randtform = AffineMap(10*rand(6)...)
+        mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:Int(size(randpts,2)/5)]) for j=1:5]))
+        mgmmy = randtform(mgmmx)
+        min_overlap_score = -overlap(mgmmx,mgmmx)
+        res = tiv_gogma_align(mgmmx,mgmmy,0.5,0.5; maxstagnant=1E3)
+        @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
+        @test isapprox(overlap(res.tform(mgmmx), mgmmy), -min_overlap_score; rtol=0.01)
+    end
+
 end
 
-@testset "ROCS alignment" begin
+@testset "ROCS alignment (perfect alignment)" begin
     for i=1:10
         randpts = 10*rand(3,50)
         randtform = AffineMap(10*rand(6)...)
@@ -185,4 +200,16 @@ end
         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
         @test isapprox(overlap(tform(gmmx), gmmy), -min_overlap_score; atol=1E-12)
     end
+
+    for i=1:10
+        randpts = 10*rand(3,50)
+        randtform = AffineMap(10*rand(6)...)
+        mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:Int(size(randpts,2)/5)]) for j=1:5]))
+        mgmmy = randtform(mgmmx)
+        min_overlap_score = -overlap(mgmmx,mgmmx)
+        ovlp, tform = rocs_align(mgmmx,mgmmy)
+        @test isapprox(ovlp, min_overlap_score; atol=1E-12)
+        @test isapprox(overlap(tform(mgmmx), mgmmy), -min_overlap_score; atol=1E-12)
+    end
+
 end
