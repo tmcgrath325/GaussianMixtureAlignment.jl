@@ -122,10 +122,10 @@ function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; k
     # perform local alignment in the full transformation space
     pos = NTuple{6, t}([rotpos..., trl_res.tform_params...])
     trlim = translation_limit(gmmx, gmmy)
-    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, z, z)
-    localopt = local_align(gmmx, gmmy, localblock)
+    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, trl_res.upperbound, -Inf)
+    min, bestpos = local_align(gmmx, gmmy, localblock)
 
-    return TIVAlignmentResult(gmmx, gmmy, localopt[1], trl_res.lowerbound, AffineMap(localopt[2]...), localopt[2], 
+    return TIVAlignmentResult(gmmx, gmmy, min, trl_res.lowerbound, AffineMap(bestpos...), bestpos, 
                              rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
                              rot_res.num_blocks+trl_res.num_blocks, rot_res.stagnant_splits+trl_res.stagnant_splits,
                              rot_res, trl_res)

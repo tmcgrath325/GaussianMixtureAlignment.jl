@@ -16,6 +16,7 @@ export local_align
 export gogma_align, rot_gogma_align, trl_gogma_align
 export tivgmm, tiv_gogma_align
 export rocs_align
+export rocs_gogma_align
 export plotdrawing, drawGaussian, drawIsotropicGMM, drawIsotropicGMMs, drawMultiGMM, drawMultiGMMs
 
 include("gmm.jl")
@@ -28,6 +29,7 @@ include("branchbound.jl")
 include("tiv.jl")
 include("combine.jl")
 include("rocsalign.jl")
+include("rocsgogma.jl")
 include("draw.jl")
 
 end

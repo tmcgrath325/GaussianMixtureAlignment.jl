@@ -164,7 +164,7 @@ end
     @test mobjminxy ≈ -3.0
 end
 
-@testset "TIV-GOGMA with larger GMMs (perfect alignment)" begin
+@testset "TIV-GOGMA (perfect alignment)" begin
     for i=1:10
         randpts = 10*rand(3,50)
         randtform = AffineMap(10*rand(6)...)
@@ -186,10 +186,9 @@ end
         @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
         @test isapprox(overlap(res.tform(mgmmx), mgmmy), -min_overlap_score; rtol=0.01)
     end
-
 end
 
-@testset "ROCS alignment (perfect alignment)" begin
+@testset "ROCS (perfect alignment)" begin
     for i=1:10
         randpts = 10*rand(3,50)
         randtform = AffineMap(10*rand(6)...)
@@ -211,5 +210,52 @@ end
         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
         @test isapprox(overlap(tform(mgmmx), mgmmy), -min_overlap_score; atol=1E-12)
     end
-
 end
+
+# @testset "TIV-GOGMA (missing data alignment)" begin
+#     for i=1:10
+#         randpts = 10*rand(3,50)
+#         randtform = AffineMap(10*rand(6)...)
+#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
+#         gmmy = randtform(IsotropicGMM(gmmx.gaussians[1:40]))
+#         min_overlap_score = -overlap(gmmx,inv(randtform)(gmmy))
+#         res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E4)
+#         @test res.upperbound <= min_overlap_score*0.99
+#         @test -overlap(res.tform(gmmx), gmmy) <= min_overlap_score*0.99   
+#     end
+
+#     for i=1:10
+#         randpts = 10*rand(3,50)
+#         randtform = AffineMap(10*rand(6)...)
+#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:10]) for j=1:5]))
+#         mgmmy = randtform(IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:8]) for j=1:5])))
+#         min_overlap_score = -overlap(mgmmx,inv(randtform)(mgmmy))
+#         res = tiv_gogma_align(mgmmx,mgmmy,0.5,0.5; maxstagnant=1E4)
+#         @test res.upperbound <= min_overlap_score*0.99
+#         @test -overlap(res.tform(mgmmx), mgmmy) <= min_overlap_score*0.99   
+#     end
+# end
+
+# @testset "ROCS-GOGMA (missing data alignment)" begin
+#     for i=1:10
+#         randpts = 10*rand(3,50)
+#         randtform = AffineMap(10*rand(6)...)
+#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
+#         gmmy = randtform(IsotropicGMM(gmmx.gaussians[1:40]))
+#         min_overlap_score = -overlap(gmmx,inv(randtform)(gmmy))
+#         res = rocs_gogma_align(gmmx,gmmy; maxstagnant=1E4)
+#         @test res.upperbound <= min_overlap_score*0.99
+#         @test -overlap(res.tform(gmmx), gmmy) <= min_overlap_score*0.99
+#     end
+
+#     for i=1:10
+#         randpts = 10*rand(3,50)
+#         randtform = AffineMap(10*rand(6)...)
+#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:10]) for j=1:5]))
+#         mgmmy = randtform(IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:8]) for j=1:5])))
+#         min_overlap_score = -overlap(mgmmx,inv(randtform)(mgmmy))
+#         res = rocs_gogma_align(mgmmx, mgmmy; maxstagnant=1E4)
+#         @test res.upperbound <= min_overlap_score*0.99
+#         @test -overlap(res.tform(mgmmx), mgmmy) <= min_overlap_score*0.99
+#     end
+# end
