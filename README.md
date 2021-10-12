@@ -78,9 +78,10 @@ julia> # Draw the unaligned GMMs
 julia> plotdrawing(drawIsotropicGMMs([gmmx,gmmy]))
 ```
 <img src="./assets/image/example.png" width="400"/>
+
 ```julia
 julia> # Draw the aligned GMMs
 
 julia> plotdrawing(drawIsotropicGMMs([res.tform(gmmx),gmmy]))
 ```
-<img src="./assets/image/example_align.png" width="400"/>
+<img src="./assets/image/example_aligned.png" width="400"/>
