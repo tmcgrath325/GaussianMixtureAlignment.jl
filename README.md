@@ -19,43 +19,68 @@ julia> ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]];
 julia> σ = ϕ = 1.;
 
 julia> gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
-IsotropicGMM with mean 3 Gaussian distributions.
+IsotropicGMM{3, Float64} with 3 IsotropicGaussian{3, Float64} distributions.
 
 
 julia> gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
-IsotropicGMM with mean 3 Gaussian distributions.
+IsotropicGMM{3, Float64} with 3 IsotropicGaussian{3, Float64} distributions.
+
+
+julia> # Compute the overlap between the two GMMs
+
+julia> overlap(gmmx, gmmy)
+1.1908057504684806
 ```
 
 ## Align Isotropic GMMs with TIV-GOGMA
 
 ```julia
-julia> ub, lb, tform, niters = tiv_gogma_align(gmmx, gmmy);
+julia> res = tiv_gogma_align(gmmx, gmmy);
 
 julia> # upper and lower bounds of alignmnet objective function at search termination
 
-julia> @show ub, lb;
-(ub, lb) = (-2.3474784988273276, -2.447055987303346)
+julia> res.upperbound, res.lowerbound
+(-3.2512906351736524, -3.348917632693506)
 
 julia> # rotation component of the best transformation
 
-julia> rot = GOGMA.rotmat(tform[1:3]...)
-3×3 SMatrix{3, 3, Float64, 9} with indices SOneTo(3)×SOneTo(3):
- -1.63136e-10  -1.90925e-10  1.0
-  1.0          -2.24997e-10  1.63136e-10
-  2.24997e-10   1.0          1.90925e-10
+julia> res.tform.linear
+3×3 AngleAxis{Float64} with indices SOneTo(3)×SOneTo(3)(2.0944, -0.57735, 0.57735, -0.57735):
+  1.63136e-10   1.90925e-10  1.0
+ -1.0           2.24997e-10  1.63136e-10
+ -2.24997e-10  -1.0          1.90925e-10
 
 julia> # translation component of the best transformation
 
-julia> trl = SVector(tform[4:6])
-3-element SVector{3, Float64} with indices SOneTo(3):
-  1.0000000009364591
- -1.3376624620107662
- -2.9326814654410134
+julia> res.tform.translation
+3-element StaticArrays.SVector{3, Float64} with indices SOneTo(3):
+ 1.0
+ 1.0
+ 1.0
 
 julia> # repeat alignment with stricter tolerance
 
-julia> ub, lb, tform, niters = tiv_gogma_align(gmmx, gmmy; atol=0.001, rtol=0.);
+julia> res.upperbound, res.lowerbound
+(-3.2512906351736524, -3.2522904816062654)
 
-julia> @show ub, lb;
-(ub, lb) = (-2.3474784988273276, -2.3484784945005486)
+julia> # The result has not changed, but there is a tighter lower bound
+
+julia> # Compute the overlap between the GMMs after alignment
+
+julia> overlap(res.tform(gmmx), gmmy)
+3.2512906351736524
 ```
+
+## Plot Isotropic GMMs
+```julia
+julia> # Draw the unaligned GMMs
+
+julia> plotdrawing(drawIsotropicGMMs([gmmx,gmmy]))
+```
+<img src="./assets/image/example.png" width="400"/>
+```julia
+julia> # Draw the aligned GMMs
+
+julia> plotdrawing(drawIsotropicGMMs([res.tform(gmmx),gmmy]))
+```
+<img src="./assets/image/example_aligned.png" width="400"/>
