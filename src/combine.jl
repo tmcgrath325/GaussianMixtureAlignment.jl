@@ -6,19 +6,19 @@
 Creates a new `IsotropicGMM` or `MultiGMM` by concatenating the vectors of `IsotroicGaussian`s in
 the input GMMs. 
 """
-function combine(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
-    if size(gmmx,2) != size(gmmy,2)
+function combine(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
+    if dims(gmmx) != dims(gmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
     t = promote_type(typeof(gmmx), typeof(gmmy))
     return t(vcat(gmmx.gaussians, gmmy.gaussians))
 end
 
-function combine(mgmmx::MultiGMM, mgmmy::MultiGMM)
-    if size(mgmmx,2) != size(mgmmy,2)
+function combine(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
+    if dims(gmmx) != dims(mgmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
-    t = IsotropicGMM{promote_type(eltype(mgmmx), eltype(mgmmy)),size(mgmmx,2)}
+    t = IsotropicGMM{dims(gmmx),promote_type(numbertype(mgmmx), numbertype(mgmmy))}
     gmms = Dict{Symbol, t}()
     xkeys, ykeys = keys(mgmmx.gmms), keys(mgmmy.gmms)
     for key in xkeys ∪ ykeys
@@ -33,7 +33,7 @@ function combine(mgmmx::MultiGMM, mgmmy::MultiGMM)
     return promote_type(typeof(mgmmx), typeof(mgmmy))(gmms)
 end
 
-function combine(gmms::Union{AbstractVector{<:IsotropicGMM},AbstractVector{<:MultiGMM}})
+function combine(gmms::Union{AbstractVector{<:AbstractSingleGMM},AbstractVector{<:AbstractMultiGMM}})
     if length(gmms) > 1
         return combine([combine(gmms[1],gmms[2]), gmms[3:end]...])
     elseif length(gmms) == 1

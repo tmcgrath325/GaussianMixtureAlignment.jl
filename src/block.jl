@@ -2,14 +2,17 @@
 A structure which defines a hypercube in `N`-dimensional searchspace, with a `center` location 
 and conrners defined by `ranges`.
 """
-struct Block{T<:Real, N}
+struct Block{N,T<:Real}
     ranges::NTuple{N, Tuple{T,T}}
     center::NTuple{N,T}
     lowerbound::T
     upperbound::T
 end
-Block{T, N}() where T where N = Block{T, N}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
-Base.size(blk::Block{T,N}) where T where N = N
+Block{N,T}() where {N,T} = Block{N,T}(ntuple(x->(zero(T),zero(T)),N), ntuple(x->(zero(T)),N), typemax(T), typemax(T))
+
+numbertype(::Block{N,T}) where {N,T} = T
+dims(::Block{N,T}) where {N,T} = N
+Base.size(::Block{N,T}) where {N,T} = (N,)
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_block_seed = UInt === UInt64 ? 0x03f7a7ad5ef46a89 : 0xa9bf8ce0
@@ -18,6 +21,8 @@ function hash(B::Block, h::UInt)
     h = hash(B.ranges, h)
     return h
 end
+
+CoordinateTransformations.AffineMap(bl::Block) = AffineMap(bl.center)
 
 # 
 function boxranges(center::Union{Tuple, NTuple, AbstractArray}, widths::Union{Tuple, NTuple, AbstractArray})
@@ -52,8 +57,8 @@ end
 
 Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
 """
-function translation_limit(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
-    trlim = typemin(promote_type(eltype(gmmx),eltype(gmmy)))
+function translation_limit(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
+    trlim = typemin(promote_type(numbertype(gmmx),numbertype(gmmy)))
     for gaussians in (gmmx.gaussians, gmmy.gaussians)
         if !isempty(gaussians)
             trlim = max(trlim, maximum(gaussians) do gauss
@@ -63,8 +68,8 @@ function translation_limit(gmmx::IsotropicGMM, gmmy::IsotropicGMM)
     return trlim
 end
 
-function translation_limit(mgmmx::MultiGMM, mgmmy::MultiGMM)
-    trlim = typemin(promote_type(eltype(mgmmx),eltype(mgmmy)))
+function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
+    trlim = typemin(promote_type(numbertype(mgmmx),numbertype(mgmmy)))
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
         trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
     end
@@ -72,9 +77,9 @@ function translation_limit(mgmmx::MultiGMM, mgmmy::MultiGMM)
 end
 
 # Block for GOGMA procedure in full transformational space
-function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function fullBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
-    t = promote_type(eltype(gmmx),eltype(gmmy))
+    t = promote_type(numbertype(gmmx),numbertype(gmmy))
     if isnothing(ranges)
         trlim = translation_limit(gmmx, gmmy)
         ranges = ((-t(π),t(π)), (-t(π),t(π)), (-t(π),t(π)), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
@@ -90,9 +95,9 @@ function fullBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM
 end
 
 # Block for rotational space only (i.e. the first stage of TIV-GOGMA)
-function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function rotBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
-    t = promote_type(eltype(gmmx),eltype(gmmy))
+    t = promote_type(numbertype(gmmx),numbertype(gmmy))
     if isnothing(ranges)
         ranges = ((-t(π),t(π)), (-t(π),t(π)), (-t(π),t(π)))
     end
@@ -109,9 +114,9 @@ function rotBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM,
 end
 
 # Block for translational space only (i.e. the second stage of TIV-GOGMA)
-function trlBlock(gmmx::Union{IsotropicGMM, MultiGMM}, gmmy::Union{IsotropicGMM, MultiGMM}, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
+function trlBlock(gmmx::AbstractGMM, gmmy::AbstractGMM, ranges=nothing, pσ=nothing, pϕ=nothing, rot=nothing, trl=nothing)
     # get center and uncertainty region
-    t = promote_type(eltype(gmmx),eltype(gmmy))
+    t = promote_type(numbertype(gmmx),numbertype(gmmy))
     if isnothing(ranges)
         trlim = translation_limit(gmmx, gmmy)
         ranges = ((-trlim,trlim), (-trlim,trlim), (-trlim,trlim))
