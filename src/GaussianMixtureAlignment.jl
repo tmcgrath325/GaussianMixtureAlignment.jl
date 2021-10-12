@@ -6,7 +6,6 @@ using DataStructures
 using Rotations
 using CoordinateTransformations
 using Optim
-using PlotlyJS
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
@@ -17,7 +16,6 @@ export gogma_align, rot_gogma_align, trl_gogma_align
 export tivgmm, tiv_gogma_align
 export rocs_align
 export rocs_gogma_align
-export plotdrawing, drawGaussian, drawIsotropicGMM, drawIsotropicGMMs, drawMultiGMM, drawMultiGMMs
 
 include("gmm.jl")
 include("transformation.jl")
@@ -30,6 +28,11 @@ include("tiv.jl")
 include("combine.jl")
 include("rocsalign.jl")
 include("rocsgogma.jl")
-include("draw.jl")
+
+using Requires
+
+function __init__()
+    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("draw.jl")
+end
 
 end

@@ -1,3 +1,7 @@
+using PlotlyJS
+
+export plotdrawing, drawGaussian, drawIsotropicGMM, drawIsotropicGMMs, drawMultiGMM, drawMultiGMMs
+
 const default_colors =     
    ["#1f77b4",  # muted blue
     "#ff7f0e",  # safety orange

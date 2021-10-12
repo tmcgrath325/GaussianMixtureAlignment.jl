@@ -149,8 +149,8 @@ end
 
     # when σ is very small, only very well aligned Gaussians will contribute to the overlap
     σ = 0.001
-    ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], 2*rand(3).-1]) for (i,x) in enumerate(xpts)])
-    ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i], 2*rand(3).-1, 2*rand(3).-1]) for (i,y) in enumerate(ypts)])
+    ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], normalize(2*rand(3).-1)]) for (i,x) in enumerate(xpts)])
+    ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
     ddobjmin = tiv_gogma_align(ddgmmx, ddgmmy).upperbound
     @test ddobjmin ≈ -3.0
 
