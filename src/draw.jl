@@ -30,7 +30,7 @@ end
 function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; size=100)
     tracesvec = AbstractTrace[]
     for trs in traces
-        push!(tracesvec, trs...)
+        append!(tracesvec, trs)
     end
     layout = Layout(autosize=false, width=800, height=600,
                     margin=attr(l=0, r=0, b=0, t=65),
@@ -44,19 +44,17 @@ function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; 
     return plt
 end
 
-function draw_wireframe_sphere(pos, r, w; npts=11, color=default_colors[1], name=nothing, opacity=1., sizecoef=1.)
+function wireframe_sphere(pos, r, npts=11)
     ϕs = range(0, stop=2π, length=npts)
     θs = range(-π/2, stop=π/2, length=npts)
     # vertical
-    v_xs = [[r * sizecoef * cos(θ) * sin(ϕ) + pos[1] for θ in θs] for ϕ in ϕs[1:end-1]]
-    v_ys = [[r * sizecoef * cos(θ) * cos(ϕ) + pos[2] for θ in θs] for ϕ in ϕs[1:end-1]]
-    v_zs = [[r * sizecoef * sin(θ) + pos[3] for θ in θs] for ϕ in ϕs[1:end-1]]
+    v_xs = [[r * cos(θ) * sin(ϕ) + pos[1] for θ in θs] for ϕ in ϕs[1:end-1]]
+    v_ys = [[r * cos(θ) * cos(ϕ) + pos[2] for θ in θs] for ϕ in ϕs[1:end-1]]
+    v_zs = [[r * sin(θ) + pos[3] for θ in θs] for ϕ in ϕs[1:end-1]]
     # horizontal
-    h_xs = [[r * sizecoef * cos(θ) * sin(ϕ) + pos[1] for ϕ in ϕs] for θ in θs]
-    h_ys = [[r * sizecoef * cos(θ) * cos(ϕ) + pos[2] for ϕ in ϕs] for θ in θs]
-    h_zs = [[r * sizecoef * sin(θ) + pos[3] for ϕ in ϕs] for θ in θs] 
-
-    hover = isnothing(name) ? "skip" : nothing
+    h_xs = [[r * cos(θ) * sin(ϕ) + pos[1] for ϕ in ϕs] for θ in θs]
+    h_ys = [[r * cos(θ) * cos(ϕ) + pos[2] for ϕ in ϕs] for θ in θs]
+    h_zs = [[r * sin(θ) + pos[3] for ϕ in ϕs] for θ in θs] 
 
     xs, ys, zs = Float64[], Float64[], Float64[]
     for i=1:length(v_xs)
@@ -76,45 +74,90 @@ function draw_wireframe_sphere(pos, r, w; npts=11, color=default_colors[1], name
         push!(zs, NaN)
     end
 
+    return xs, ys, zs
+end
+
+function draw_wireframe_spheres(positions, rs, ws; npts=11, color=default_colors[1], name=nothing, opacity=1.)
+    xs, ys, zs = Float64[], Float64[], Float64[]
+    for i = 1:length(rs)
+        x,y,z = wireframe_sphere(positions[i], rs[i], npts)
+        append!(xs,x)
+        append!(ys,y)
+        append!(zs,z)
+    end
+
+    len = Int(length(xs)/length(rs))
+    cdata = [[positions[Int(floor((i-1)/len + 1))][1],
+              positions[Int(floor((i-1)/len + 1))][2],
+              positions[Int(floor((i-1)/len + 1))][3],
+              rs[Int(floor((i-1)/len + 1))],
+              ws[Int(floor((i-1)/len + 1))]] 
+            for i=1:length(xs)]
+    
+    hovertemp = join(["μ = [%{customdata[0]:.3e}, %{customdata[1]:.3e}, %{customdata[2]:.3e}]<br>",
+                      "σ = %{customdata[3]:.3e}<br>",
+                      "ϕ = %{customdata[4]:.3e}<br>",])
+
+    
     return scatter3d(;x=xs, y=ys, z=zs, 
+                      customdata=cdata,
                       mode="lines",
                       line=attr(color=color),
                       opacity=opacity,
-                      showlegend=false, showscale=false, name=name,
-                      hovertemplate="μ = " * string(pos) * "<br>σ = " * string(r) * "<br>ϕ = " *string(w), 
-                      hoverinfo=hover,
+                      showlegend=!isnothing(name), name=isnothing(name) ? "" : name,
+                      hovertemplate=hovertemp, 
+                      hoverinfo=isnothing(name) ? "skip" : nothing,
             )
 end
 
-function drawGaussian(gauss::AbstractIsotropicGaussian; sizecoef=1., opacity=1., color=default_colors[1], kwargs...)
-    # gaussian centered at μ
+function arrows(gauss::AbstractIsotropicGaussian, sizecoef=1)
     pos = gauss.μ
     r = gauss.σ * sizecoef
-    gtrace = draw_wireframe_sphere(pos, gauss.σ, gauss.ϕ; color=color, kwargs...)
-    if length(gauss.dirs) < 1
-        return (gtrace,)
-    end
-    # cones to represent geometric constraints
     cntrs = [pos + 1.25*r*dir/norm(dir) for dir in gauss.dirs]
-    dtrace = cone(;x=[c[1] for c in cntrs], y=[c[2] for c in cntrs], z=[c[3] for c in cntrs], 
-                   u=[d[1] for d in gauss.dirs], v=[d[2] for d in gauss.dirs], w=[d[3] for d in gauss.dirs],
-                   colorscale=[[0,color],[1,color]], opacity=opacity,
-                   sizemode="absolute", sizeref=0.25,
-                   showlegend=false, showscale=false, name="", hoverinfo="skip")
-    return (gtrace, dtrace)
+
+    x=[c[1] for c in cntrs]
+    y=[c[2] for c in cntrs]
+    z=[c[3] for c in cntrs]
+
+    u=[d[1] for d in gauss.dirs]
+    v=[d[2] for d in gauss.dirs]
+    w=[d[3] for d in gauss.dirs]
+
+    return x,y,z,u,v,w
+end
+
+function draw_arrows(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; sizecoef=1., opacity=1., color=default_colors[1], kwargs...)
+    xs, ys, zs, us, vs, ws = Float64[], Float64[], Float64[], Float64[], Float64[], Float64[]
+    for gauss in gaussians
+        x,y,z,u,v,w = arrows(gauss, sizecoef)
+        append!(xs,x)
+        append!(ys,y)
+        append!(zs,z)
+        append!(us,u)
+        append!(vs,v)
+        append!(ws,w)
+    end
+    return cone(;x=xs, y=ys, z=zs, u=us, v=vs, w=ws,
+                 colorscale=[[0,color],[1,color]], opacity=opacity,
+                 sizemode="absolute", sizeref=0.25,
+                 showlegend=false, showscale=false, name="", hoverinfo="skip")
+end
+
+function drawGaussians(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; sizecoef=1., kwargs...)
+    # spheres to represent Gaussian distributions
+    positions = [gauss.μ for gauss in gaussians]
+    rs = [gauss.σ * sizecoef for gauss in gaussians]
+    ws = [gauss.ϕ for gauss in gaussians]
+    gtrace = draw_wireframe_spheres(positions, rs, ws; kwargs...)
+
+    # cones to represent geometric constraints
+    dtrace = draw_arrows(gaussians; sizecoef=sizecoef, kwargs...)
+    
+    return [gtrace, dtrace]
 end
 
 function drawIsotropicGMM(gmm::AbstractIsotropicGMM; kwargs...)
-    # set opacities with weight values
-    # weights = [gauss.ϕ for gauss in gmm.gaussians]
-    # opacities = weights/maximum(weights) * 0.25
-
-    # add a trace for each gaussian
-    traces = AbstractTrace[]
-    for i=1:length(gmm)
-        push!(traces, drawGaussian(gmm.gaussians[i]; kwargs...)...)
-    end
-    return traces
+    return drawGaussians(gmm.gaussians; kwargs...)
 end
 
 function drawIsotropicGMMs(gmms::AbstractVector{<:AbstractIsotropicGMM};
@@ -123,22 +166,22 @@ function drawIsotropicGMMs(gmms::AbstractVector{<:AbstractIsotropicGMM};
     for (i,gmm) in enumerate(gmms)
         # add traces for each GMM
         color = colors[mod(i-1, length(colors))+1]
-        push!(traces, drawIsotropicGMM(gmm; color=color, kwargs...)...)
+        append!(traces, drawIsotropicGMM(gmm; color=color, kwargs...))
     end
     return traces
 end
 
-function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, kwargs...)
+function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, names=keys(mgmm), kwargs...)
     # add traces from each GMM
     i = 1
     traces = AbstractTrace[]
-    for key in keys(mgmm.gmms)
+    for (i,key) in enumerate(keys(mgmm))
         # assign a color if the Dict doesn't include the key for a feature
         if key ∉ keys(colordict)
             push!(colordict, Pair(key, colors[mod(i-1, length(colors))+1]))
             i += i
         end
-        push!(traces, drawIsotropicGMM(mgmm.gmms[key]; color=colordict[key], kwargs...)...)
+        push!(traces, drawIsotropicGMM(mgmm[key]; color=colordict[key], name=names[i], kwargs...)...)
     end
     return traces
 end
@@ -163,7 +206,7 @@ function drawMultiGMMs(mgmms::AbstractVector{<:AbstractMultiGMM};
     # add traces from each MultiGMM
     traces = AbstractTrace[]
     for (i,mgmm) in enumerate(mgmms)
-        push!(traces, drawMultiGMM(mgmm; colordict, colors=colors, kwargs...)...)
+        append!(traces, drawMultiGMM(mgmm; colordict, colors=colors, kwargs...))
     end
     return traces
 end
