@@ -4,7 +4,8 @@ function rocs_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
     p = t(π)
 
     # rotation alignment
-    rotpos = rot_to_axis(rocs_align(gmmx, gmmy)[2].linear)
+    rocs_res = rocs_align(gmmx, gmmy)
+    rotpos = rot_to_axis(rocs_res.tform.linear)
 
     # translation alignment
     trl_res = trl_gogma_align(gmmx, gmmy; rot=rotpos, kwargs...)

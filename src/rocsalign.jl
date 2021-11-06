@@ -1,3 +1,10 @@
+struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
+    x::X
+    y::Y
+    minimum::T
+    tform::F
+end
+
 """
     com = center_of_mass(gmm)
 
@@ -77,8 +84,8 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
 
     # then rotate the first transformation about each coordinate axis by -π/2, π/2, and π
     for i=1:3
-        axis = zeros(3)
-        axis[i] = 1.
+        axis = zeros(N)
+        axis[i] = one(T)
         for angle in (π)
             push!(tforms, LinearMap(AngleAxis(angle, axis...)) ∘  tforms[1])
         end
@@ -123,6 +130,6 @@ function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
     # Apply the inverse of `tformfixed` to the optimized transformation 
     alignment_tform = inv(tformfixed) ∘ tformmoving
     
-    # return the objective value, best transformation
-    return minoverlap, alignment_tform
+    # return the result
+    return ROCSAlignmentResult(gmmmoving, gmmfixed, minoverlap, alignment_tform)
 end

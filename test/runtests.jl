@@ -106,7 +106,7 @@ end
     res = tiv_gogma_align(mgmmx, mgmmy)
 
     # ROCS alignment should work perfectly
-    @test isapprox(rocs_align(gmmx, gmmy)[1], -overlap(gmmx,gmmx); atol=1E-12)
+    @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 
 @testset "directional GOGMA" begin
@@ -195,7 +195,8 @@ end
         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
         gmmy = randtform(gmmx)
         min_overlap_score = -overlap(gmmx,gmmx)
-        ovlp, tform = rocs_align(gmmx,gmmy)
+        rocs_res = rocs_align(gmmx,gmmy)
+        ovlp, tform  = rocs_res.minimum, rocs_res.tform
         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
         @test isapprox(overlap(tform(gmmx), gmmy), -min_overlap_score; atol=1E-12)
     end
@@ -206,7 +207,8 @@ end
         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:Int(size(randpts,2)/5)]) for j=1:5]))
         mgmmy = randtform(mgmmx)
         min_overlap_score = -overlap(mgmmx,mgmmx)
-        ovlp, tform = rocs_align(mgmmx,mgmmy)
+        rocs_res = rocs_align(mgmmx,mgmmy)
+        ovlp, tform  = rocs_res.minimum, rocs_res.tform
         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
         @test isapprox(overlap(tform(mgmmx), mgmmy), -min_overlap_score; atol=1E-12)
     end
