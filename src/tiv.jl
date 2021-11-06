@@ -1,4 +1,4 @@
-struct TIVAlignmentResult{T,D,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:AbstractAffineMap,V<:AbstractGMM{D,T},W<:AbstractGMM{D,T},X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
+struct TIVAlignmentResult{D,S,T,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:AbstractAffineMap,V<:AbstractGMM{D,S},W<:AbstractGMM{D,T},X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -9,8 +9,8 @@ struct TIVAlignmentResult{T,D,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:AbstractA
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    rotation_result::GMAlignmentResult{T,D,M,G,V,W}
-    translation_result::GMAlignmentResult{T,D,M,H,X,Y}
+    rotation_result::GMAlignmentResult{D,S,T,M,G,V,W}
+    translation_result::GMAlignmentResult{D,S,T,M,H,X,Y}
 end
 
 
@@ -58,7 +58,7 @@ end
 
 # fit a plane to a set of points, returning the normal vector
 function planefit(pts)
-    decomp = svd(pts .- sum(pts, dims=2))
+    decomp = GenericLinearAlgebra.svd(pts .- sum(pts, dims=2))
     dist, nvecidx = findmin(decomp.S)
     return decomp.U[:, nvecidx], dist
 end
@@ -122,7 +122,7 @@ function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; k
     # perform local alignment in the full transformation space
     pos = NTuple{6, t}([rotpos..., trl_res.tform_params...])
     trlim = translation_limit(gmmx, gmmy)
-    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, trl_res.upperbound, -Inf)
+    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, trl_res.upperbound, typemin(t))
     min, bestpos = local_align(gmmx, gmmy, localblock)
 
     return TIVAlignmentResult(gmmx, gmmy, min, trl_res.lowerbound, AffineMap(bestpos...), bestpos, 

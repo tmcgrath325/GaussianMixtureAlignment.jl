@@ -21,6 +21,7 @@ module GaussianMixtureAlignment
 
 using StaticArrays
 using LinearAlgebra
+using GenericLinearAlgebra
 using DataStructures
 using Rotations
 using CoordinateTransformations

@@ -1,6 +1,6 @@
 abstract type AlignmentResults end
 
-struct GMAlignmentResult{T,D,N,F<:AbstractAffineMap,X<:AbstractGMM{D,T},Y<:AbstractGMM{D,T}} <: AlignmentResults
+struct GMAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -59,8 +59,8 @@ function gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM;
     end
     ndims = dims(initblock)
     ub, bestloc = initblock.upperbound, initblock.center    # best-so-far objective value and transformation
-    lb = Inf
     t = promote_type(numbertype(gmmx), numbertype(gmmy))
+    lb = typemin(t)
     pq = PriorityQueue{Block{ndims, t}, Tuple{t,t}}()
     enqueue!(pq, initblock, (initblock.lowerbound, initblock.upperbound))
     
