@@ -171,17 +171,17 @@ function drawIsotropicGMMs(gmms::AbstractVector{<:AbstractIsotropicGMM};
     return traces
 end
 
-function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, names=keys(mgmm), kwargs...)
+function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, names=collect(keys(mgmm.gmms)), kwargs...)
     # add traces from each GMM
-    i = 1
+    coloridx = 1
     traces = AbstractTrace[]
-    for (i,key) in enumerate(keys(mgmm))
+    for (i,key) in enumerate(keys(mgmm.gmms))
         # assign a color if the Dict doesn't include the key for a feature
         if key ∉ keys(colordict)
-            push!(colordict, Pair(key, colors[mod(i-1, length(colors))+1]))
-            i += i
+            push!(colordict, Pair(key, colors[mod(coloridx-1, length(colors))+1]))
+            coloridx += 1
         end
-        push!(traces, drawIsotropicGMM(mgmm[key]; color=colordict[key], name=names[i], kwargs...)...)
+        push!(traces, drawIsotropicGMM(mgmm.gmms[key]; color=colordict[key], name=names[i], kwargs...)...)
     end
     return traces
 end
