@@ -14,34 +14,33 @@ const default_colors =
     "#bcbd22",  # curry yellow-green
     "#17becf"]  # blue-teal
 
-function plotdrawing(traces::AbstractVector{AbstractTrace})
+function plotdrawing(traces::AbstractVector{AbstractTrace}; plotsize=nothing)
     layout = Layout(autosize=false, width=800, height=600,
                     margin=attr(l=0, r=0, b=0, t=65),
-                    scene=attr(),
-                        # aspectmode="cube",)
-                        # xaxis=attr(visible=false,), # range=[-size/2, size/2]),
-                        # yaxis=attr(visible=false,), # range=[-size/2, size/2]),
-                        # zaxis=attr(visible=false,), # range=[-size/2, size/2]))
+                    scene= isnothing(plotsize) ? attr(aspectmode="data",
+                                                      xaxis=attr(visible=false,), 
+                                                      yaxis=attr(visible=false,), 
+                                                      zaxis=attr(visible=false,), 
+                                                     ) :
+                                                 attr(aspectmode="cube",
+                                                      xaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                      yaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                      zaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                     ),
+                                        
                     )
     plt = plot(traces, layout)
+
+                            
     return plt
 end
 
-function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; size=100)
+function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; kwargs...)
     tracesvec = AbstractTrace[]
     for trs in traces
         append!(tracesvec, trs)
     end
-    layout = Layout(autosize=false, width=800, height=600,
-                    margin=attr(l=0, r=0, b=0, t=65),
-                    scene=attr(
-                        aspectmode="cube",
-                        xaxis=attr(visible=false, range=[-size/2, size/2]),
-                        yaxis=attr(visible=false, range=[-size/2, size/2]),
-                        zaxis=attr(visible=false, range=[-size/2, size/2]))
-                    )
-    plt = plot(tracesvec, layout)
-    return plt
+    plotdrawing(tracesvec; kwargs...)
 end
 
 function wireframe_sphere(pos, r, npts=11)
