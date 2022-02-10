@@ -22,19 +22,19 @@ CoordinateTransformations.AffineMap(rx,ry,rz,tx,ty,tz) = CoordinateTransformatio
 
 # There is some concern about the inferability of the functions below. Using Test.@inferred did not throw any errors
 
-function (tform::AffineMap)(x::AbstractIsotropicGaussian)
+function (tform::Union{LinearMap,Translation,AffineMap})(x::AbstractIsotropicGaussian)
     T = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][5:end] # first 3 fields must be `μ`, `σ`, `ϕ`, and `dirs`
     return T.name.wrapper(tform(x.μ), x.σ, x.ϕ, [tform.linear*dir for dir in x.dirs], otherfields...)
 end
 
-function (tform::AffineMap)(x::AbstractIsotropicGMM)
+function (tform::Union{LinearMap,Translation,AffineMap})(x::AbstractIsotropicGMM)
     T = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gaussians`
     return T.name.wrapper([tform(g) for g in x.gaussians], otherfields...)
 end
 
-function (tform::AffineMap)(x::AbstractIsotropicMultiGMM)
+function (tform::Union{LinearMap,Translation,AffineMap})(x::AbstractIsotropicMultiGMM)
     T = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
     tformgmms = [tform(x.gmms[key]) for key in keys(x.gmms)]
