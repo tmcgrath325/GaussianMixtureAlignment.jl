@@ -37,17 +37,17 @@ export tivgmm, tiv_gogma_align
 export rocs_align
 export rocs_gogma_align
 
-include("gmm.jl")
-include("transformation.jl")
-include("overlap.jl")
-include("bounds.jl")
-include("block.jl")
-include("localalign.jl")
-include("branchbound.jl")
-include("tiv.jl")
-include("combine.jl")
-include("rocsalign.jl")
-include("rocsgogma.jl")
+include("optimize/localalign.jl")
+include("optimize/branchbound.jl")
+include("optimize/uncertaintyregion.jl")
+include("optimize/bounds.jl")
+include("gogma/gmm.jl")
+include("gogma/transformation.jl")
+include("gogma/overlap.jl")
+include("gogma/tiv.jl")
+include("gogma/combine.jl")
+include("rocs/rocsalign.jl")
+include("rocs/rocsgogma.jl")
 
 using Requires
 

@@ -1,12 +1,12 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
-
 version = "0.1.4"
 
 [deps]
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 GenericLinearAlgebra = "14197337-ba66-59df-a3e3-ca00e7dcff7a"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"

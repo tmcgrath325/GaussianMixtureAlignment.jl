@@ -2,13 +2,13 @@
 
 function Rotations.AngleAxis(rx, ry, rz) 
     # Note: promoting with Float64 here in order to avoid strange behavior when passing AngleAxis{Int} to AffineMap()
-    #       I don't think this is a big deal, since the only time a RotMatrix{Int} will be valid is for the identity matrix
+    #       I don't think this is a big deal, since RotMatrix{Int} is almost never valid (identity, reflections, etc...)
     t = promote_type(typeof(rx), typeof(ry), typeof(rz), Float64)
     theta = √(rx^2+ry^2+rz^2)
     return theta == 0 ? AngleAxis(zero(t),one(t),zero(t),zero(t)) : AngleAxis(theta, rx, ry, rz)
 end
 
-function rot_to_axis(R)
+function rot_to_axis(R::RotationVec)
     aa = AngleAxis(R)
     return aa.theta.*(aa.axis_x, aa.axis_y, aa.axis_z)
 end
