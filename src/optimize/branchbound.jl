@@ -41,8 +41,8 @@ number of evaluations during the alignment procedure.
 """ 
 function branchbound(x::AbstractPointSet, y::AbstractPointSet;
                      pσ = nothing, pϕ = nothing,
-                     nsplits=2, searchspace=nothing, rot=nothing, trl=nothing,
-                     blockfun=fullBlock, objfun=alignment_objective, tformfun=AffineMap,
+                     nsplits=2, searchspace=nothing, R=nothing, T=nothing,
+                     blockfun=UncertaintyRegion, objfun=alignment_objective, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, threads=false)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
@@ -53,9 +53,10 @@ function branchbound(x::AbstractPointSet, y::AbstractPointSet;
 
     # initialization
     if isnothing(searchspace)
-        searchspace = blockfun(x, y, nothing, pσ, pϕ, rot, trl)
+        searchspace = blockfun(x, y, R, T)
     end
     ndims = dims(searchspace)
+    (start_lb, start_ub) = 
     ub, bestloc = searchspace.upperbound, searchspace.center    # best-so-far objective value and transformation
     t = promote_type(numbertype(x), numbertype(y))
     lb = typemin(t)
@@ -86,11 +87,11 @@ function branchbound(x::AbstractPointSet, y::AbstractPointSet;
         sblks = fill(Block{ndims,t}(), nsplits^ndims)
         if threads
             Threads.@threads for i=1:length(subrngs)
-                sblks[i] = blockfun(x, y, subrngs[i], pσ, pϕ, rot, trl)
+                sblks[i] = blockfun(x, y, subrngs[i], rot, trl)
             end
         else
             for i=1:length(subrngs)
-                sblks[i] = blockfun(x, y, subrngs[i], pσ, pϕ, rot, trl)
+                sblks[i] = blockfun(x, y, subrngs[i], rot, trl)
             end
         end
 

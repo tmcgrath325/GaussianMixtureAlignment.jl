@@ -69,9 +69,10 @@ struct RotationRegion{T<:Real} <: SearchRegion{T}
 end
 RotationRegion(R,T,σᵣ)   = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
 RotationRegion(σᵣ)       = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
-RotationRegion()         = RotationRegion(one(RotationVec), zero(SVector{3}), π)
+RotationRegion(::T) where T<:Number = RotationRegion(one(T), zero(SVector{3,T}), T(π))
+RotationRegion()         = RotationRegion(Float64)
 
-UncertaintyRegion(rr::RotationRegion) = UncertaintyRegion(rr.R, rr.T, rr.σᵣ, 0)
+UncertaintyRegion(rr::RotationRegion{T}) where T = UncertaintyRegion(rr.R, rr.T, rr.σᵣ, zero(T))
 RotationRegion(ur::UncertaintyRegion) = RotationRegion(ur.R, ur.T, ur.σᵣ)
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
@@ -91,10 +92,10 @@ struct TranslationRegion{T<:Real} <: SearchRegion{T}
     ranges::NTuple{3,Tuple{T,T}}
 end
 TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ, cuberanges(T, σₜ))
-TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec), zero(SVector{3}), σₜ)
-TranslationRegion()        = TranslationRegion(one(RotationVec), zero(SVector{3}), Inf)
+TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec{typeof(σₜ)}), zero(SVector{3, typeof(σₜ)}), σₜ)
+TranslationRegion()        = TranslationRegion(one(RotationVec{Float64}), zero(SVector{3, Float64}), 1.0)
 
-UncertaintyRegion(tr::TranslationRegion) = UncertaintyRegion(tr.R, tr.T, 0, tr.σₜ)
+UncertaintyRegion(tr::TranslationRegion{T}) where T = UncertaintyRegion(tr.R, tr.T, zero(T), tr.σₜ)
 TranslationRegion(ur::UncertaintyRegion) = TranslationRegion(ur.R, ur.T, ur.σₜ)
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
@@ -142,7 +143,7 @@ function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
     return trlim
 end
 
-UncertaintyRegion(x::AbstractPointSet, y::AbstractPointSet) = UncertaintyRegion(translation_limit(x, y))
-TranslationRegion(x::AbstractPointSet, y::AbstractPointSet) = TranslationRegion(translation_limit(x, y))
-RotationRegion(x:: AbstractPointSet, y::AbstractPointSet)   = RotationRegion()
+UncertaintyRegion(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}) = UncertaintyRegion(translation_limit(x, y))
+TranslationRegion(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}) = TranslationRegion(R, zero(SVector{3}), translation_limit(x, y))
+RotationRegion(x:: AbstractPointSet, y::AbstractPointSet,   R::RotationVec, T::SVector{3}) = RotationRegion(zero(RotationVec), T, π)
     
