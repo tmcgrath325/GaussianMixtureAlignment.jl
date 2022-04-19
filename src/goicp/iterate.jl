@@ -9,9 +9,15 @@ rmsd(P, Q, metric) = rmsd(P, Q, metric, length(P))
 
 rmsd(P, Q, metric, matches) = rmsd(matched_points(P, Q, matches)..., metric)
 
-function iterate_kabsch(P, Q; iterations=1000, correspondence=closest_points, kwargs...)
+function iterate_kabsch(P, Q; iterations=1000, correspondence=nothing)
+    # default to nearest neighbor correspondence
+    if correspondence === nothing
+        kdtree = KDTree(Q, Euclidean())
+        correspondence = (p) => closest_points(p, kdtree)
+    end
+
     # initial correspondences
-    matches = correspondence(P, Q; kwargs...)
+    matches = correspondence(P)
     tform = identity
 
     # iterate until convergence
@@ -22,7 +28,7 @@ function iterate_kabsch(P, Q; iterations=1000, correspondence=closest_points, kw
         tform = kabsch(matchedP, matchedQ)
         
         prevmatches = matches
-        matches = correspondence(tform(P), Q; kwargs...)
+        matches = correspondence(tform(P))
         if matches == prevmatches
             break
         end

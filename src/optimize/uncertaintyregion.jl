@@ -104,3 +104,45 @@ function hash(B::TranslationRegion, h::UInt)
     h = hash(B.ranges, h)
     return h
 end
+
+
+# Initialize UncertaintyRegion for aligning two PointSets
+
+"""
+    lim = translation_limit(gmmx, gmmy)
+
+Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
+"""
+function translation_limit(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
+    trlim = typemin(promote_type(numbertype(gmmx),numbertype(gmmy)))
+    for gaussians in (gmmx.gaussians, gmmy.gaussians)
+        if !isempty(gaussians)
+            trlim = max(trlim, maximum(gaussians) do gauss
+                    maximum(abs, gauss.μ) end)
+        end
+    end
+    return trlim
+end
+
+function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
+    trlim = typemin(promote_type(numbertype(mgmmx),numbertype(mgmmy)))
+    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
+    end
+    return trlim
+end
+
+translation_limit(x::AbstractSingle, y::AbstractSingle) = max(maximum(x.coords), maximum(y.coords))
+
+function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
+    trlim = typemin(promote_type(numbertype(x),numbertype(y)))
+    for key in keys(x.pointsets) ∩ keys(y.pointsets)
+        trlim = max(trlim, translation_limit(x.pointsets[key], y.pointsets[key]))
+    end
+    return trlim
+end
+
+UncertaintyRegion(x::AbstractPointSet, y::AbstractPointSet) = UncertaintyRegion(translation_limit(x, y))
+TranslationRegion(x::AbstractPointSet, y::AbstractPointSet) = TranslationRegion(translation_limit(x, y))
+RotationRegion(x:: AbstractPointSet, y::AbstractPointSet)   = RotationRegion()
+    

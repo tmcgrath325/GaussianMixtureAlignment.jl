@@ -2,7 +2,7 @@ import Base: eltype, length, size, getindex, iterate, convert, promote_rule
 
 # Type structure: leaving things open for adding anisotropic Gaussians and GMMs
 
-abstract type AbstractGaussian{N,T} end
+abstract type AbstractGaussian{N,T} <: AbstractPoint end
 abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
     # concrete subtypes:
     #   IsotropicGaussian
@@ -24,12 +24,12 @@ abstract type AbstractIsotropicMultiGMM{N,T,K} <: AbstractMultiGMM{N,T,K} end
     #   FeatureMolGMM (MolecularGaussians.jl)
 
 
-# Base methods for Gaussians
-numbertype(::AbstractGaussian{N,T}) where {N,T} = T
-dims(::AbstractGaussian{N,T}) where {N,T} = N
-length(::AbstractGaussian{N,T}) where {N,T} = N
-size(::AbstractGaussian{N,T}) where {N,T} = (N,)
-size(::AbstractGaussian{N,T}, idx::Int) where {N,T} = (N,)[idx]
+# # Base methods for Gaussians
+# numbertype(::AbstractGaussian{N,T}) where {N,T} = T
+# dims(::AbstractGaussian{N,T}) where {N,T} = N
+# length(::AbstractGaussian{N,T}) where {N,T} = N
+# size(::AbstractGaussian{N,T}) where {N,T} = (N,)
+# size(::AbstractGaussian{N,T}, idx::Int) where {N,T} = (N,)[idx]
 
 # Base methods for GMMs
 numbertype(::AbstractGMM{N,T}) where {N,T} = T

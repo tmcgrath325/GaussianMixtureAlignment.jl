@@ -1,6 +1,5 @@
 # closest points using a particular metric, using a K-D tree implemented by NearestNeighbors
-function closest_points(P,Q; metric=Euclidean())
-    kdtree = KDTree(Q, metric)
+function closest_points(P, kdtree); # kdtree=KDTree(Q, Euclidean())
     nearestidx, dists = nn(kdtree, P)
     return [(i,nearestidx[i]) for i=1:size(P,2)]
 end
