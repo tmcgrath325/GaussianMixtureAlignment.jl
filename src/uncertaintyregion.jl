@@ -51,6 +51,8 @@ UncertaintyRegion(R,T,σᵣ,σₜ) = UncertaintyRegion(R, T, σᵣ, σₜ, cuber
 UncertaintyRegion(σᵣ, σₜ)    = UncertaintyRegion(one(RotationVec), zero(SVector{3}), σᵣ, σₜ)
 UncertaintyRegion(σₜ)        = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, σₜ)
 UncertaintyRegion()         = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, Inf)
+UncertaintyRegion(block::UncertaintyRegion) = block;
+
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_UncertaintyRegion_seed = UInt === UInt64 ? 0x4de49213ae1a23bf : 0xef78ce68

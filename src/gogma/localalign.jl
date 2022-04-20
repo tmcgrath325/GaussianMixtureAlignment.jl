@@ -1,32 +1,32 @@
-function alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
+function alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, R=nothing, T=nothing, pσ=nothing, pϕ=nothing)
     return -overlap(AffineMap(X...)(gmmx), gmmy, pσ, pϕ)
 end
 
-# alignment objective for rigid rotation (i.e. the first stage of TIV-GOGMA)
-function rot_alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
-    if isnothing(trl)
+# alignment objective for rigid Ration (i.e. the first stage of TIV-GOGMA)
+function R_alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, R=nothing, T=nothing, pσ=nothing, pϕ=nothing)
+    if isnothing(T)
         zro = zero(promote_type(numbertype(gmmx), numbertype(gmmy)))
-        trl = (zro, zro, zro)
+        T = (zro, zro, zro)
     end
-    return alignment_objective((X..., trl...), gmmx, gmmy, pσ, pϕ)
+    return alignment_objective((X..., T...), gmmx, gmmy, pσ, pϕ)
 end
 
 # alignment objective for translation (i.e. the second stage of TIV-GOGMA)
-function trl_alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, rot=nothing, trl=nothing, pσ=nothing, pϕ=nothing)
-    if isnothing(rot)
+function T_alignment_objective(X, gmmx::AbstractGMM, gmmy::AbstractGMM, R=nothing, T=nothing, pσ=nothing, pϕ=nothing)
+    if isnothing(R)
         zro = zero(promote_type(numbertype(gmmx), numbertype(gmmy)))
-        rot = (zro, zro, zro)
+        R = (zro, zro, zro)
     end
-    return alignment_objective((rot..., X...), gmmx, gmmy, pσ, pϕ)
+    return alignment_objective((R..., X...), gmmx, gmmy, pσ, pϕ)
 end
 
 """
-    obj, pos = local_align(gmmx, gmmy, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, rot=nothing, trl=nothing, rtol=1e-9, maxevals=100)
+    obj, pos = local_align(gmmx, gmmy, block, pσ=nothing, pϕ=nothing; objfun=alignment_objective, R=nothing, T=nothing, rtol=1e-9, maxevals=100)
 
 Performs local alignment within the specified `block` using L-BFGS to minimize objective function `objfun` for the provided GMMs, `gmmx` and `gmmy`.
 """
 function local_align(gmmx::AbstractGMM, gmmy::AbstractGMM, block=fullBlock(gmmx,gmmy), pσ=nothing, pϕ=nothing; 
-                     objfun=alignment_objective, rot=nothing, trl=nothing, maxevals=100)
+                     objfun=alignment_objective, R=nothing, T=nothing, maxevals=100)
     # prepare pairwise widths and weights
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -40,7 +40,7 @@ function local_align(gmmx::AbstractGMM, gmmy::AbstractGMM, block=fullBlock(gmmx,
     initial_X = [x for x in block.center]
 
     # local optimization within the block
-    f(X) = objfun(X, gmmx, gmmy, rot, trl, pσ, pϕ)
+    f(X) = objfun(X, gmmx, gmmy, R, T, pσ, pϕ)
     res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
     return Optim.minimum(res), tuple(Optim.minimizer(res)...)
 end

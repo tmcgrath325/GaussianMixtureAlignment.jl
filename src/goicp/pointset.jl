@@ -23,6 +23,7 @@ size(x::AbstractSinglePointSet{N,T}, idx::Int) where {N,T} = (length(x), N)[idx]
 
 length(x::AbstractMultiPointSet) = length(x.pointsets)
 getindex(x::AbstractMultiPointSet, key) = x.pointsets[key]
+keys(x::AbstractMultiPointSet) = keys(x.pointsets)
 iterate(x::AbstractMultiPointSet) = iterate(x.pointsets)
 iterate(x::AbstractMultiPointSet, i) = iterate(x.pointsets, i)
 size(x::AbstractMultiPointSet{N,T,K}) where {N,T,K} = (length(x.pointsets), N)
@@ -39,6 +40,14 @@ end
 convert(::Type{Point{N,T}}, p::AbstractPoint) where {N,T} = Point(SVector{N,T}(p.coords), T(p.weight))
 promote_rule(::Type{Point{N,T}}, ::Type{Point{N,S}}) where {N,T<:Real,S<:Real} = Point{N,promote_type(T,S)} 
 
+function Base.:*(R::AbstractMatrix, p::Point)
+    return Point(R*p.coords, p.weight)
+end
+
+function Base.:-(p::Point, T::AbstractVector)
+    return Point(p.coords-T, p.weight)
+end
+
 
 """
 A point set made consisting of a matrix of coordinate positions with corresponding weights.
@@ -54,6 +63,15 @@ eltype(::Type{PointSet{N,T}}) where {N,T} = Point{N,T}
 convert(t::Type{PointSet}, p::AbstractPointSet) = t(p.coords, p.weights)
 promote_rule(::Type{PointSet{N,T}}, ::Type{PointSet{N,S}}) where {T,S,N} = PointSet{N,promote_type(T,S)}
 
+function Base.:*(R::AbstractMatrix, p::PointSet)
+    return PointSet(R*p.coords, p.weights)
+end
+
+function Base.:-(p::PointSet, T::AbstractVector)
+    return PointSet(p.coords.-T, p.weights)
+end
+
+
 """
 A collection of labeled point sets, to each be considered separately during an alignment procedure. That is, 
 only alignment scores between point sets with the same key are considered when aligning two `MultiPointSet`s. 
@@ -67,3 +85,11 @@ MultiPointSet(x::AbstractMultiPointSet) = MultiPointSet(x.pointsets)
 eltype(::Type{MultiPointSet{N,T,K}}) where {N,T,K} = Pair{K, PointSet{N,T}}
 convert(t::Type{MultiPointSet}, x::AbstractMultiPointSet) = t(x.pointsets)
 promote_rule(::Type{MultiPointSet{N,T,K}}, ::Type{MultiPointSet{N,S,L}}) where {N,T,S,K,L} = MultiPointSet{N,promote_type(T,S), promote_type(K,L)}
+
+function Base.:*(R::AbstractMatrix, p::MultiPointSet)
+    return MultiPointSet([R*p[key] for key in keys(p)])
+end
+
+function Base.:-(p::MultiPointSet, T::AbstractVector)
+    return MultiPointSet([p[key]-T for key in keys(p)])
+end

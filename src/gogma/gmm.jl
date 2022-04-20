@@ -44,6 +44,7 @@ size(gmm::AbstractSingleGMM{N,T}, idx::Int) where {N,T} = (length(gmm.gaussians)
 
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
+keys(mgmm::AbstractMultiGMM) = keys(mgmm.gmms)
 iterate(mgmm::AbstractMultiGMM) = iterate(mgmm.gmms)
 iterate(mgmm::AbstractMultiGMM, i) = iterate(mgmm.gmms, i)
 size(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = (length(mgmm.gmms), N)
