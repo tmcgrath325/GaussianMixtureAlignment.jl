@@ -1,3 +1,5 @@
+import Base: eltype, length, size, getindex, iterate, convert, promote_rule, keys
+
 abstract type AbstractPoint{N,T} end
 abstract type AbstractPointSet{N,T} end
 abstract type AbstractSinglePointSet{N,T} <: AbstractPointSet{N,T} end
@@ -11,7 +13,7 @@ size(::AbstractPoint{N,T}) where {N,T} = (N,)
 size(::AbstractPoint{N,T}, idx::Int) where {N,T} = (N,)[idx]
 
 # Base methods for point sets
-numbertype(::AAbstractPointSet{N,T}) where {N,T} = T
+numbertype(::AbstractPointSet{N,T}) where {N,T} = T
 dims(::AbstractPointSet{N,T}) where {N,T} = N
 
 length(x::AbstractSinglePointSet) = size(x.coords, 2)

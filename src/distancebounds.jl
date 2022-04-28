@@ -1,18 +1,18 @@
-loose_distance_bounds(x<:SVector{3,Number}, y<:SVector{3,Number}, σᵣ<:Number, σₜ<:Number) = (norm(x - y), max(ubdist - σᵣ - σₜ, 0))
-loose_distance_bounds(x<:SVector{3}, y<:SVector{3}, R::RotationVec, T<:SVector{3}, σᵣ, σₜ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
-loose_distance_bounds(x<:SVector{3}, y<:SVector{3}, block::UncertaintyRegion) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
-loose_distance_bounds(x<:SVector{3}, y<:SVector{3}, block::SearchRegion) = loose_distance_bounds(x, y, UncertaintyRegion(block))
+loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number) = (norm(x - y), max(ubdist - σᵣ - σₜ, 0))
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::SearchRegion) = loose_distance_bounds(x, y, UncertaintyRegion(block))
 
 
 """
-    lb, ub = tight_distance_bounds(x::SVector{3,Number}, y::SVector{3,Number}, σᵣ<:Number, σₜ<:Number)
-    lb, ub = tight_distance_bounds(x::SVector{3,Number}, y::SVector{3,Number}, R::RotationVec, T<:SVector{3}, σᵣ<:Number, σₜ<:Number)
+    lb, ub = tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
+    lb, ub = tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T<:SVector{3}, σᵣ::Number, σₜ::Number)
 
 Within an uncertainty region, find the bounds on distance between two points x and y.
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function tight_distance_bounds(x<:SVector{3,Number}, y<:SVector{3,Number}, σᵣ<:Number, σₜ<:Number)
+function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     # prepare positions and angles
     xnorm, ynorm = norm(x), norm(y)
     if xnorm*ynorm == 0
@@ -39,6 +39,6 @@ function tight_distance_bounds(x<:SVector{3,Number}, y<:SVector{3,Number}, σᵣ
     return (lbdist, ubdist)
 end
 
-tight_distance_bounds(x<:SVector{3,Number}, y<:SVector{3,Number}, R::RotationVec, T<:SVector{3}, σᵣ<:Number, σₜ<:Number) = tight_distance_bounds(R*x, y-T, σᵣ, σₜ)
-tight_distance_bounds(x<:SVector{3}, y<:SVector{3}, block::UncertaintyRegion) = tight_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
-tight_distance_bounds(x<:SVector{3}, y<:SVector{3}, block::Union{RotationRegion, TranslationRegion}) = tight_distance_bounds(x, y, UncertaintyRegion(block))
+tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number) = tight_distance_bounds(R*x, y-T, σᵣ, σₜ)
+tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = tight_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
+tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::Union{RotationRegion, TranslationRegion}) = tight_distance_bounds(x, y, UncertaintyRegion(block))

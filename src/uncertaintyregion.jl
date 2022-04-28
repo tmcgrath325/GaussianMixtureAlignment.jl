@@ -17,7 +17,7 @@ Takes `ranges`, a nested tuple describing intervals for each dimension in rigid-
 defining a hypercube, and splits the hypercube into `nsplits` even components along each dimension.
 If the cube is N-dimensional, the number of returned sub-cubes will be `nsplits^N`.
 """
-function subranges(ranges, nsplits::Int)
+function subranges(ranges, nsplits::Int=1)
     t = eltype(eltype(ranges))
 
     # calculate even splititng points for each dimension
@@ -53,6 +53,7 @@ UncertaintyRegion(σₜ)        = UncertaintyRegion(one(RotationVec), zero(SVect
 UncertaintyRegion()         = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, Inf)
 UncertaintyRegion(block::UncertaintyRegion) = block;
 
+center(ur::UncertaintyRegion) = [ur.R.sx, ur.R.sy, ur.r.sz, ur.T...];
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_UncertaintyRegion_seed = UInt === UInt64 ? 0x4de49213ae1a23bf : 0xef78ce68
@@ -73,6 +74,8 @@ RotationRegion(R,T,σᵣ)   = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
 RotationRegion(σᵣ)       = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
 RotationRegion(::T) where T<:Number = RotationRegion(one(T), zero(SVector{3,T}), T(π))
 RotationRegion()         = RotationRegion(Float64)
+
+center(rr::RotationRegion) = [rr.R.sx, rr.R.sy, rr.r.sz];
 
 UncertaintyRegion(rr::RotationRegion{T}) where T = UncertaintyRegion(rr.R, rr.T, rr.σᵣ, zero(T))
 RotationRegion(ur::UncertaintyRegion) = RotationRegion(ur.R, ur.T, ur.σᵣ)
@@ -96,6 +99,8 @@ end
 TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ, cuberanges(T, σₜ))
 TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec{typeof(σₜ)}), zero(SVector{3, typeof(σₜ)}), σₜ)
 TranslationRegion()        = TranslationRegion(one(RotationVec{Float64}), zero(SVector{3, Float64}), 1.0)
+
+center(tr::TranslationRegion) = [tr.T...];
 
 UncertaintyRegion(tr::TranslationRegion{T}) where T = UncertaintyRegion(tr.R, tr.T, zero(T), tr.σₜ)
 TranslationRegion(ur::UncertaintyRegion) = TranslationRegion(ur.R, ur.T, ur.σₜ)
@@ -135,7 +140,7 @@ function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
     return trlim
 end
 
-translation_limit(x::AbstractSingle, y::AbstractSingle) = max(maximum(x.coords), maximum(y.coords))
+translation_limit(x::AbstractSinglePointSet, y::AbstractSinglePointSet) = max(maximum(x.coords), maximum(y.coords))
 
 function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
     trlim = typemin(promote_type(numbertype(x),numbertype(y)))

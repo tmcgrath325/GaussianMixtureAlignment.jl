@@ -45,8 +45,10 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
 
     # upperbound of dot product between directional constraints (minimizes objective)
     if length(x.dirs) == 0 || length(y.dirs) == 0
+        lbdot = 1.
         cosγ = 1.
     else
+        cosβ = cos(min(sqrt3*σᵣ/2, π))
         # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
         cosγ = -1
         for xdir in x.dirs
@@ -54,13 +56,12 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
                 cosγ = max(cosγ, dot(R0*xdir, ydir))
             end
         end
-    end
-
-    if cosγ >= cosβ
-        lbdot = 1.
-    else
-        lbdot = cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
-        # lbdot = cosγ*cosβ + √(1 - cosγ^2 - cosβ^2 + cosγ^2*cosβ^2)
+        if cosγ >= cosβ
+            lbdot = 1.
+        else
+            lbdot = cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
+            # lbdot = cosγ*cosβ + √(1 - cosγ^2 - cosβ^2 + cosγ^2*cosβ^2)
+        end
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
@@ -73,7 +74,8 @@ gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVe
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
 
-gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
+gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
+    ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), s, w; kwargs...)
 
 
 

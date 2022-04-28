@@ -1,8 +1,8 @@
-import Base: eltype, length, size, getindex, iterate, convert, promote_rule
+import Base: eltype, length, size, getindex, iterate, convert, promote_rule, keys
 
 # Type structure: leaving things open for adding anisotropic Gaussians and GMMs
 
-abstract type AbstractGaussian{N,T} <: AbstractPoint end
+abstract type AbstractGaussian{N,T} <: AbstractPoint{N,T} end
 abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
     # concrete subtypes:
     #   IsotropicGaussian

@@ -2,14 +2,16 @@ using GaussianMixtureAlignment
 using Test
 using IntervalSets
 using LinearAlgebra
+using StaticArrays
+using Rotations
 using CoordinateTransformations
 
-using GaussianMixtureAlignment: get_bounds, subranges, fullBlock
+using GaussianMixtureAlignment: gauss_l2_bounds, subranges
 
 const GMA = GaussianMixtureAlignment
 @testset "get bounds" begin
-    μx = [3,0,0]
-    μy = [-4,0,0]
+    μx = SVector(3,0,0)
+    μy = SVector(-4,0,0)
     σ = ϕ = 1
     ndims = 3
     sqrt2 = √2
@@ -18,28 +20,28 @@ const GMA = GaussianMixtureAlignment
 
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
-    lb, ub = get_bounds(x,y,2π,0,zeros(6))
+    lb, ub = gauss_l2_bounds(x,y,2π,0)
     @test lb ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
-    lb, ub = get_bounds(x,y,2π,0,[0,0,π,0,0,0])
+    lb, ub = gauss_l2_bounds(RotationVec(0,0,π)*x,y,2π,0)
     @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
     # spheres with closest alignment at 90 degree rotation
-    lb = get_bounds(x,y,π/√(3),0,zeros(6))[1]
+    lb = gauss_l2_bounds(x,y,π/√(3),0)[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
-    lb = get_bounds(x,y,π/(2*√(3)),0,[0,0,π/4,0,0,0])[1]
+    lb = gauss_l2_bounds(RotationVec(0,0,π/4)*x,y,π/(2*√(3)),0)[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # centered at origin
-    lb, ub = get_bounds(x,y,0,2/√(3),zeros(6))
+    lb, ub = gauss_l2_bounds(x,y,0,2/√(3))
     @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
-    lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,1,0,0])
+    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,0,2/√(3))
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
-    lb, ub = get_bounds(x,y,0,2/√(3),[0,0,0,0,3,0])
+    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,0,2/√(3))
     @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
 

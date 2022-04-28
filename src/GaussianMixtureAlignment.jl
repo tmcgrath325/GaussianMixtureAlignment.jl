@@ -29,25 +29,25 @@ using Optim
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
-export rotmat
-export overlap, distance, tanimoto
-export local_align
-export gogma_align, rot_gogma_align, trl_gogma_align
-export tivgmm, tiv_gogma_align
-export rocs_align
-export rocs_gogma_align
+# export rotmat
+# export overlap, distance, tanimoto
+# export local_align
+# export gogma_align, rot_gogma_align, trl_gogma_align
+# export tivgmm, tiv_gogma_align
+# export rocs_align
+# export rocs_gogma_align
 
-include("optimize/localalign.jl")
-include("optimize/branchbound.jl")
-include("optimize/uncertaintyregion.jl")
-include("optimize/bounds.jl")
+include("goicp/pointset.jl")
 include("gogma/gmm.jl")
+include("uncertaintyregion.jl")
+include("distancebounds.jl")
+include("gogma/combine.jl")
 include("gogma/transformation.jl")
 include("gogma/overlap.jl")
-include("gogma/tiv.jl")
-include("gogma/combine.jl")
-include("rocs/rocsalign.jl")
-include("rocs/rocsgogma.jl")
+include("gogma/bounds.jl")
+# include("gogma/tiv.jl")
+# include("rocs/rocsalign.jl")
+# include("rocs/rocsgogma.jl")
 
 using Requires
 

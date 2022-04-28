@@ -51,6 +51,12 @@ function Base.:*(R::AbstractMatrix, x::AbstractIsotropicGaussian)
     return ty.name.wrapper(R*x.μ, x.σ, x.ϕ, [R*dir for dir in x.dirs], otherfields...)
 end
 
+function Base.:+(x::AbstractIsotropicGaussian, T::AbstractVector,)
+    ty = typeof(x)
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][5:end] # first 4 fields must be `μ`, `σ`, `ϕ`, and `dirs`
+    return ty.name.wrapper(x.μ+T, x.σ, x.ϕ, x.dirs, otherfields...)
+end
+
 function Base.:-(x::AbstractIsotropicGaussian, T::AbstractVector,)
     ty = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][5:end] # first 4 fields must be `μ`, `σ`, `ϕ`, and `dirs`
@@ -61,6 +67,12 @@ function Base.:*(R::AbstractMatrix, x::AbstractIsotropicGMM)
     ty = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first fields must be `gaussians`
     return ty.name.wrapper([R*g for g in x.gaussians], otherfields...)
+end
+
+function Base.:+(x::AbstractIsotropicGMM, T::AbstractVector,)
+    ty = typeof(x)
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first fields must be `gaussians`
+    return ty.name.wrapper([g+T for g in x.gaussians], otherfields...)
 end
 
 function Base.:-(x::AbstractIsotropicGMM, T::AbstractVector,)
@@ -75,6 +87,16 @@ function Base.:*(R::AbstractMatrix, x::AbstractIsotropicMultiGMM)
     gmmdict = Dict{eltype(keys(x.gmms)),eltype(x)}()
     for (i,key) in enumerate(keys(x.gmms))
         push!(gmmdict, key=>R*x.gmms[key])
+    end
+    return ty.name.wrapper(gmmdict, otherfields...)
+end
+
+function  Base.:+(x::AbstractIsotropicMultiGMM, T::AbstractVector)
+    ty = typeof(x)
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
+    gmmdict = Dict{eltype(keys(x.gmms)),eltype(x)}()
+    for (i,key) in enumerate(keys(x.gmms))
+        push!(gmmdict, key=>x.gmms[key]+T)
     end
     return ty.name.wrapper(gmmdict, otherfields...)
 end
