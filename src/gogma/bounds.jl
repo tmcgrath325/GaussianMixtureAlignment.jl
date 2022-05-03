@@ -1,5 +1,5 @@
-const sqrt3 = √(3)
-const sqrt2pi = √(2π)
+loose_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = loose_distance_bounds(x.μ, y.μ, args...)
+tight_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = tight_distance_bounds(x.μ, y.μ, args...)
 
 # prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
 function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM)
@@ -48,7 +48,7 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
         lbdot = 1.
         cosγ = 1.
     else
-        cosβ = cos(min(sqrt3*σᵣ/2, π))
+        cosβ = cos(min(sqrt3*σᵣ, π))
         # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
         cosγ = -1
         for xdir in x.dirs
@@ -79,7 +79,7 @@ gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s
 
 
 
-function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ, σₜ, pσ=nothing, pϕ=nothing; kwargs...)
+function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing; kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)

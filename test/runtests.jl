@@ -6,7 +6,7 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 
-using GaussianMixtureAlignment: gauss_l2_bounds, subranges
+using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions
 
 const GMA = GaussianMixtureAlignment
 @testset "get bounds" begin
@@ -18,30 +18,52 @@ const GMA = GaussianMixtureAlignment
 
     x, y = IsotropicGaussian(μx, σ, ϕ), IsotropicGaussian(μy, σ, ϕ)
 
+    ### tight_distance_bounds
+    # anti-aligned (no rotation) and aligned (180 degree rotation)
+    lbdist, ubdist = tight_distance_bounds(x,y,π,0)
+    @test ubdist ≈ 7
+    @test lbdist ≈ 1
+    # region with closest alignment at 90 degree rotation
+    lbdist, ubdist = tight_distance_bounds(x,y,π/2/sqrt3,0)
+    @test lbdist ≈ 5
+    # translation region centered at origin
+    lbdist, ubdist = tight_distance_bounds(x,y,0,1/√3)
+    @test lbdist ≈ 6
+    @test ubdist ≈ 7
+    # centered at x = 1
+    lbdist, ubdist = tight_distance_bounds(x+SVector(1,0,0),y,0,1/sqrt3)
+    @test lbdist ≈ 7
+    @test ubdist ≈ 8
+
+    ### loose_distance_bounds
+
+
+
+    ### Gaussian L2 bounds
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
-    lb, ub = gauss_l2_bounds(x,y,2π,0)
+    lb, ub = gauss_l2_bounds(x,y,π,0)
     @test lb ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
-    lb, ub = gauss_l2_bounds(RotationVec(0,0,π)*x,y,2π,0)
+    lb, ub = gauss_l2_bounds(RotationVec(0,0,π)*x,y,π,0)
     @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
-    # spheres with closest alignment at 90 degree rotation
-    lb = gauss_l2_bounds(x,y,π/√(3),0)[1]
+    # region with closest alignment at 90 degree rotation
+    lb = gauss_l2_bounds(x,y,π/2/sqrt3,0)[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
-    lb = gauss_l2_bounds(RotationVec(0,0,π/4)*x,y,π/(2*√(3)),0)[1]
+    lb = gauss_l2_bounds(RotationVec(0,0,π/4)*x,y,π/4/(sqrt3),0)[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
-    # centered at origin
-    lb, ub = gauss_l2_bounds(x,y,0,2/√(3))
+    # translation region centered at origin
+    lb, ub = gauss_l2_bounds(x,y,0,1/sqrt3)
     @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
-    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,0,2/√(3))
+    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,0,1/sqrt3)
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
-    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,0,2/√(3))
+    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,0,1/sqrt3)
     @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
 
@@ -83,19 +105,19 @@ end
     gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
     # aligning a GMM to itself
-    bigblock = fullBlock(gmmx, gmmx)
-    # @show bigblock.lowerbound, bigblock.upperbound
-    @test bigblock.lowerbound ≈ -length(gmmx.gaussians)^2 # / √(4π)^3
+    bigblock = UncertaintyRegion(gmmx, gmmx)
+    (lb,ub) = gauss_l2_bounds(gmmx, gmmx, bigblock)
+    @test lb ≈ -length(gmmx.gaussians)^2 # / √(4π)^3
 
-    blk = fullBlock(gmmx, gmmx, NTuple{6,Tuple{Float64,Float64}}(((0,π), (0,π), (0,π), (0,2), (0,2), (0,2))))
-    lb = blk.lowerbound
-    ub = blk.upperbound
+    blk = UncertaintyRegion(RotationVec{Float64}(π/2, π/2, π/2), SVector{3,Float64}(1.0, 1.0, 1.0), π/2, 1.0)
+    (lb,ub) = gauss_l2_bounds(gmmx, gmmx, blk)
     for i = 1:20
-        blk = fullBlock(gmmx, gmmx, subranges(blk.ranges, 2)[1])
-        @test blk.lowerbound >= lb
-        @test blk.upperbound <= ub
-        lb = blk.lowerbound
-        ub = blk.upperbound
+        @show blk.ranges
+        blk = subregions(blk)[1]
+        (newlb,newub) = gauss_l2_bounds(gmmx, gmmx, blk)
+        @test newlb >= lb
+        @test newub <= ub
+        (lb,ub) = (newlb, newub)
     end
 
     # make sure this runs without an error

@@ -17,7 +17,7 @@ Takes `ranges`, a nested tuple describing intervals for each dimension in rigid-
 defining a hypercube, and splits the hypercube into `nsplits` even components along each dimension.
 If the cube is N-dimensional, the number of returned sub-cubes will be `nsplits^N`.
 """
-function subranges(ranges, nsplits::Int=1)
+function subranges(ranges, nsplits::Int=2)
     t = eltype(eltype(ranges))
 
     # calculate even splititng points for each dimension
@@ -31,6 +31,10 @@ function subranges(ranges, nsplits::Int=1)
     return children
 end
 
+function center(ranges::NTuple{N,Tuple{T,T}}) where {N,T}
+    return NTuple{N,T}([sum(dim)/2 for dim in ranges])
+end
+
 ## supertype for search regions
 abstract type SearchRegion{T} end
 CoordinateTransformations.AffineMap(sr::SearchRegion) = AffineMap(sr.R, sr.T)
@@ -40,20 +44,24 @@ CoordinateTransformations.AffineMap(sr::SearchRegion) = AffineMap(sr.R, sr.T)
 """
 Describes an transformation uncertainty region centered at rotation R and translation T, with rotation and translation half-widths of σᵣ and σₜ respectively
 """
-struct UncertaintyRegion{T<:Real} <: SearchRegion{T}
-    R::RotationVec{T}
-    T::SVector{3,T}
-    σᵣ::T
-    σₜ::T
-    ranges::NTuple{6,Tuple{T,T}}
+struct UncertaintyRegion{N<:Real} <: SearchRegion{N}
+    R::RotationVec{N}
+    T::SVector{3,N}
+    σᵣ::N
+    σₜ::N
+    ranges::NTuple{6,Tuple{N,N}}
 end
-UncertaintyRegion(R,T,σᵣ,σₜ) = UncertaintyRegion(R, T, σᵣ, σₜ, cuberanges(R, T, σᵣ, σₜ))
-UncertaintyRegion(σᵣ, σₜ)    = UncertaintyRegion(one(RotationVec), zero(SVector{3}), σᵣ, σₜ)
-UncertaintyRegion(σₜ)        = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, σₜ)
-UncertaintyRegion()         = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, Inf)
+
+function UncertaintyRegion(R::RotationVec,T::SVector{3},σᵣ::Number,σₜ::Number)
+    t = promote_type(eltype(R), eltype(T), typeof(σᵣ), typeof(σₜ))
+    return UncertaintyRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ), t(σₜ), NTuple{6,Tuple{t,t}}(cuberanges(R,T,σᵣ,σₜ)))
+end
+UncertaintyRegion(σᵣ::Number, σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), σᵣ, σₜ)    
+UncertaintyRegion(σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, σₜ)
+UncertaintyRegion() = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, 1.0)
 UncertaintyRegion(block::UncertaintyRegion) = block;
 
-center(ur::UncertaintyRegion) = [ur.R.sx, ur.R.sy, ur.r.sz, ur.T...];
+center(ur::UncertaintyRegion) = (ur.R.sx, ur.R.sy, ur.r.sz, ur.T...);
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_UncertaintyRegion_seed = UInt === UInt64 ? 0x4de49213ae1a23bf : 0xef78ce68
@@ -64,18 +72,22 @@ function hash(B::UncertaintyRegion, h::UInt)
 end
 
 ## only rotation
-struct RotationRegion{T<:Real} <: SearchRegion{T}
-    R::RotationVec{T}
-    T::SVector{3,T}
-    σᵣ::T
-    ranges::NTuple{3,Tuple{T,T}}
+struct RotationRegion{N<:Real} <: SearchRegion{N}
+    R::RotationVec{N}
+    T::SVector{3,N}
+    σᵣ::N
+    ranges::NTuple{3,Tuple{N,N}}
 end
-RotationRegion(R,T,σᵣ)   = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
-RotationRegion(σᵣ)       = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
+function RotationRegion(R::RotationVec,T::SVector{3},σᵣ::Number)
+    t = promote_type(eltype(R), eltype(T), typeof(σᵣ))
+    return RotationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ), NTuple{3,Tuple{t,t}}(cuberanges(R,σᵣ)))
+end
+RotationRegion(R,T,σᵣ::Number) = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
+RotationRegion(σᵣ::Number) = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
 RotationRegion(::T) where T<:Number = RotationRegion(one(T), zero(SVector{3,T}), T(π))
-RotationRegion()         = RotationRegion(Float64)
+RotationRegion() = RotationRegion(Float64)
 
-center(rr::RotationRegion) = [rr.R.sx, rr.R.sy, rr.r.sz];
+center(rr::RotationRegion) = (rr.R.sx, rr.R.sy, rr.r.sz);
 
 UncertaintyRegion(rr::RotationRegion{T}) where T = UncertaintyRegion(rr.R, rr.T, rr.σᵣ, zero(T))
 RotationRegion(ur::UncertaintyRegion) = RotationRegion(ur.R, ur.T, ur.σᵣ)
@@ -90,17 +102,21 @@ end
 
 
 ## only translation
-struct TranslationRegion{T<:Real} <: SearchRegion{T}
-    R::RotationVec{T}
-    T::SVector{3,T}
-    σₜ::T
-    ranges::NTuple{3,Tuple{T,T}}
+struct TranslationRegion{N<:Real} <: SearchRegion{N}
+    R::RotationVec{N}
+    T::SVector{3,N}
+    σₜ::N
+    ranges::NTuple{3,Tuple{N,N}}
+end
+function TranslationRegion(R::RotationVec,T::SVector{3},σₜ::Number)
+    t = promote_type(eltype(R), eltype(T), typeof(σₜ))
+    return TranslationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σₜ), NTuple{3,Tuple{t,t}}(cuberanges(T,σₜ)))
 end
 TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ, cuberanges(T, σₜ))
 TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec{typeof(σₜ)}), zero(SVector{3, typeof(σₜ)}), σₜ)
-TranslationRegion()        = TranslationRegion(one(RotationVec{Float64}), zero(SVector{3, Float64}), 1.0)
+TranslationRegion()         = TranslationRegion(one(RotationVec{Float64}), zero(SVector{3, Float64}), 1.0)
 
-center(tr::TranslationRegion) = [tr.T...];
+center(tr::TranslationRegion) = (tr.T...,);
 
 UncertaintyRegion(tr::TranslationRegion{T}) where T = UncertaintyRegion(tr.R, tr.T, zero(T), tr.σₜ)
 TranslationRegion(ur::UncertaintyRegion) = TranslationRegion(ur.R, ur.T, ur.σₜ)
@@ -113,6 +129,40 @@ function hash(B::TranslationRegion, h::UInt)
     return h
 end
 
+# Split SearchRegion
+function subregions!(subregionvec::Vector{<:UncertaintyRegion}, ur::UncertaintyRegion, nsplits=2)
+    sranges = subranges(ur.ranges, nsplits)
+    σᵣ = ur.σᵣ / nsplits
+    σₜ = ur.σₜ / nsplits
+    for (i,sr) in enumerate(sranges)
+        c = center(sr)
+        R = RotationVec(c[1:3]...)
+        T = SVector{3}(c[4:6]...)
+        subregionvec[i] = UncertaintyRegion(R,T,σᵣ,σₜ,sr)
+    end
+end
+function subregions!(subregionvec::Vector{<:RotationRegion}, rr::RotationRegion, nsplits=2)
+    sranges = subranges(rr.ranges, nsplits)
+    σᵣ = rr.σᵣ / nsplits
+    for (i,sr) in enumerate(sranges)
+        R = RotationVec(center(sr))
+        subregionvec[i] = RotationRegion(R,rr.T,σᵣ,sr)
+    end
+end
+function subregions!(subregionvec::Vector{<:TranslationRegion}, tr::TranslationRegion, nsplits=2)
+    sranges = subranges(rr.ranges, nsplits)
+    σₜ = tr.σₜ / nsplits
+    for (i,sr) in enumerate(sranges)
+        T = SVector{3}(center(sr))
+        subregionvec[i] = TranslationRegion(tr.R,T,σₜ,sr)
+    end
+end
+
+function subregions(sr::SearchRegion, nsplits=2)
+    subregionvec = fill(sr, nsplits^length(sr.ranges))
+    subregions!(subregionvec, sr, nsplits)
+    return subregionvec
+end
 
 # Initialize UncertaintyRegion for aligning two PointSets
 
@@ -150,7 +200,7 @@ function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
     return trlim
 end
 
-UncertaintyRegion(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}) = UncertaintyRegion(translation_limit(x, y))
-TranslationRegion(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}) = TranslationRegion(R, zero(SVector{3}), translation_limit(x, y))
-RotationRegion(x:: AbstractPointSet, y::AbstractPointSet,   R::RotationVec, T::SVector{3}) = RotationRegion(zero(RotationVec), T, π)
+UncertaintyRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = UncertaintyRegion(translation_limit(x, y))
+TranslationRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = TranslationRegion(R, zero(SVector{3}), translation_limit(x, y))
+RotationRegion(x:: Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM},   R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = RotationRegion(zero(RotationVec), T, π)
     

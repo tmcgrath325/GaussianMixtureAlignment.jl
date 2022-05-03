@@ -1,4 +1,12 @@
-loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number) = (norm(x - y), max(ubdist - σᵣ - σₜ, 0))
+const sqrt3 = √(3)
+const sqrt2pi = √(2π)
+
+function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
+    ubdist = norm(x - y)
+    γₜ = sqrt3 * σₜ 
+    γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2)  
+    return (max(ubdist - γₜ - γᵣ, 0), ubdist)
+end
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::SearchRegion) = loose_distance_bounds(x, y, UncertaintyRegion(block))
@@ -20,16 +28,16 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     else
         cosα = dot(x, y)/(xnorm*ynorm) 
     end
-    cosβ = cos(min(sqrt3*σᵣ/2, π))
+    cosβ = cos(min(sqrt3*σᵣ, π))
 
     # upper bound distance at hypercube center
     ubdist = norm(x - y)
     
     # lower bound distance from the nearest point on the "spherical cap"
     if cosα >= cosβ
-        lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ/2, 0)
+        lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ, 0)
     else
-        lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ/2, 0)  # law of cosines
+        lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
         catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
             0
         end

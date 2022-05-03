@@ -39,11 +39,11 @@ Returns a `GMAlignmentResult` that contains the maximized overlap of the two GMM
 a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
 number of evaluations during the alignment procedure. 
 """ 
-function branchbound(x::AbstractPointSet, y::AbstractPointSet;
+function branchbound(x::Union{AbstractGMM, AbstractPointSet}, y::Union{AbstractGMM, AbstractPointSet};
                      pσ = nothing, pϕ = nothing,
-                     nsplits=2, searchspace=nothing, R=nothing, T=nothing,
-                     blockfun=UncertaintyRegion, objfun=alignment_objective, tformfun=AffineMap,
-                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, threads=false)
+                     nsplits=2, searchspace=nothing,
+                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, objfun=alignment_objective, tformfun=AffineMap,
+                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -51,17 +51,17 @@ function branchbound(x::AbstractPointSet, y::AbstractPointSet;
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
 
+    t = promote_type(numbertype(x), numbertype(y))
+    ndims = dims(searchspace)
+
     # initialization
     if isnothing(searchspace)
-        searchspace = blockfun(x, y, R, T)
+        searchspace = blockfun(x, y)
     end
-    ndims = dims(searchspace)
-    (start_lb, start_ub) = 
-    ub, bestloc = searchspace.upperbound, searchspace.center    # best-so-far objective value and transformation
-    t = promote_type(numbertype(x), numbertype(y))
-    lb = typemin(t)
-    pq = PriorityQueue{Block{ndims, t}, Tuple{t,t}}()
-    enqueue!(pq, searchspace, (searchspace.lowerbound, searchspace.upperbound))
+    (ub, lb) = boundsfun(x, y, searchspace)
+    bestloc = center(searchspace)
+    pq = PriorityQueue{blockfun{ndims, t}, Tuple{t,t}}()
+    enqueue!(pq, searchspace, (lb, ub))
     
     # split cubes until convergence
     ndivisions = 0
@@ -83,17 +83,8 @@ function branchbound(x::AbstractPointSet, y::AbstractPointSet;
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
-        subrngs = subranges(bl.ranges, nsplits)
-        sblks = fill(Block{ndims,t}(), nsplits^ndims)
-        if threads
-            Threads.@threads for i=1:length(subrngs)
-                sblks[i] = blockfun(x, y, subrngs[i], rot, trl)
-            end
-        else
-            for i=1:length(subrngs)
-                sblks[i] = blockfun(x, y, subrngs[i], rot, trl)
-            end
-        end
+        sblks = subregions(bl)
+        sbnds = [boundsfun(x,y,sblk) for sblk in sblks]
 
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sblk.upperbound for sblk in sblks])
