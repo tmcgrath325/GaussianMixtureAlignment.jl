@@ -84,8 +84,8 @@ end
 function Base.:*(R::AbstractMatrix, x::AbstractIsotropicMultiGMM)
     ty = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(x)}()
-    for (i,key) in enumerate(keys(x.gmms))
+    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
+    for key in keys(x.gmms)
         push!(gmmdict, key=>R*x.gmms[key])
     end
     return ty.name.wrapper(gmmdict, otherfields...)
@@ -94,8 +94,8 @@ end
 function  Base.:+(x::AbstractIsotropicMultiGMM, T::AbstractVector)
     ty = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(x)}()
-    for (i,key) in enumerate(keys(x.gmms))
+    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
+    for key in keys(x.gmms)
         push!(gmmdict, key=>x.gmms[key]+T)
     end
     return ty.name.wrapper(gmmdict, otherfields...)
@@ -104,8 +104,8 @@ end
 function  Base.:-(x::AbstractIsotropicMultiGMM, T::AbstractVector)
     ty = typeof(x)
     otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(x)}()
-    for (i,key) in enumerate(keys(x.gmms))
+    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
+    for key in keys(x.gmms)
         push!(gmmdict, key=>x.gmms[key]-T)
     end
     return ty.name.wrapper(gmmdict, otherfields...)

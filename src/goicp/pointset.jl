@@ -1,7 +1,7 @@
 import Base: eltype, length, size, getindex, iterate, convert, promote_rule, keys
 
 abstract type AbstractPoint{N,T} end
-abstract type AbstractPointSet{N,T} end
+abstract type AbstractPointSet{N,T} <: AbstractModel{N,T} end
 abstract type AbstractSinglePointSet{N,T} <: AbstractPointSet{N,T} end
 abstract type AbstractMultiPointSet{N,T,K} <: AbstractPointSet{N,T} end
 

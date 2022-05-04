@@ -23,4 +23,5 @@ function (distance_bound_fun::Union{loose_distance_bounds, tight_distance_bounds
     return lb, ub
 end
 
-(distance_bound_fun::Union{loose_distance_bounds, tight_distance_bounds})(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ<:Number, σₜ<:Number) = distance_bound_fun(R*x, y-T, σᵣ, σₜ)
+(distance_bound_fun::Union{loose_distance_bounds, tight_distance_bounds})(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ<:Number, σₜ<:Number
+    ) = sum(abs2, [R.sx, R.sy, R.sz]) ? infbounds(x,y) : distance_bound_fun(R*x, y-T, σᵣ, σₜ)

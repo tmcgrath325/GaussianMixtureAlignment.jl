@@ -1,6 +1,6 @@
 abstract type AlignmentResults end
 
-struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractPointSet{D,S},Y<:AbstractPointSet{D,T}} <: AlignmentResults
+struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:Union{AbstractGMM{D,S},AbstractPointSet{D,S}},Y<:Union{AbstractGMM{D,T},AbstractPointSet{D,T}}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -35,12 +35,11 @@ end
 Finds the globally optimal rigid transform for alignment between two isotropic Gaussian mixtures, `x`
 and `y`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 
-Returns a `GMAlignmentResult` that contains the maximized overlap of the two GMMs (the upperbound on the objective function),
+Returns a `GlobalAlignmentResult` that contains the maximized overlap of the two GMMs (the upperbound on the objective function),
 a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
 number of evaluations during the alignment procedure. 
 """ 
-function branchbound(x::Union{AbstractGMM, AbstractPointSet}, y::Union{AbstractGMM, AbstractPointSet};
-                     pσ = nothing, pϕ = nothing,
+function branchbound(x::AbstractModel, y::AbstractModel, args...;
                      nsplits=2, searchspace=nothing,
                      blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, objfun=alignment_objective, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
@@ -50,17 +49,19 @@ function branchbound(x::Union{AbstractGMM, AbstractPointSet}, y::Union{AbstractG
     if dims(x) != dims(y)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
-
+    # if isnothing(pσ) || isnothing(pϕ)
+    #     pσ, pϕ = pairwise_consts(x, y)
+    # end
     t = promote_type(numbertype(x), numbertype(y))
-    ndims = dims(searchspace)
 
     # initialization
     if isnothing(searchspace)
         searchspace = blockfun(x, y)
     end
+    ndims = length(searchspace.ranges)
     (ub, lb) = boundsfun(x, y, searchspace)
     bestloc = center(searchspace)
-    pq = PriorityQueue{blockfun{ndims, t}, Tuple{t,t}}()
+    pq = PriorityQueue{blockfun{t}, Tuple{t,t}}()
     enqueue!(pq, searchspace, (lb, ub))
     
     # split cubes until convergence
@@ -79,7 +80,7 @@ function branchbound(x::Union{AbstractGMM, AbstractPointSet}, y::Union{AbstractG
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            return GMAlignmentResult(x, y, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -87,25 +88,41 @@ function branchbound(x::Union{AbstractGMM, AbstractPointSet}, y::Union{AbstractG
         sbnds = [boundsfun(x,y,sblk) for sblk in sblks]
 
         # reset the upper bound if appropriate
-        minub, ubidx = findmin([sblk.upperbound for sblk in sblks])
+        minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
-            ub, bestloc = local_align(x, y, sblks[ubidx], pσ, pϕ; objfun=objfun, rot=rot, trl=trl)
+            ub, bestloc = local_align(x, y, sblks[ubidx], args...; objfun=objfun)
             sinceimprove = 0
         end
 
+        # remove all blocks in the queue that can now be eliminated (no possible improvement)
+        if !isempty(pq)
+            while first(pq)[2][1] > ub
+                popfirst!(pq)
+                if isempty(pq)
+                    break
+                end
+            end
+        end
+
         # only add sub-blocks to the queue if they present possibility for improvement
-        for sblk in sblks
-            if sblk.lowerbound < ub
-                enqueue!(pq, sblk, (sblk.lowerbound, sblk.upperbound))
+        for (i,sblk) in enumerate(sblks)
+            if sbnds[i][1] < ub
+                enqueue!(pq, sblk, sbnds[i])
             end
         end
     end
     if isempty(pq)
-        return GMAlignmentResult(x, y, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
     else
-        return GMAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc...), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
     end
 end
+
+function branchbound(x::AbstractGMM, y::AbstractGMM; kwargs...)
+    pσ, pϕ = pairwise_consts(x,y)
+    return branchbound(x,y,pσ,pϕ; kwargs...)
+end
+
 
 """
     result = rot_gogma_align(x, y; kwargs...)
@@ -116,8 +133,8 @@ That is, only rigid translation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function rot_gogma_align(x::AbstractGMM, y::AbstractGMM; kwargs...)
-    return gogma_align(x, y; blockfun=rotBlock, objfun=rot_alignment_objective, tformfun=LinearMap, kwargs...)
+function rotbranchbound(x::AbstractModel, y::AbstractModel; kwargs...)
+    return branchbound(x, y; blockfun=RotationRegion, objfun=R_alignment_objective, tformfun=LinearMap, kwargs...)
 end
 
 """
@@ -129,6 +146,6 @@ That is, only rigid rotation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function trl_gogma_align(x::AbstractGMM, y::AbstractGMM;  kwargs...)
-    return gogma_align(x, y; blockfun=trlBlock, objfun=trl_alignment_objective, tformfun=Translation, kwargs...)
+function trlbranchbound(x::AbstractModel, y::AbstractModel;  kwargs...)
+    return branchbound(x, y; blockfun=trlBlock, objfun=trl_alignment_objective, tformfun=Translation, kwargs...)
 end

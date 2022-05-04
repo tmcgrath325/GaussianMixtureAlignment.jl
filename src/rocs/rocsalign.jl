@@ -10,15 +10,16 @@ end
 
 Returns the center of mass of `gmm`, where its first order moments are equal to 0.
 """
-function center_of_mass(positions::AbstractMatrix{<:Real}, weights=ones(eltype(positions),size(positions,2)))
-    return SVector{size(positions,1)}([sum(hcat([weights[i]*positions[:,i] for i=1:size(positions,2)]...), dims=2)...]/sum(weights))
+function center_of_mass(positions::AbstractMatrix{<:Real}, weights::AbstractVector{<:Real}=ones(eltype(positions),size(positions,2)))
+    normweights = weights / sum(weights)
+    return SVector{size(positions,1)}(positions * normweights)
 end
 
 center_of_mass(gaussians::AbstractVector{<:AbstractIsotropicGaussian}) = 
     return center_of_mass(hcat([g.μ for g in gaussians]...), [g.ϕ for g in gaussians])
 
+center_of_mass(x::AbstractPointSet) = center_of_mass(x.coords, x.weights)
 center_of_mass(gmm::AbstractIsotropicGMM) = center_of_mass(gmm.gaussians)
-
 center_of_mass(mgmm::AbstractMultiGMM) = center_of_mass(collect(Iterators.flatten([gmm.gaussians for (k,gmm) in mgmm])))
 
 """ 
@@ -27,8 +28,8 @@ center_of_mass(mgmm::AbstractMultiGMM) = center_of_mass(collect(Iterators.flatte
 Returns the second order moment of `gmm`
 """
 function mass_matrix(positions::AbstractMatrix{<:Real}, 
-                     widths=zeros(eltype(positions),size(positions,2)), 
                      weights=ones(eltype(positions),size(positions,2)), 
+                     widths=zeros(eltype(positions),size(positions,2)), 
                      center=center_of_mass(positions,weights))
     t = eltype(positions)
     npts = size(positions,2)
@@ -61,11 +62,11 @@ Returns 10 transformations to put `gmm` in an inertial frame. That is, the mass 
 is made diagonal, and the GMM center of mass is made the origin.
 """
 function inertial_transforms(positions::AbstractMatrix{<:Real},
-                             widths=zeros(eltype(positions),size(positions,2)), 
-                             weights=ones(eltype(positions),size(positions,2)); 
+                             weights=ones(eltype(positions),size(positions,2)),
+                             widths=zeros(eltype(positions),size(positions,2)); 
                              invert = false)
     com = center_of_mass(positions, weights)
-    massmat = mass_matrix(positions, widths, weights, com)
+    massmat = mass_matrix(positions, weights, widths, com)
     evecs = eigvecs(massmat)
 
     T = eltype(com)
@@ -97,8 +98,10 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
     end
 end
 
-inertial_transforms(gaussians; kwargs...
-    ) = inertial_transforms(hcat([g.μ for g in gaussians]...), [g.σ for g in gaussians], [g.ϕ for g in gaussians]; kwargs...)
+inertial_transforms(x::AbstractPointSet; kwargs...) = inertial_transforms(x.coords, x.weights; kwargs...)
+
+inertial_transforms(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; kwargs...
+    ) = inertial_transforms(hcat([g.μ for g in gaussians]...), [g.ϕ for g in gaussians], [g.σ for g in gaussians]; kwargs...)
 
 inertial_transforms(gmm::AbstractIsotropicGMM; kwargs...
     ) = inertial_transforms(gmm.gaussians; kwargs...)

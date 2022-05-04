@@ -6,10 +6,10 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 
-using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions
+using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap
 
 const GMA = GaussianMixtureAlignment
-@testset "get bounds" begin
+@testset "search space bounds" begin
     μx = SVector(3,0,0)
     μy = SVector(-4,0,0)
     σ = ϕ = 1
@@ -36,8 +36,6 @@ const GMA = GaussianMixtureAlignment
     @test ubdist ≈ 8
 
     ### loose_distance_bounds
-
-
 
     ### Gaussian L2 bounds
     # rotation distances, no translation
@@ -69,7 +67,7 @@ const GMA = GaussianMixtureAlignment
 
 end
 
-@testset "divide block" begin
+@testset "divide a searchspace" begin
     blk1 = NTuple{6,Tuple{Float64,Float64}}(((-π,π), (-π,π), (-π,π), (-1,1), (-1,1), (-1,1)))
     subblks1 = subranges(blk1, 2)
     @test length(subblks1) == 2^6
@@ -96,7 +94,7 @@ end
     end
 end
 
-@testset "GOGMA" begin
+@testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
@@ -112,24 +110,42 @@ end
     blk = UncertaintyRegion(RotationVec{Float64}(π/2, π/2, π/2), SVector{3,Float64}(1.0, 1.0, 1.0), π/2, 1.0)
     (lb,ub) = gauss_l2_bounds(gmmx, gmmx, blk)
     for i = 1:20
-        @show blk.ranges
         blk = subregions(blk)[1]
         (newlb,newub) = gauss_l2_bounds(gmmx, gmmx, blk)
         @test newlb >= lb
         @test newub <= ub
         (lb,ub) = (newlb, newub)
     end
+end
+
+@testset "ROCS alignment" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
+
+    
+end
+
+@testset "GOGMA" begin
+    # two sets of points, each forming a 3-4-5 triangle
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
     # make sure this runs without an error
-    res = gogma_align(gmmx, gmmy, maxblocks=1E5)
-    res = tiv_gogma_align(gmmx, gmmy)
+    res = branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, maxblocks=1E5)
+    # res = tiv_gogma_align(gmmx, gmmy)
 
     mgmmx = IsotropicMultiGMM(Dict(:x => gmmx, :y => gmmy))
     mgmmy = IsotropicMultiGMM(Dict(:y => gmmx, :x => gmmy))
-    res = gogma_align(mgmmx, mgmmy, maxblocks=1E5)
-    res = tiv_gogma_align(mgmmx, mgmmy)
+    res = branchbound(mgmmx, mgmmy; boundsfun=gauss_l2_bounds, maxblocks=1E5)
+    # res = tiv_gogma_align(mgmmx, mgmmy)
 
-    # ROCS alignment should work perfectly
+    # ROCS alignment should work perfectly for this alignment
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 

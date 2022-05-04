@@ -61,7 +61,7 @@ UncertaintyRegion(σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVec
 UncertaintyRegion() = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, 1.0)
 UncertaintyRegion(block::UncertaintyRegion) = block;
 
-center(ur::UncertaintyRegion) = (ur.R.sx, ur.R.sy, ur.r.sz, ur.T...);
+center(ur::UncertaintyRegion) = (ur.R.sx, ur.R.sy, ur.R.sz, ur.T...);
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_UncertaintyRegion_seed = UInt === UInt64 ? 0x4de49213ae1a23bf : 0xef78ce68

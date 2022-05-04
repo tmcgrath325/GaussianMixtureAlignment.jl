@@ -1,5 +1,11 @@
 const sqrt3 = √(3)
 const sqrt2pi = √(2π)
+const pisq = Float64(π^2)
+
+function infbounds(x,y) 
+    typeinf = typemax(promote_type(numbertype(x), numbertype(y)))
+    return (typeinf, typeinf) 
+end
 
 function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     ubdist = norm(x - y)
@@ -7,7 +13,8 @@ function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2)  
     return (max(ubdist - γₜ - γᵣ, 0), ubdist)
 end
-loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ
+    ) = sum(abs2, [R.sx, R.sy, R.sz]) ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::SearchRegion) = loose_distance_bounds(x, y, UncertaintyRegion(block))
 
@@ -47,6 +54,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     return (lbdist, ubdist)
 end
 
-tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number) = tight_distance_bounds(R*x, y-T, σᵣ, σₜ)
+tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number
+    ) = sum(abs2, [R.sx, R.sy, R.sz]) ? infbounds(x,y) : tight_distance_bounds(R*x, y-T, σᵣ, σₜ)
 tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = tight_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
 tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::Union{RotationRegion, TranslationRegion}) = tight_distance_bounds(x, y, UncertaintyRegion(block))

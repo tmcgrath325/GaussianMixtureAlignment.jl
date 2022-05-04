@@ -69,7 +69,7 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
 end
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
-    ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
+    ) = sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
@@ -96,7 +96,7 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ
     return lb, ub
 end
 
-function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ, σₜ, mpσ=nothing, mpϕ=nothing)
+function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
@@ -106,16 +106,16 @@ function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ
     lb = 0.
     ub = 0.
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], rwidth, twidth, θ, R0, t0, mpσ[key], mpϕ[key])
+        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ, mpσ[key], mpϕ[key])
     end
     return lb, ub
 end
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, σᵣ, σₜ, pσ=nothing, pϕ=nothing; kwargs...
-    ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, pσ, pϕ; kwargs...)
+gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
+    ) = sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : gauss_l2_bounds(R*x, y-T, args...; kwargs...)
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, pσ=nothing, pϕ=nothing; kwargs...
-    ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, pσ, pϕ; kwargs...)
+gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args...; kwargs...
+    ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, args...; kwargs...)
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, pσ=nothing, pϕ=nothing; kwargs...
-    ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), pσ, pϕ; kwargs...)
+gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, args...; kwargs...
+    ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), args...; kwargs...)

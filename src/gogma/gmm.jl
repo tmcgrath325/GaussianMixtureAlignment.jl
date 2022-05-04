@@ -2,14 +2,14 @@ import Base: eltype, length, size, getindex, iterate, convert, promote_rule, key
 
 # Type structure: leaving things open for adding anisotropic Gaussians and GMMs
 
-abstract type AbstractGaussian{N,T} <: AbstractPoint{N,T} end
+abstract type AbstractGaussian{N,T} end
 abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
     # concrete subtypes:
     #   IsotropicGaussian
     #   AtomGaussian (MolecularGaussians.jl)
     #   FeatureGaussian (MolecularGaussians.jl)
 
-abstract type AbstractGMM{N,T} end
+abstract type AbstractGMM{N,T} <: AbstractModel{N,T} end
 
 abstract type AbstractSingleGMM{N,T} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicGMM{N,T} <: AbstractSingleGMM{N,T} end

@@ -19,6 +19,8 @@ REPL help
 """
 module GaussianMixtureAlignment
 
+abstract type AbstractModel{N,T} end
+
 using StaticArrays
 using LinearAlgebra
 using GenericLinearAlgebra
@@ -45,8 +47,10 @@ include("gogma/combine.jl")
 include("gogma/transformation.jl")
 include("gogma/overlap.jl")
 include("gogma/bounds.jl")
+include("localalign.jl")
+include("branchbound.jl")
 # include("gogma/tiv.jl")
-# include("rocs/rocsalign.jl")
+include("rocs/rocsalign.jl")
 # include("rocs/rocsgogma.jl")
 
 using Requires
