@@ -1,6 +1,6 @@
 abstract type AlignmentResults end
 
-struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:Union{AbstractGMM{D,S},AbstractPointSet{D,S}},Y<:Union{AbstractGMM{D,T},AbstractPointSet{D,T}}} <: AlignmentResults
+struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:AbstractModel{D,T}} <: AlignmentResults
     x::X
     y::Y
     upperbound::T
@@ -41,7 +41,7 @@ number of evaluations during the alignment procedure.
 """ 
 function branchbound(x::AbstractModel, y::AbstractModel, args...;
                      nsplits=2, searchspace=nothing,
-                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, objfun=alignment_objective, tformfun=AffineMap,
+                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
@@ -90,7 +90,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
-            ub, bestloc = local_align(x, y, sblks[ubidx], args...; objfun=objfun)
+            ub, bestloc = localfun(x, y, sblks[ubidx], args...; objfun=objfun)
             sinceimprove = 0
         end
 

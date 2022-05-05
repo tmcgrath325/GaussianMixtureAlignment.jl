@@ -27,6 +27,8 @@ using GenericLinearAlgebra
 using DataStructures
 using Rotations
 using CoordinateTransformations
+using Distances
+using NearestNeighbors
 using Optim
 
 export AbstractGaussian, AbstractGMM
@@ -41,17 +43,20 @@ export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
 
 include("goicp/pointset.jl")
 include("gogma/gmm.jl")
+
 include("uncertaintyregion.jl")
 include("distancebounds.jl")
+
 include("gogma/combine.jl")
 include("gogma/transformation.jl")
 include("gogma/overlap.jl")
 include("gogma/bounds.jl")
+
 include("localalign.jl")
 include("branchbound.jl")
-# include("gogma/tiv.jl")
+
+include("gogma/align.jl")
 include("rocs/rocsalign.jl")
-# include("rocs/rocsgogma.jl")
 
 using Requires
 

@@ -18,7 +18,7 @@ function (distance_bound_fun::Union{loose_distance_bounds, tight_distance_bounds
     lb = 0.
     ub = 0.
     for key in keys(x.pointsets) ∩ keys(y.pointsets)
-        lb, ub = (lb, ub) .+ distance_bound_fun(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ)
+        lb, ub = (lb, ub) .+ distance_bound_fun(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ).^2
     end
     return lb, ub
 end

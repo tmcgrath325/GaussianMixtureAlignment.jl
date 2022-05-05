@@ -12,7 +12,8 @@ function kabsch_centered(P,Q,w)
     W = diagm(w/sum(w)) # here, the weights are assumed to sum to 1
     H = P*W*Q'
     D = Matrix{Float64}(I,size(H,1), size(H,2))
-    U,Σ,V = svd(H)
+    # U,Σ,V = svd(H)
+    U,Σ,V = GenericLinearAlgebra.svd(H)
     D[end] = sign(det(V*U'))
     return LinearMap(V * D * U')
 end
