@@ -1,4 +1,4 @@
-function goicp_align(x::AbstractPointset, y::AbstractPointset; kwargs...)
+function goicp_align(x::AbstractPointSet, y::AbstractPointSet; kwargs...)
     kdtree = KDTree(y.coords, Euclidean())
-    return branchbound(x, y, kdtree; localfun=local_icp, kwargs...)
+    return branchbound(x, y, kdtree; boundsfun=squared_dist_bounds, localfun=local_icp, kwargs...)
 end

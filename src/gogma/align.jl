@@ -1,1 +1,3 @@
-gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = branchbound(gmmx, gmmy; blockfun=UncertaintyRegion, objfun=alignment_objective)
+gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, objfun=overlapobj, kwargs...)
+rot_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = rot_branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, objfun=overlapobj, kwargs...)
+trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = trl_branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, objfun=overlapobj, kwargs...)

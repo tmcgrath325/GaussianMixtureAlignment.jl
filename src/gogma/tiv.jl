@@ -9,8 +9,8 @@ struct TIVAlignmentResult{D,S,T,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:Abstrac
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    rotation_result::GMAlignmentResult{D,S,T,M,G,V,W}
-    translation_result::GMAlignmentResult{D,S,T,M,H,X,Y}
+    rotation_result::GlobalAlignmentResult{D,S,T,M,G,V,W}
+    translation_result::GlobalAlignmentResult{D,S,T,M,H,X,Y}
 end
 
 
@@ -96,36 +96,39 @@ for `gmmx` and `gmmy` respectively, during rotational alignment.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; kwargs...)
+function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; objfun=overlapobj, kwargs...)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
     p = t(π)
     z = zero(t)
+    zeroTranslation = SVector{3}(z,z,z)
     
-    # align TIVs
+    # align TIVs (rotation space)
     tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
     rot_res = rot_gogma_align(tivgmmx, tivgmmy; kwargs...)
-    rotblock = Block(((-p,p), (-p,p), (-p,p)), rot_res.tform_params, z, z)
-    rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock, objfun=rot_alignment_objective)
+    rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
+    rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock; objfun=objfun)
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
-    R = AngleAxis(rot_res.tform_params...)
+    R = RotationVec(rot_res.tform_params...)
     spinvec, dist = planefit(tivgmmx, R)
-    spinblock = Block(((-p,p), (-p,p), (-p,p)), rot_to_axis(AngleAxis(π*spinvec...) * R), z, z)
-    spinscore, spinrotpos = local_align(tivgmmx, tivgmmy, spinblock, objfun=rot_alignment_objective)
+    spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
+    spinscore, spinrotpos = local_align(tivgmmx, tivgmmy, spinblock; objfun=objfun)
     if spinscore < rotscore
-        rotpos = spinrotpos
+        rotpos = RotationVec(spinrotpos...)
+    else
+        rotpos = RotationVec(rotpos...)
     end
 
-    # perform translation alignment
-    trl_res = trl_gogma_align(gmmx, gmmy; rot=rotpos, kwargs...)
+    # perform translation alignment of original models
+    trl_res = trl_gogma_align(RotationVec(rotpos)*gmmx, gmmy; kwargs...)
+    trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space
-    pos = NTuple{6, t}([rotpos..., trl_res.tform_params...])
     trlim = translation_limit(gmmx, gmmy)
-    localblock = Block(((-p,p), (-p,p), (-p,p), (-trlim,trlim), (-trlim,trlim), (-trlim,trlim)), pos, trl_res.upperbound, typemin(t))
-    min, bestpos = local_align(gmmx, gmmy, localblock)
+    localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
+    min, bestpos = local_align(gmmx, gmmy, localblock; objfun=objfun)
 
-    return TIVAlignmentResult(gmmx, gmmy, min, trl_res.lowerbound, AffineMap(bestpos...), bestpos, 
+    return TIVAlignmentResult(gmmx, gmmy, min, trl_res.lowerbound, AffineMap(rotpos, trlpos), bestpos, 
                              rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
                              rot_res.num_blocks+trl_res.num_blocks, rot_res.stagnant_splits+trl_res.stagnant_splits,
                              rot_res, trl_res)

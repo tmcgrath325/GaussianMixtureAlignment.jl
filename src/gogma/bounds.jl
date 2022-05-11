@@ -43,17 +43,15 @@ See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
     (lbdist, ubdist) = distance_bound_fun(x.μ, y.μ, σᵣ, σₜ)
 
-    # upperbound of dot product between directional constraints (minimizes objective)
     if length(x.dirs) == 0 || length(y.dirs) == 0
         lbdot = 1.
         cosγ = 1.
     else
         cosβ = cos(min(sqrt3*σᵣ, π))
-        # NOTE: Avoid list comprehension (slow), but perform more matrix multiplications
-        cosγ = -1
+        cosγ = -1.
         for xdir in x.dirs
             for ydir in y.dirs
-                cosγ = max(cosγ, dot(R0*xdir, ydir))
+                cosγ = max(cosγ, dot(xdir, ydir))
             end
         end
         if cosγ >= cosβ
@@ -69,7 +67,7 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
 end
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
-    ) = sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
+    ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
@@ -112,7 +110,7 @@ function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ
 end
 
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
-    ) = sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : gauss_l2_bounds(R*x, y-T, args...; kwargs...)
+    ) = gauss_l2_bounds(R*x, y-T, args...; kwargs...)
 
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args...; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, args...; kwargs...)

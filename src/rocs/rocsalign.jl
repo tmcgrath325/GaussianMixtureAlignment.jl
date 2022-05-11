@@ -5,23 +5,6 @@ struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:Abs
     tform::F
 end
 
-"""
-    com = center_of_mass(gmm)
-
-Returns the center of mass of `gmm`, where its first order moments are equal to 0.
-"""
-function center_of_mass(positions::AbstractMatrix{<:Real}, weights::AbstractVector{<:Real}=ones(eltype(positions),size(positions,2)))
-    normweights = weights / sum(weights)
-    return SVector{size(positions,1)}(positions * normweights)
-end
-
-center_of_mass(gaussians::AbstractVector{<:AbstractIsotropicGaussian}) = 
-    return center_of_mass(hcat([g.μ for g in gaussians]...), [g.ϕ for g in gaussians])
-
-center_of_mass(x::AbstractPointSet) = center_of_mass(x.coords, x.weights)
-center_of_mass(gmm::AbstractIsotropicGMM) = center_of_mass(gmm.gaussians)
-center_of_mass(mgmm::AbstractMultiGMM) = center_of_mass(collect(Iterators.flatten([gmm.gaussians for (k,gmm) in mgmm])))
-
 """ 
     m = second_moment(gmm, center, dim1, dim2)
 
@@ -30,7 +13,7 @@ Returns the second order moment of `gmm`
 function mass_matrix(positions::AbstractMatrix{<:Real}, 
                      weights=ones(eltype(positions),size(positions,2)), 
                      widths=zeros(eltype(positions),size(positions,2)), 
-                     center=center_of_mass(positions,weights))
+                     center=centroid(positions,weights))
     t = eltype(positions)
     npts = size(positions,2)
     M = fill(zero(t), 3, 3)
@@ -65,7 +48,7 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
                              weights=ones(eltype(positions),size(positions,2)),
                              widths=zeros(eltype(positions),size(positions,2)); 
                              invert = false)
-    com = center_of_mass(positions, weights)
+    com = centroid(positions, weights)
     massmat = mass_matrix(positions, weights, widths, com)
     evecs = eigvecs(massmat)
 
@@ -128,7 +111,7 @@ function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
 
     # combine the inertial transform with the subsequent alignment transform for the best result
     minoverlap, mindex = findmin([r[1] for r in results])
-    tformmoving = AffineMap(results[mindex][2]...) ∘ tformsmoving[mindex]
+    tformmoving = AffineMap(results[mindex][2]) ∘ tformsmoving[mindex]
 
     # Apply the inverse of `tformfixed` to the optimized transformation 
     alignment_tform = inv(tformfixed) ∘ tformmoving

@@ -1,25 +1,3 @@
-# Extend rotation and transformation methods from Rotations and CoordinateTransformations
-
-function Rotations.AngleAxis(rx, ry, rz) 
-    # Note: promoting with Float64 here in order to avoid strange behavior when passing AngleAxis{Int} to AffineMap()
-    #       I don't think this is a big deal, since RotMatrix{Int} is almost never valid (identity, reflections, etc...)
-    t = promote_type(typeof(rx), typeof(ry), typeof(rz), Float64)
-    theta = √(rx^2+ry^2+rz^2)
-    return theta == 0 ? AngleAxis(zero(t),one(t),zero(t),zero(t)) : AngleAxis(theta, rx, ry, rz)
-end
-
-function rot_to_axis(R::RotationVec)
-    aa = AngleAxis(R)
-    return aa.theta.*(aa.axis_x, aa.axis_y, aa.axis_z)
-end
-
-function affinemap_to_params(tform::AffineMap)
-    return (rot_to_axis(tform.linear)..., tform.translation)
-end
-
-CoordinateTransformations.LinearMap(rx,ry,rz) = CoordinateTransformations.LinearMap(AngleAxis(rx,ry,rz))
-CoordinateTransformations.AffineMap(rx,ry,rz,tx,ty,tz) = CoordinateTransformations.AffineMap(AngleAxis(rx,ry,rz), SVector(tx,ty,tz))
-
 # There is some concern about the inferability of the functions below. Using Test.@inferred did not throw any errors
 
 # function (tform::Union{LinearMap,Translation,AffineMap})(x::AbstractIsotropicGaussian)
@@ -83,31 +61,34 @@ end
 
 function Base.:*(R::AbstractMatrix, x::AbstractIsotropicMultiGMM)
     ty = typeof(x)
-    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
-    for key in keys(x.gmms)
-        push!(gmmdict, key=>R*x.gmms[key])
+    gmmkeys = keys(x.gmms)
+    gmmdict = Dict(first(gmmkeys)=>R*x.gmms[first(gmmkeys)])
+    for (i,key) in enumerate(gmmkeys)
+        i === 1 ? continue : push!(gmmdict, key=>R*x.gmms[key])
     end
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
     return ty.name.wrapper(gmmdict, otherfields...)
 end
 
 function  Base.:+(x::AbstractIsotropicMultiGMM, T::AbstractVector)
     ty = typeof(x)
-    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
-    for key in keys(x.gmms)
-        push!(gmmdict, key=>x.gmms[key]+T)
+    gmmkeys = keys(x.gmms)
+    gmmdict = Dict(first(gmmkeys)=>x.gmms[first(gmmkeys)]+T)
+    for (i,key) in enumerate(gmmkeys)
+        i === 1 ? continue : push!(gmmdict, key=>x.gmms[key]+T)
     end
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
     return ty.name.wrapper(gmmdict, otherfields...)
 end
 
 function  Base.:-(x::AbstractIsotropicMultiGMM, T::AbstractVector)
     ty = typeof(x)
-    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
-    gmmdict = Dict{eltype(keys(x.gmms)),eltype(values(x.gmms))}()
-    for key in keys(x.gmms)
-        push!(gmmdict, key=>x.gmms[key]-T)
+    gmmkeys = keys(x.gmms)
+    gmmdict = Dict(first(gmmkeys)=>x.gmms[first(gmmkeys)]-T)
+    for (i,key) in enumerate(gmmkeys)
+        i === 1 ? continue : push!(gmmdict, key=>x.gmms[key]-T)
     end
+    otherfields = [getfield(x,fname) for fname in fieldnames(typeof(x))][2:end] # first field must be `gmms`
     return ty.name.wrapper(gmmdict, otherfields...)
 end
 

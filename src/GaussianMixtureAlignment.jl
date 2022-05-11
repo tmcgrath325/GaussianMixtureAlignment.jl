@@ -41,6 +41,8 @@ export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
 # export rocs_align
 # export rocs_gogma_align
 
+include("tforms.jl")
+
 include("goicp/pointset.jl")
 include("gogma/gmm.jl")
 
@@ -52,10 +54,18 @@ include("gogma/transformation.jl")
 include("gogma/overlap.jl")
 include("gogma/bounds.jl")
 
+include("goicp/bounds.jl")
+include("goicp/correspondence.jl")
+include("goicp/kabsch.jl")
+include("goicp/icp.jl")
+include("goicp/rmsd.jl")
+
 include("localalign.jl")
 include("branchbound.jl")
 
 include("gogma/align.jl")
+include("gogma/tiv.jl")
+include("goicp/align.jl")
 include("rocs/rocsalign.jl")
 
 using Requires

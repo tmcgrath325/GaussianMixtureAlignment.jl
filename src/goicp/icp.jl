@@ -1,6 +1,6 @@
 # perform point-to-point ICP with provided correspondence and distance score functions
 
-function iterate_kabsch(P, Q, w, args...; iterations=1000; correspondence = (p,q) => closest_points(p,q,args...))
+function iterate_kabsch(P, Q, w, args...; iterations=1000, correspondence = (p,q) => closest_points(p,q,args...))
     # initial correspondences
     matches = correspondence(P,Q)
     tform = identity
