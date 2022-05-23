@@ -29,17 +29,14 @@ using Rotations
 using CoordinateTransformations
 using Distances
 using NearestNeighbors
+using Hungarian
 using Optim
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
-# export rotmat
-# export overlap, distance, tanimoto
-# export local_align
-# export gogma_align, rot_gogma_align, trl_gogma_align
-# export tivgmm, tiv_gogma_align
-# export rocs_align
-# export rocs_gogma_align
+export overlap, gogma_align, rot_gogma_align, trl_gogma_align
+export PointSet, MultiPointSet
+export icp, iterative_hungarian, goicp_align, goih_align
 
 include("tforms.jl")
 

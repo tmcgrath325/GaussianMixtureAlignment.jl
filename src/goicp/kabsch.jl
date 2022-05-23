@@ -39,6 +39,9 @@ function kabsch(P,Q,matches::AbstractVector{<:Tuple{Int,Int}},wp=ones(size(P,2))
     return kabsch(matchedP, matchedQ, w)
 end
 
+kabsch(P::PointSet, Q::PointSet) = kabsch(P.coords, Q.coords, P.weights .* Q.weights);
+kabsch(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = kabsch(P.coords, Q.coords, matches, P.weights, Q.weights);
+
 # centroid of positions in A, weighted by weights in w (assumed to sum to 1)
 centroid(A, w=fill(1/size(A,2), size(A,2))) = A*w
 

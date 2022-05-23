@@ -204,6 +204,48 @@ end
     @test mobjminxy ≈ -3.0
 end
 
+@testset "Kabsch" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+
+    xset = PointSet(xpts, ones(3))
+    yset = PointSet(ypts, ones(3))
+
+    tform = kabsch(xset, yset)
+
+    yset.coords ≈ tform(xset).coords
+end
+
+# @testset "ICP" begin
+#     ycoords = rand(3,10) * 5 .- 10;
+#     randtform = AffineMap(RotationVec(π/4*rand(3)...), SVector{3}(5*rand(3)...))
+#     xcoords = randtform(ycoords)
+
+#     matches = icp(ycoords, xcoords)
+# end
+
+@testset "Iterative Hungarian" begin
+    for i=1:10
+        ycoords = rand(3,10) * 5 .- 10;
+        randtform = AffineMap(RotationVec(π/4*rand(3)...), SVector{3}(5*rand(3)...))
+        xcoords = randtform(ycoords)
+
+        matches = iterative_hungarian(ycoords, xcoords)
+
+        @test([m[1] for m in matches] == [m[2] for m in matches])
+    end
+end
+
+@testset "globally optimal iterative hungarian" begin
+    ycoords = rand(3,10) * 5 .- 10;
+    randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
+    xcoords = randtform(ycoords)
+
+    res = goih_align(ycoords, xcoords)
+
+    @test(res.upperbound ≈ 0)
+end
+
 # @testset "TIV-GOGMA (perfect alignment)" begin
 #     for i=1:10
 #         randpts = 10*rand(3,50)

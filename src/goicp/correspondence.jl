@@ -4,16 +4,17 @@ function closest_points(P, kdtree::KDTree); # kdtree=KDTree(Q, Euclidean())
     return [(i,nearestidx[i]) for i=1:size(P,2)]
 end
 
-closest_points(P, Q) = closestPoints(P, KDTree(Q, Euclidean()))
+closest_points(P::AbstractMatrix, Q::AbstractMatrix) = closest_points(P, KDTree(Q, Euclidean()))
+closest_points(P::PointSet, Q::PointSet) = closest_points(P.coords, Q.coords)
 
 # Hungarian algorithm for assignment
-function hungarian_assignment(P,Q,metric=EuclideanSq())
+function hungarian_assignment(P,Q,metric=SqEuclidean())
     weights = pairwise(metric, P, Q; dims=2)
     assignment, cost = hungarian(weights)
-    matches = Tuble{Int,Int}[]
+    matches = Tuple{Int,Int}[]
     for (i,a) in enumerate(assignment)
         if a !== 0
-            push!(matches((i,a)))
+            push!(matches, (i,a))
         end
     end
     return matches

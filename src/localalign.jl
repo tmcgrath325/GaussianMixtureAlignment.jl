@@ -1,8 +1,7 @@
 tformwithparams(X,x) = RotationVec(X[1:3]...)*x + SVector{3}(X[4:6]...)
-distobj(X,x,y,args...) = squared_deviation(tformwithparams(X,x),y)
 overlapobj(X,x,y,args...) = -overlap(tformwithparams(X,x), y, args...)
 
-function alignment_objective(X, x::AbstractModel, y::AbstractModel, args...; objfun=distobj)
+function alignment_objective(X, x::AbstractModel, y::AbstractModel, args...; objfun=overlapobj)
     return objfun(X,x,y,args...)
 end
 

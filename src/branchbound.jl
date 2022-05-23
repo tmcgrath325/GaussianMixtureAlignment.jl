@@ -11,6 +11,7 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
+    progress::Vector{Tuple{Int,T}}
 end
 
 # Keyword arguments:\n
@@ -41,7 +42,7 @@ number of evaluations during the alignment procedure.
 """ 
 function branchbound(x::AbstractModel, y::AbstractModel, args...;
                      nsplits=2, searchspace=nothing,
-                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, objfun=distobj, tformfun=AffineMap,
+                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
@@ -60,9 +61,11 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
     end
     ndims = length(searchspace.ranges)
     (lb, ub) = boundsfun(x, y, searchspace)
-    bestloc = center(searchspace)
+    (ub, bestloc) = localfun(x, y, searchspace, args...)
     pq = PriorityQueue{blockfun{t}, t}()
     enqueue!(pq, searchspace, lb)
+
+    progress = [(0, ub)]
     
     # split cubes until convergence
     ndivisions = 0
@@ -80,7 +83,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -90,7 +93,9 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
-            ub, bestloc = localfun(x, y, sblks[ubidx], args...; objfun=objfun)
+            ub, bestloc = localfun(x, y, sblks[ubidx])
+            push!(progress, (ndivisions, ub))
+            @show progress
             sinceimprove = 0
         end
 
@@ -116,9 +121,9 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         # @show (length(pq), lb, ub, minub)
     end
     if isempty(pq)
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
     else
-        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove)
+        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
     end
 end
 

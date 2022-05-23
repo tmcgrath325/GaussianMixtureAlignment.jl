@@ -1,14 +1,16 @@
 loose_distance_bounds(x::AbstractPoint, y::AbstractPoint, args...) = loose_distance_bounds(x.coords, y.coords, args...)
 tight_distance_bounds(x::AbstractPoint, y::AbstractPoint, args...) = tight_distance_bounds(x.coords, y.coords, args...)
 
-function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSet, σᵣ::Number, σₜ::Number; distance_bound_fun = tight_distance_bounds) 
+function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSet, σᵣ::Number, σₜ::Number; distance_bound_fun = tight_distance_bounds, correspondence = hungarian_assignment) 
+    matches = correspondence(x.coords, y.coords)
+    
     # sum bounds for each pair of points
     lb = 0.
     ub = 0.
-    for xpt in x
-        for ypt in y
-            lb, ub = (lb, ub) .+ distance_bound_fun(xpt, ypt, σᵣ, σₜ).^2  
-        end
+    for (i,j) in matches
+        (matchlb, matchub) = distance_bound_fun(x[i], y[j], σᵣ, σₜ).^2  
+        lb += matchlb
+        ub += matchub 
     end
     return lb, ub
 end
@@ -24,4 +26,10 @@ function squared_dist_bounds(x::AbstractMultiPointSet, y::AbstractMultiPointSet,
 end
 
 squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number; kwargs...
-    ) = sum(abs2, [R.sx, R.sy, R.sz]) ? infbounds(x,y) : squared_dist_bounds(R*x, y-T, σᵣ, σₜ; kwargs...)
+    ) = squared_dist_bounds(R*x, y-T, σᵣ, σₜ; kwargs...)
+
+squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, ur::UncertaintyRegion; kwargs...
+    ) = squared_dist_bounds(x, y, ur.R, ur.T, ur.σᵣ, ur.σₜ; kwargs...)
+
+squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, sr::SearchRegion; kwargs...
+    ) = squared_dist_bounds(x, y, UncertaintyRegion(sr); kwargs...)

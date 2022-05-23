@@ -189,7 +189,7 @@ function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
     return trlim
 end
 
-translation_limit(x::AbstractSinglePointSet, y::AbstractSinglePointSet) = max(maximum(x.coords), maximum(y.coords))
+translation_limit(x::AbstractSinglePointSet, y::AbstractSinglePointSet) = max(maximum(abs.(x.coords)), maximum(abs.(y.coords)))
 
 function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
     trlim = typemin(promote_type(numbertype(x),numbertype(y)))
