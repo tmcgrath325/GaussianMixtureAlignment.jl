@@ -58,7 +58,7 @@ function UncertaintyRegion(R::RotationVec,T::SVector{3},σᵣ::Number,σₜ::Num
 end
 UncertaintyRegion(σᵣ::Number, σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), σᵣ, σₜ)    
 UncertaintyRegion(σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), 2π, σₜ)
-UncertaintyRegion() = UncertaintyRegion(one(RotationVec), zero(SVector{3}), 2π, 1.0)
+UncertaintyRegion() = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, 1.0)
 UncertaintyRegion(block::UncertaintyRegion) = block;
 
 center(ur::UncertaintyRegion) = (ur.R.sx, ur.R.sy, ur.R.sz, ur.T...);
@@ -84,7 +84,7 @@ function RotationRegion(R::RotationVec,T::SVector{3},σᵣ::Number)
 end
 RotationRegion(R,T,σᵣ::Number) = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
 RotationRegion(σᵣ::Number) = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
-RotationRegion() = RotationRegion(Float64(2π))
+RotationRegion() = RotationRegion(Float64(π))
 
 center(rr::RotationRegion) = (rr.R.sx, rr.R.sy, rr.R.sz);
 

@@ -34,9 +34,9 @@ using Optim
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
-export overlap, gogma_align, rot_gogma_align, trl_gogma_align
+export overlap, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export PointSet, MultiPointSet
-export icp, iterative_hungarian, goicp_align, goih_align
+export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
 include("tforms.jl")
 
@@ -60,8 +60,9 @@ include("goicp/rmsd.jl")
 include("localalign.jl")
 include("branchbound.jl")
 
-include("gogma/align.jl")
 include("gogma/tiv.jl")
+include("gogma/align.jl")
+include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")
 

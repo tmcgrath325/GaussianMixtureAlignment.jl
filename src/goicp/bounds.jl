@@ -1,16 +1,19 @@
-loose_distance_bounds(x::AbstractPoint, y::AbstractPoint, args...) = loose_distance_bounds(x.coords, y.coords, args...)
-tight_distance_bounds(x::AbstractPoint, y::AbstractPoint, args...) = tight_distance_bounds(x.coords, y.coords, args...)
+loose_distance_bounds(x::AbstractPoint, y::AbstractPoint, sr::Number, st::Number) = loose_distance_bounds(x.coords, y.coords, sr, st)
+tight_distance_bounds(x::AbstractPoint, y::AbstractPoint, sr::Number, st::Number) = tight_distance_bounds(x.coords, y.coords, sr, st)
 
-function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSet, σᵣ::Number, σₜ::Number; distance_bound_fun = tight_distance_bounds, correspondence = hungarian_assignment) 
+function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSet, σᵣ::Number, σₜ::Number; 
+    distance_bound_fun::Union{typeof(tight_distance_bounds),typeof(loose_distance_bounds)} = tight_distance_bounds, 
+    correspondence = hungarian_assignment) 
+
     matches = correspondence(x.coords, y.coords)
     
     # sum bounds for each pair of points
     lb = 0.
     ub = 0.
     for (i,j) in matches
-        (matchlb, matchub) = distance_bound_fun(x[i], y[j], σᵣ, σₜ).^2  
-        lb += matchlb
-        ub += matchub 
+        (matchlb, matchub) = distance_bound_fun(x[i], y[j], σᵣ, σₜ) 
+        lb += matchlb^2
+        ub += matchub^2
     end
     return lb, ub
 end

@@ -213,7 +213,7 @@ end
 
     tform = kabsch(xset, yset)
 
-    yset.coords ≈ tform(xset).coords
+    @test yset.coords ≈ tform(xset).coords
 end
 
 # @testset "ICP" begin
@@ -224,10 +224,35 @@ end
 #     matches = icp(ycoords, xcoords)
 # end
 
+@testset "ICP" begin
+    for i=1:10
+        ycoords = rand(3,10) * 5 .- 10;
+        randtform = AffineMap(RotationVec(π/16*rand(3)...), SVector{3}(0*rand(3)...))
+        xcoords = randtform(ycoords)
+
+        matches = icp(ycoords, xcoords)
+
+        @test([m[1] for m in matches] == [m[2] for m in matches])
+    end
+end
+
+@testset "GO-ICP" begin
+    ycoords = rand(3,5) * 5 .- 10;
+    randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
+    xcoords = randtform(ycoords)
+
+    xset = PointSet(xcoords, ones(size(xcoords,2)))
+    yset = PointSet(xcoords, ones(size(ycoords,2)))
+
+    res = goicp_align(yset, xset)
+    @test res.lowerbound == 0
+    @test res.upperbound < 1e-15
+end
+
 @testset "Iterative Hungarian" begin
     for i=1:10
         ycoords = rand(3,10) * 5 .- 10;
-        randtform = AffineMap(RotationVec(π/4*rand(3)...), SVector{3}(5*rand(3)...))
+        randtform = AffineMap(RotationVec(π/8*rand(3)...), SVector{3}(0*rand(3)...))
         xcoords = randtform(ycoords)
 
         matches = iterative_hungarian(ycoords, xcoords)
@@ -237,13 +262,16 @@ end
 end
 
 @testset "globally optimal iterative hungarian" begin
-    ycoords = rand(3,10) * 5 .- 10;
+    ycoords = rand(3,5) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
     xcoords = randtform(ycoords)
 
-    res = goih_align(ycoords, xcoords)
+    xset = PointSet(xcoords, ones(size(xcoords,2)))
+    yset = PointSet(xcoords, ones(size(ycoords,2)))
 
-    @test(res.upperbound ≈ 0)
+    res = goih_align(yset, xset)
+    @test res.lowerbound == 0
+    @test res.upperbound < 1e-15
 end
 
 # @testset "TIV-GOGMA (perfect alignment)" begin

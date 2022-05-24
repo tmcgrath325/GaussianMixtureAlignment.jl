@@ -44,6 +44,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
                      nsplits=2, searchspace=nothing,
                      blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
+    @show tformfun
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -95,7 +96,6 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         if minub < ub
             ub, bestloc = localfun(x, y, sblks[ubidx])
             push!(progress, (ndivisions, ub))
-            @show progress
             sinceimprove = 0
         end
 
@@ -157,4 +157,76 @@ For details about keyword arguments, see `gogma_align()`.
 """
 function trl_branchbound(x::AbstractModel, y::AbstractModel;  kwargs...)
     return branchbound(x, y; blockfun=TranslationRegion, tformfun=Translation, kwargs...)
+end
+
+
+
+# fit a plane to a set of points, returning the normal vector
+function planefit(pts)
+    decomp = GenericLinearAlgebra.svd(pts .- sum(pts, dims=2))
+    dist, nvecidx = findmin(decomp.S)
+    return decomp.U[:, nvecidx], dist
+end
+
+planefit(ps::AbstractSinglePointSet) = planefit(ps.coords)
+planefit(ps::AbstractSinglePointSet, R) = planefit(R*ps.coords)
+
+function planefit(gmm::AbstractIsotropicGMM, R)
+    ptsmat = fill(zero(numbertype(gmm)), 3, length(gmm))
+    for (i,gauss) in enumerate(gmm.gaussians)
+        ptsmat[:,i] = gauss.μ
+    end
+    return planefit(R * ptsmat)
+end
+
+function planefit(mgmm::AbstractIsotropicMultiGMM, R)
+    len = sum([length(gmm) for gmm in values(mgmm.gmms)])
+    ptsmat = fill(zero(numbertype(mgmm)), 3, len)
+    idx = 1
+    for gmm in values(mgmm.gmms)
+        for gauss in gmm.gaussians
+            ptsmat[:,idx] = gauss.μ
+            idx += 1
+        end
+    end
+    return planefit(R * ptsmat)
+end
+
+function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel, tivy::AbstractModel; localfun=local_align, kwargs...)
+    t = promote_type(numbertype(x),numbertype(y))
+    p = t(π)
+    z = zero(t)
+    zeroTranslation = SVector{3}(z,z,z)
+    
+    rot_res = rot_branchbound(tivx, tivy; localfun=localfun, kwargs...)
+    @show rot_res.tform_params
+    rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
+    rotscore, rotpos = localfun(tivx, tivy, rotblock)
+
+    # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
+    R = RotationVec(rot_res.tform_params...)
+    spinvec, dist = planefit(tivx, R)
+    spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
+    spinscore, spinrotpos = localfun(tivx, tivy, spinblock)
+    if spinscore < rotscore
+        rotpos = RotationVec(spinrotpos...)
+    else
+        rotpos = RotationVec(rotpos...)
+    end
+
+    # perform translation alignment of original models
+    trl_res = trl_branchbound(RotationVec(rotpos)*x, y; localfun=localfun, kwargs...)
+    trlpos = SVector{3}(trl_res.tform_params)
+
+    # perform local alignment in the full transformation space
+    trlim = translation_limit(x, y)
+    localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
+    min, bestpos = localfun(x, y, localblock)
+
+    @show trl_res.lowerbound, trl_res.upperbound
+    @show rot_res.lowerbound, rot_res.upperbound
+
+    return GlobalAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
+                                rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
+                                rot_res.num_blocks+trl_res.num_blocks, trl_res.stagnant_splits, trl_res.progress)
 end

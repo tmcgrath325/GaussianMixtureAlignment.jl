@@ -54,8 +54,8 @@ end
 """
 A point set made consisting of a matrix of coordinate positions with corresponding weights.
 """
-struct PointSet{N,T,L} <: AbstractSinglePointSet{N,T,L}
-    coords::SMatrix{N,L,T}
+struct PointSet{N,T,L,E} <: AbstractSinglePointSet{N,T,L}
+    coords::SMatrix{N,L,T,E}
     weights::SVector{L,T}
 end
 
@@ -77,16 +77,14 @@ function Base.:-(p::PointSet, T::AbstractVector)
     return PointSet(p.coords.-T, p.weights)
 end
 
-PointSet(coords::AbstractMatrix{T}, weights::AbstractVector{T}) where T = (
-    return PointSet{size(coords,1),T,size(coords,2)}(SMatrix{size(coords)...}(coords), SVector{length(weights)}(weights))
-)
+function PointSet(coords::AbstractMatrix{T}, weights::AbstractVector{T}) where T
+    (dim, len) = size(coords);
+    return PointSet{dim,T,len,dim*len}(SMatrix{size(coords)...}(coords), SVector{length(weights)}(weights))
+end
 
-PointSet(coords::AbstractVector{<:SVector{3,T}}, weights::AbstractVector{T}) where T = (
-    return PointSet(hcat(coords...), SVector{length(weights), T}(weights))
-)
-PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T}) where T = (
-    return PointSet([SVector{3,T}(c) for c in coords], weights)
-)
+PointSet(coords::AbstractVector{<:SVector{3,T}}, weights::AbstractVector{T}) where T = PointSet(hcat(coords...), SVector{length(weights), T}(weights))
+
+PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T}) where T = PointSet([SVector{3,T}(c) for c in coords], weights)
 
 """
 A collection of labeled point sets, to each be considered separately during an alignment procedure. That is, 

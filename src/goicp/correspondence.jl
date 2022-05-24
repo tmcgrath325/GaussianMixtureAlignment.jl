@@ -5,10 +5,10 @@ function closest_points(P, kdtree::KDTree); # kdtree=KDTree(Q, Euclidean())
 end
 
 closest_points(P::AbstractMatrix, Q::AbstractMatrix) = closest_points(P, KDTree(Q, Euclidean()))
-closest_points(P::PointSet, Q::PointSet) = closest_points(P.coords, Q.coords)
+closest_points(P::AbstractSinglePointSet, Q::AbstractSinglePointSet) = closest_points(P.coords, Q.coords)
 
 # Hungarian algorithm for assignment
-function hungarian_assignment(P,Q,metric=SqEuclidean())
+function hungarian_assignment(P::AbstractMatrix,Q::AbstractMatrix,metric=SqEuclidean())
     weights = pairwise(metric, P, Q; dims=2)
     assignment, cost = hungarian(weights)
     matches = Tuple{Int,Int}[]
@@ -19,6 +19,8 @@ function hungarian_assignment(P,Q,metric=SqEuclidean())
     end
     return matches
 end
+
+hungarian_assignment(P::AbstractSinglePointSet, Q::AbstractSinglePointSet, metric) = hungarian_assignment(P.coords, Q.coords, metric)
 
 
 # generate matrices for Kabsch from a list of correspondences

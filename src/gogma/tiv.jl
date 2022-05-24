@@ -1,19 +1,3 @@
-struct TIVAlignmentResult{D,S,T,N,M,F<:AffineMap,G<:AbstractAffineMap,H<:AbstractAffineMap,V<:AbstractGMM{D,S},W<:AbstractGMM{D,T},X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
-    x::X
-    y::Y
-    upperbound::T
-    lowerbound::T
-    tform::F
-    tform_params::NTuple{N,T}
-    obj_calls::Int
-    num_splits::Int
-    num_blocks::Int
-    stagnant_splits::Int
-    rotation_result::GlobalAlignmentResult{D,S,T,M,G,V,W}
-    translation_result::GlobalAlignmentResult{D,S,T,M,H,X,Y}
-end
-
-
 """
     tgmm = tivgmm(gmm::IsotropicGMM, c=Inf)
     tgmm = tivgmm(mgmm::MultiGMM, c=Inf)
@@ -27,8 +11,8 @@ function tivgmm(gmm::AbstractIsotropicGMM, c=Inf)
     t = numbertype(gmm)
     npts, ndims = size(gmm)
     n = ceil(c*npts)
-    if npts^2 < n
-        n = npts^2
+    if npts^2 - npts < n
+        n = npts^2 - npts
     end
     scores = fill(zero(t), npts, npts)
     for i=1:npts
@@ -54,82 +38,4 @@ function tivgmm(mgmm::AbstractIsotropicMultiGMM, c=Inf)
         push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
     end
     return IsotropicMultiGMM(gmms)
-end
-
-# fit a plane to a set of points, returning the normal vector
-function planefit(pts)
-    decomp = GenericLinearAlgebra.svd(pts .- sum(pts, dims=2))
-    dist, nvecidx = findmin(decomp.S)
-    return decomp.U[:, nvecidx], dist
-end
-
-function planefit(gmm::AbstractIsotropicGMM, R)
-    ptsmat = fill(zero(numbertype(gmm)), 3, length(gmm))
-    for (i,gauss) in enumerate(gmm.gaussians)
-        ptsmat[:,i] = gauss.μ
-    end
-    return planefit(R * ptsmat)
-end
-
-function planefit(mgmm::AbstractIsotropicMultiGMM, R)
-    len = sum([length(gmm) for gmm in values(mgmm.gmms)])
-    ptsmat = fill(zero(numbertype(mgmm)), 3, len)
-    idx = 1
-    for gmm in values(mgmm.gmms)
-        for gauss in gmm.gaussians
-            ptsmat[:,idx] = gauss.μ
-            idx += 1
-        end
-    end
-    return planefit(R * ptsmat)
-end
-
-"""
-    result = tiv_gogma_align(gmmx, gmmy, cx, cy; kwargs...)
-
-Finds the globally optimal translation for alignment between two isotropic Gaussian mixtures, `gmmx`
-and `gmmy`, using a modified GOGMA algorithm that performs rotational and translational optimization separately
-by making use of translation invariant vectors (TIVs).
-
-`cx` and `cy` are the ratios between number of TIVs used to represent a GMM and the number of Gaussians it contains, 
-for `gmmx` and `gmmy` respectively, during rotational alignment. 
-
-For details about keyword arguments, see `gogma_align()`.
-"""
-function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; objfun=overlapobj, kwargs...)
-    t = promote_type(numbertype(gmmx),numbertype(gmmy))
-    p = t(π)
-    z = zero(t)
-    zeroTranslation = SVector{3}(z,z,z)
-    
-    # align TIVs (rotation space)
-    tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
-    rot_res = rot_gogma_align(tivgmmx, tivgmmy; kwargs...)
-    rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
-    rotscore, rotpos = local_align(tivgmmx, tivgmmy, rotblock; objfun=objfun)
-
-    # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
-    R = RotationVec(rot_res.tform_params...)
-    spinvec, dist = planefit(tivgmmx, R)
-    spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
-    spinscore, spinrotpos = local_align(tivgmmx, tivgmmy, spinblock; objfun=objfun)
-    if spinscore < rotscore
-        rotpos = RotationVec(spinrotpos...)
-    else
-        rotpos = RotationVec(rotpos...)
-    end
-
-    # perform translation alignment of original models
-    trl_res = trl_gogma_align(RotationVec(rotpos)*gmmx, gmmy; kwargs...)
-    trlpos = SVector{3}(trl_res.tform_params)
-
-    # perform local alignment in the full transformation space
-    trlim = translation_limit(gmmx, gmmy)
-    localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
-    min, bestpos = local_align(gmmx, gmmy, localblock; objfun=objfun)
-
-    return TIVAlignmentResult(gmmx, gmmy, min, trl_res.lowerbound, AffineMap(rotpos, trlpos), bestpos, 
-                             rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
-                             rot_res.num_blocks+trl_res.num_blocks, rot_res.stagnant_splits+trl_res.stagnant_splits,
-                             rot_res, trl_res)
 end
