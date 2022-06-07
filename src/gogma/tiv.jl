@@ -11,12 +11,12 @@ function tivgmm(gmm::AbstractIsotropicGMM, c=Inf)
     t = numbertype(gmm)
     npts, ndims = size(gmm)
     n = ceil(c*npts)
-    if npts^2 - npts < n
-        n = npts^2 - npts
+    if npts^2 < n
+        n = npts^2
     end
     scores = fill(zero(t), npts, npts)
     for i=1:npts
-        for j = i+1:npts
+        for j = i:npts
             scores[i,j] = scores[j,i] = norm(gmm.gaussians[i].μ-gmm.gaussians[j].μ) * √(gmm.gaussians[i].ϕ * gmm.gaussians[j].ϕ)
         end
     end
@@ -35,7 +35,7 @@ end
 function tivgmm(mgmm::AbstractIsotropicMultiGMM, c=Inf)
     gmms = Dict{Symbol, IsotropicGMM{dims(mgmm),numbertype(mgmm)}}()
     for key in keys(mgmm.gmms)
-        push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
+        push!(gmms, Pair(key, tivgmm(mgmm.gmms[key], c)))
     end
     return IsotropicMultiGMM(gmms)
 end

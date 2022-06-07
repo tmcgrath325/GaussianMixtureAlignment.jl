@@ -77,14 +77,14 @@ function Base.:-(p::PointSet, T::AbstractVector)
     return PointSet(p.coords.-T, p.weights)
 end
 
-function PointSet(coords::AbstractMatrix{T}, weights::AbstractVector{T}) where T
+function PointSet(coords::AbstractMatrix{T}, weights::AbstractVector{T} = ones(T, size(coords,2))) where T
     (dim, len) = size(coords);
     return PointSet{dim,T,len,dim*len}(SMatrix{size(coords)...}(coords), SVector{length(weights)}(weights))
 end
 
-PointSet(coords::AbstractVector{<:SVector{3,T}}, weights::AbstractVector{T}) where T = PointSet(hcat(coords...), SVector{length(weights), T}(weights))
+PointSet(coords::AbstractVector{<:SVector{3,T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet(hcat(coords...), SVector{length(weights), T}(weights))
 
-PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T}) where T = PointSet([SVector{3,T}(c) for c in coords], weights)
+PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet([SVector{3,T}(c) for c in coords], weights)
 
 """
 A collection of labeled point sets, to each be considered separately during an alignment procedure. That is, 
@@ -95,19 +95,26 @@ struct MultiPointSet{N,T,K} <: AbstractMultiPointSet{N,T,K}
 end
 
 MultiPointSet(x::AbstractMultiPointSet) = MultiPointSet(x.pointsets)
+function MultiPointSet(pointsetpairs::AbstractVector{<:Pair{K, S}}) where {K, S<:AbstractSinglePointSet}
+    psdict = Dict{K,S}()
+    for pair in pointsetpairs
+        push!(psdict, pair)
+    end
+    return MultiPointSet(psdict)
+end
 
 eltype(::Type{MultiPointSet{N,T,K}}) where {N,T,K} = Pair{K, PointSet{N,T}}
 convert(t::Type{MultiPointSet}, x::AbstractMultiPointSet) = t(x.pointsets)
 promote_rule(::Type{MultiPointSet{N,T,K}}, ::Type{MultiPointSet{N,S,L}}) where {N,T,S,K,L} = MultiPointSet{N,promote_type(T,S), promote_type(K,L)}
 
 function Base.:*(R::AbstractMatrix, p::MultiPointSet)
-    return MultiPointSet([R*p[key] for key in keys(p)])
+    return MultiPointSet([key => R*p[key] for key in keys(p)])
 end
 
 function Base.:+(p::MultiPointSet, T::AbstractVector)
-    return MultiPointSet([p[key]+T for key in keys(p)])
+    return MultiPointSet([key => p[key]+T for key in keys(p)])
 end
 
 function Base.:-(p::MultiPointSet, T::AbstractVector)
-    return MultiPointSet([p[key]-T for key in keys(p)])
+    return MultiPointSet([key => p[key]-T for key in keys(p)])
 end

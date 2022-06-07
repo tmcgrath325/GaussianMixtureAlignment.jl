@@ -6,7 +6,7 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 
-using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, overlapobj
+using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
 
 @testset "search space bounds" begin
@@ -147,6 +147,26 @@ end
 
     # ROCS alignment should work perfectly for these GMMs
     @test isapprox(rocs_align(gmmx, gmmy; objfun=overlapobj).minimum, -overlap(gmmx,gmmx); atol=1E-12)
+end
+
+@testset "GO-IH runs without errors" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+
+    xset = PointSet(xpts);
+    yset = PointSet(ypts);
+
+    res1 = goih_align(xset, yset)
+
+    mxset = MultiPointSet(Dict(
+        :x => xset,
+        :y => yset,
+    ))
+    myset = MultiPointSet(Dict(
+        :x => yset,
+        :y => xset,
+    ))
+    tiv_goih_align(mxset, myset)
 end
 
 @testset "GOGMA with directions" begin

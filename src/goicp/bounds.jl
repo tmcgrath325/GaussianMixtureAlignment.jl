@@ -23,7 +23,7 @@ function squared_dist_bounds(x::AbstractMultiPointSet, y::AbstractMultiPointSet,
     lb = 0.
     ub = 0.
     for key in keys(x.pointsets) ∩ keys(y.pointsets)
-        lb, ub = (lb, ub) .+ squared_dist_bounds(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ; kwargs...)
+        lb, ub = (lb, ub) .+ squared_dist_bounds(x.pointsets[key], y.pointsets[key], σᵣ, σₜ; kwargs...)
     end
     return lb, ub
 end

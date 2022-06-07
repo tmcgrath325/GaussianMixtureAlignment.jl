@@ -33,10 +33,10 @@ function tivpointset(x::AbstractSinglePointSet, c=Inf)
     return PointSet(hcat(tivcoords...), tivweights)
 end
 
-# function tivgmm(mgmm::AbstractIsotropicMultiGMM, c=Inf)
-#     gmms = Dict{Symbol, IsotropicGMM{dims(mgmm),numbertype(mgmm)}}()
-#     for key in keys(mgmm.gmms)
-#         push!(gmms, Pair(key, tivgmm(mgmm.gmms[key],c)))
-#     end
-#     return IsotropicMultiGMM(gmms)
-# end
+function tivpointset(mps::AbstractMultiPointSet, c=Inf)
+    pointsets = Dict{Symbol, PointSet{dims(mps),numbertype(mps)}}()
+    for key in keys(mps.pointsets)
+        push!(pointsets, Pair(key, tivpointset(mps.pointsets[key], c)))
+    end
+    return MultiPointSet(pointsets)
+end

@@ -44,7 +44,6 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
                      nsplits=2, searchspace=nothing,
                      blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
-    @show tformfun
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -199,12 +198,14 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     zeroTranslation = SVector{3}(z,z,z)
     
     rot_res = rot_branchbound(tivx, tivy; localfun=localfun, kwargs...)
-    @show rot_res.tform_params
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
     rotscore, rotpos = localfun(tivx, tivy, rotblock)
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
     R = RotationVec(rot_res.tform_params...)
+    if typeof(tivx) <: AbstractMultiGMM
+        @show tivx.gmms
+    end
     spinvec, dist = planefit(tivx, R)
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = localfun(tivx, tivy, spinblock)
@@ -222,9 +223,6 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     trlim = translation_limit(x, y)
     localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
     min, bestpos = localfun(x, y, localblock)
-
-    @show trl_res.lowerbound, trl_res.upperbound
-    @show rot_res.lowerbound, rot_res.upperbound
 
     return GlobalAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
                                 rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
