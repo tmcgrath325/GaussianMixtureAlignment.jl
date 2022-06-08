@@ -10,7 +10,7 @@ end
 function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     ubdist = norm(x - y)
     γₜ = sqrt3 * σₜ 
-    γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2)  
+    γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2) * norm(x)
     return (max(ubdist - γₜ - γᵣ, 0), ubdist)
 end
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ

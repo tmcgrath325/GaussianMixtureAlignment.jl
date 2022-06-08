@@ -2,7 +2,7 @@ loose_distance_bounds(x::AbstractPoint, y::AbstractPoint, sr::Number, st::Number
 tight_distance_bounds(x::AbstractPoint, y::AbstractPoint, sr::Number, st::Number) = tight_distance_bounds(x.coords, y.coords, sr, st)
 
 function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSet, σᵣ::Number, σₜ::Number; 
-    distance_bound_fun::Union{typeof(tight_distance_bounds),typeof(loose_distance_bounds)} = tight_distance_bounds, 
+    distance_bound_fun::Union{typeof(tight_distance_bounds),typeof(loose_distance_bounds)} = loose_distance_bounds, 
     correspondence = hungarian_assignment) 
 
     matches = correspondence(x.coords, y.coords)
