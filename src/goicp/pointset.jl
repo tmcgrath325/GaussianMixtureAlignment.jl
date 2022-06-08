@@ -65,6 +65,8 @@ eltype(::Type{PointSet{N,T,L}}) where {N,T,L} = Point{N,T}
 convert(t::Type{PointSet}, p::AbstractPointSet) = t(p.coords, p.weights)
 promote_rule(::Type{PointSet{N,T,L}}, ::Type{PointSet{N,S,M}}) where {T,S,N,L,M} = PointSet{N,promote_type(T,S)}
 
+weights(ps::PointSet) = ps.weights
+
 function Base.:*(R::AbstractMatrix, p::PointSet)
     return PointSet(R*p.coords, p.weights)
 end
@@ -106,6 +108,14 @@ end
 eltype(::Type{MultiPointSet{N,T,K}}) where {N,T,K} = Pair{K, PointSet{N,T}}
 convert(t::Type{MultiPointSet}, x::AbstractMultiPointSet) = t(x.pointsets)
 promote_rule(::Type{MultiPointSet{N,T,K}}, ::Type{MultiPointSet{N,S,L}}) where {N,T,S,K,L} = MultiPointSet{N,promote_type(T,S), promote_type(K,L)}
+
+function weights(mps::MultiPointSet{N,T,K}) where {N,T,K}
+    w = Dict{K, Vector{T}}()
+    for (key, ps) in mps.pointsets
+        push!(w, key => ps.weights)
+    end
+    return w
+end
 
 function Base.:*(R::AbstractMatrix, p::MultiPointSet)
     return MultiPointSet([key => R*p[key] for key in keys(p)])

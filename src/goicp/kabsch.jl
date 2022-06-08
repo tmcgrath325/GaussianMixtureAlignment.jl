@@ -42,6 +42,19 @@ end
 kabsch(P::PointSet, Q::PointSet) = kabsch(P.coords, Q.coords, P.weights .* Q.weights);
 kabsch(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = kabsch(P.coords, Q.coords, matches, P.weights, Q.weights);
 
+function kabsch(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict, wp = weights(P), wq = weights(Q)) where {N,T,K}
+    matchedP, matchedQ = matched_points(P,Q,matchesdict)
+    w = Vector{T}()
+
+    for (key, matches) in matchesdict
+        for m in matches
+            push!(w, wp[key][m[1]] * wq[key][m[2]])
+        end
+    end
+
+    return kabsch(matchedP, matchedQ, w)
+end
+
 # centroid of positions in A, weighted by weights in w (assumed to sum to 1)
 centroid(A, w=fill(1/size(A,2), size(A,2))) = A*w
 

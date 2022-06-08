@@ -203,9 +203,6 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
     R = RotationVec(rot_res.tform_params...)
-    if typeof(tivx) <: AbstractMultiGMM
-        @show tivx.gmms
-    end
     spinvec, dist = planefit(tivx, R)
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = localfun(tivx, tivy, spinblock)

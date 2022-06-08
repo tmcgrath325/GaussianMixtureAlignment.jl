@@ -1,6 +1,6 @@
 # perform point-to-point ICP with provided correspondence and distance score functions
 # TO DO: for MultiPointSets, choose the appropriate number of weights
-function iterate_kabsch(P, Q, w=ones(size(P,2)); iterations=1000, correspondence = hungarian_assignment)
+function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations=1000, correspondence = hungarian_assignment)
     # initial correspondences
     matches = correspondence(P,Q)
     tform = identity
@@ -9,9 +9,8 @@ function iterate_kabsch(P, Q, w=ones(size(P,2)); iterations=1000, correspondence
     it = 0
     while it < iterations
         it += 1
-        matchedP, matchedQ = matched_points(P, Q, matches)
         # TO DO: make sure that, for hungarian assignment, the proper weights are selected
-        tform = kabsch(matchedP, matchedQ, w)
+        tform = kabsch(P, Q, matches, wp, wq)
         
         prevmatches = matches
         matches = correspondence(tform(P),Q)
@@ -22,12 +21,13 @@ function iterate_kabsch(P, Q, w=ones(size(P,2)); iterations=1000, correspondence
     return matches
 end
 
-iterate_kabsch(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = iterate_kabsch(P.coords, Q.coords, P.weights .* Q.weights; kwargs...);
+iterate_kabsch(P::AbstractPointSet, Q::AbstractSet; kwargs...) = iterate_kabsch(P.coords, Q.coords, P.weights, Q.weights; kwargs...)
+iterate_kabsch(P::AbstractMultiPointSet,  Q::AbstractMultiPointSet;  kwargs...) = iterate_kabsch(P, Q, weights(P), weights(Q); kwargs...)
 
-function icp(P::AbstractMatrix, Q::AbstractMatrix, w=ones(size(P,2)); kdtree = KDTree(Q, Euclidean()), kwargs...)
-    return iterate_kabsch(P, Q, w; correspondence = f(p,q) = closest_points(p, kdtree), kwargs...)
+function icp(P::AbstractMatrix, Q::AbstractMatrix, wp=ones(size(P,2)), wq=ones(size(P,2)); kdtree = KDTree(Q, Euclidean()), kwargs...)
+    return iterate_kabsch(P, Q, wp, wq; correspondence = f(p,q) = closest_points(p, kdtree), kwargs...)
 end
-icp(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = icp(P.coords, Q.coords, P.weights .* Q.weights; kwargs...)
+icp(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = icp(P.coords, Q.coords, P.weights, Q.weights; kwargs...)
 
 iterative_hungarian(args...; kwargs...) = iterate_kabsch(args...; correspondence = hungarian_assignment, kwargs...) 
 

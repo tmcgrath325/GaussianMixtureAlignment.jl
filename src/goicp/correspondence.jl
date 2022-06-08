@@ -45,7 +45,6 @@ function matched_points(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSe
         matchedP = hcat(matchedP, mp)
         matchedQ = hcat(matchedQ, mq)
     end
-    @show size(matchedP), size(matchedQ)
     return matchedP, matchedQ
 end
 

@@ -160,13 +160,11 @@ end
 
     mxset = MultiPointSet(Dict(
         :x => xset,
-        :y => yset,
     ))
     myset = MultiPointSet(Dict(
         :x => yset,
-        :y => xset,
     ))
-    tiv_goih_align(mxset, myset)
+    goih_align(mxset, myset)
 end
 
 @testset "GOGMA with directions" begin
