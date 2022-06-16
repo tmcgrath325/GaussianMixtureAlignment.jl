@@ -2,16 +2,27 @@ const sqrt3 = √(3)
 const sqrt2pi = √(2π)
 const pisq = Float64(π^2)
 
+struct SearchRegionBounds{T}
+    lowerbound::T
+    upperbound::T
+end
+
+function SearchRegionBounds(lb::L, ub::U) where {L,U}
+    numtype = promote_type(U,L)
+    @show L, U, numtype
+    return  SearchRegionBounds{numtype}(numtype(lb), numtype(ub))
+end
+
 function infbounds(x,y) 
     typeinf = typemax(promote_type(numbertype(x), numbertype(y)))
-    return (typeinf, typeinf) 
+    return SearchRegionBounds(typeinf, typeinf)
 end
 
 function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     ubdist = norm(x - y)
     γₜ = sqrt3 * σₜ 
     γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2) * norm(x)
-    return (max(ubdist - γₜ - γᵣ, 0), ubdist)
+    return SearchRegionBounds(max(ubdist - γₜ - γᵣ, 0), ubdist)
 end
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ
     ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ) # sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
@@ -51,7 +62,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
-    return (lbdist, ubdist)
+    return SearchRegionBounds(lbdist, ubdist)
 end
 
 tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number

@@ -15,16 +15,16 @@ weights = [1.,1.,1.]
 xset = PointSet(xcoords, weights)
 yset = PointSet(ycoords, weights)
 
-goicp_align(xset, yset; maxsplits=1e3)
-goih_align(xset, yset; maxsplits=100)
+goih_align(xset, yset; maxsplits=1e3)
+tiv_goih_align(xset, yset; maxsplits=100)
 
 # larger problem
 randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
-ycoords = rand(3, 50) * 10 .- 20
+ycoords = rand(3, 10) * 10 .- 20
 xcoords = randtform(ycoords)
-weights = ones(Float64, 50)
+weights = ones(Float64, 10)
 xset = PointSet(xcoords, weights)
 yset = PointSet(ycoords, weights)
 
-@ProfileView.profview goicp_align(xset, yset; maxsplits=1e3)
-@ProfileView.profview goih_align(xset, yset; maxsplits=100)
+@ProfileView.profview goih_align(xset, yset; maxsplits=1e3)
+@ProfileView.profview tiv_goih_align(xset, yset; maxsplits=100)

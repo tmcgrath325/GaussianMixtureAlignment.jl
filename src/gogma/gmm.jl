@@ -41,6 +41,7 @@ iterate(gmm::AbstractSingleGMM) = iterate(gmm.gaussians)
 iterate(gmm::AbstractSingleGMM, i) = iterate(gmm.gaussians, i)
 size(gmm::AbstractSingleGMM{N,T}) where {N,T} = (length(gmm.gaussians), N)
 size(gmm::AbstractSingleGMM{N,T}, idx::Int) where {N,T} = (length(gmm.gaussians), N)[idx]
+eltype(gmm::AbstractSingleGMM) = eltype(gmm.gaussians);
 
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
@@ -49,6 +50,8 @@ iterate(mgmm::AbstractMultiGMM) = iterate(mgmm.gmms)
 iterate(mgmm::AbstractMultiGMM, i) = iterate(mgmm.gmms, i)
 size(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = (length(mgmm.gmms), N)
 size(mgmm::AbstractMultiGMM{N,T,K}, idx::Int) where {N,T,K} = (length(mgmm.gmms), N)[idx]
+eltype(mgmm::AbstractMultiGMM) = eltype(mgmm.gmms);
+
 
 
 """
@@ -86,7 +89,6 @@ end
 
 IsotropicGMM(gmm::AbstractIsotropicGMM) = IsotropicGMM(gmm.gaussians)
 
-eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 convert(t::Type{IsotropicGMM}, gmm::AbstractIsotropicGMM) = t(gmm.gaussians)
 promote_rule(::Type{IsotropicGMM{N,T}}, ::Type{IsotropicGMM{N,S}}) where {T,S,N} = IsotropicGMM{N,promote_type(T,S)}
 
@@ -100,7 +102,6 @@ end
 
 IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
 
-eltype(::Type{IsotropicMultiGMM{N,T,K}}) where {N,T,K} = Pair{K, IsotropicGMM{N,T}}
 convert(t::Type{IsotropicMultiGMM}, mgmm::AbstractIsotropicMultiGMM) = t(mgmm.gmms)
 promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}}) where {N,T,S,K} = IsotropicMultiGMM{N,promote_type(T,S),K}
 
