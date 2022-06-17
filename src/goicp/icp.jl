@@ -4,14 +4,12 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
     # initial correspondences
     matches = correspondence(P,Q)
     tform = identity
-
     # iterate until convergence
     it = 0
     while it < iterations
         it += 1
         # TO DO: make sure that, for hungarian assignment, the proper weights are selected
         tform = kabsch(P, Q, matches, wp, wq)
-        
         prevmatches = matches
         matches = correspondence(tform(P),Q)
         if matches == prevmatches
@@ -32,7 +30,7 @@ icp(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = icp(P.coo
 iterative_hungarian(args...; kwargs...) = iterate_kabsch(args...; correspondence = hungarian_assignment, kwargs...) 
 
 function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, block::SearchRegion; matching_fun = iterative_hungarian, kwargs...)
-    tformedx = tformwithparams((block.R..., block.T...), x)
+    tformedx = block.R*x + block.T
     matches = matching_fun(tformedx, y; kwargs...)
     tform = kabsch(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
@@ -41,7 +39,7 @@ function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, bloc
     return (score, params)
 end
 
- local_icp(x, y, block::UncertaintyRegion; kwargs...) = local_matching_alignment(x, y, block; matching_fun = icp, kwargs...)
+local_icp(x, y, block::UncertaintyRegion; kwargs...) = local_matching_alignment(x, y, block; matching_fun = icp, kwargs...)
 function local_icp(x, y, block::RotationRegion; kwargs...)
     (score, params) = local_icp(x, y, UncertaintyRegion(block); kwargs...)
     return (score, params[1:3])

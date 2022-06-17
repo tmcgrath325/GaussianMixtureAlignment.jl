@@ -11,8 +11,8 @@ function tivpointset(x::AbstractSinglePointSet, c=Inf)
     t = numbertype(x)
     npts = length(x)
     n = ceil(c)*npts
-    if npts^2 - npts < n
-        n = npts^2 - npts
+    if npts^2 < n
+        n = npts^2
     end
     scores = fill(zero(t), npts, npts)
     for i=1:npts

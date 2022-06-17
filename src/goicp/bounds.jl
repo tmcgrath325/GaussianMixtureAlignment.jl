@@ -11,11 +11,11 @@ function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSe
     lb = 0.
     ub = 0.
     for (i,j) in matches
-        matchbounds = distance_bound_fun(x[i], y[j], σᵣ, σₜ) 
-        lb += matchbounds.lowerbound^2
-        ub += matchbounds.upperbound^2
+        (matchlb, matchub) = distance_bound_fun(x[i], y[j], σᵣ, σₜ) 
+        lb += matchlb^2
+        ub += matchub^2
     end
-    return SearchRegionBounds(lb, ub)
+    return lb, ub
 end
 
 function squared_dist_bounds(x::AbstractMultiPointSet, y::AbstractMultiPointSet, σᵣ, σₜ; kwargs...)
@@ -23,11 +23,9 @@ function squared_dist_bounds(x::AbstractMultiPointSet, y::AbstractMultiPointSet,
     lb = 0.
     ub = 0.
     for key in keys(x.pointsets) ∩ keys(y.pointsets)
-        pointsetbounds = squared_dist_bounds(x.pointsets[key], y.pointsets[key], σᵣ, σₜ; kwargs...)
-        lb += pointsetbounds.lowerbound
-        ub += pointsetbounds.upperbound
+        lb, ub = (lb, ub) .+ squared_dist_bounds(x.pointsets[key], y.pointsets[key], σᵣ, σₜ; kwargs...)
     end
-    return SearchRegionBounds(lb, ub)
+    return lb, ub
 end
 
 squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number; kwargs...

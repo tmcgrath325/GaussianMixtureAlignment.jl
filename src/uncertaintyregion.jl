@@ -65,9 +65,9 @@ center(ur::UncertaintyRegion) = (ur.R.sx, ur.R.sy, ur.R.sz, ur.T...);
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_UncertaintyRegion_seed = UInt === UInt64 ? 0x4de49213ae1a23bf : 0xef78ce68
-function hash(B::UncertaintyRegion, h::UInt)
+function Base.hash(B::UncertaintyRegion, h::UInt)
     h += hash_UncertaintyRegion_seed
-    h = hash(B.ranges, h)
+    h = Base.hash(center(B), h)
     return h
 end
 
@@ -93,9 +93,9 @@ RotationRegion(ur::UncertaintyRegion) = RotationRegion(ur.R, ur.T, ur.σᵣ)
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_RotationRegion_seed = UInt === UInt64 ? 0xee63e114344da2b9 : 0xe6cb1eb7
-function hash(B::RotationRegion, h::UInt)
+function Base.hash(B::RotationRegion, h::UInt)
     h += hash_RotationRegion_seed
-    h = hash(B.ranges, h)
+    h = Base.hash(center(B), h)
     return h
 end
 
@@ -122,9 +122,9 @@ TranslationRegion(ur::UncertaintyRegion) = TranslationRegion(ur.R, ur.T, ur.σ�
 
 # for speeding up hashing and performance of the priority queue in the branch and bound procedure
 const hash_TranslationRegion_seed = UInt === UInt64 ? 0x24f59aedb6bf903f : 0x76f5f734
-function hash(B::TranslationRegion, h::UInt)
+function Base.hash(B::TranslationRegion, h::UInt)
     h += hash_TranslationRegion_seed
-    h = hash(B.ranges, h)
+    h = Base.hash(center(B), h)
     return h
 end
 

@@ -6,6 +6,8 @@ using Rotations
 using ProfileView
 using BenchmarkTools
 
+using GaussianMixtureAlignment: goicp_align
+
 # small problem
 xcoords = hcat([[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]...);
 ycoords = hcat([[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]...);
@@ -13,10 +15,10 @@ weights = [1.,1.,1.];
 xset = PointSet(xcoords, weights);
 yset = PointSet(ycoords, weights);
 
-@btime goih_align(xset, yset; maxsplits=100);
-@btime tiv_goih_align(xset, yset; maxsplits=100);
-# @ProfileView.profview goih_align(xset, yset; maxsplits=1000);
-# @ProfileView.profview tiv_goih_align(xset, yset; maxsplits=1000);
+@btime goicp_align(xset, yset; maxsplits=100);
+@btime tiv_goicp_align(xset, yset; maxsplits=100);
+@ProfileView.profview goicp_align(xset, yset; maxsplits=1000);
+@ProfileView.profview tiv_goicp_align(xset, yset; maxsplits=1000);
 
 # larger problem
 randpts = 25*rand(3,50) .- 50;
@@ -25,7 +27,5 @@ weights = ones(Float64, 50);
 xset = PointSet(randpts, weights);
 yset = PointSet(randtform(randpts), weights);
 
-@ProfileView.profview goih_align(xset, yset; maxsplits=100);
-@ProfileView.profview tiv_goih_align(xset, yset, 2, 2; maxsplits=100);
-@time goih_align(xset, yset)
-@time tiv_goih_align(xset, yset, 2, 2)
+@ProfileView.profview goicp_align(xset, yset; maxsplits=1000);
+@ProfileView.profview tiv_goicp_align(xset, yset, 1, 1; maxsplits=1000);

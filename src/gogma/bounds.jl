@@ -41,7 +41,7 @@ the uncertainty region is assumed to be centered at the origin (i.e. x has alrea
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
 function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
-    distbounds::SearchRegionBounds = distance_bound_fun(x.μ, y.μ, σᵣ, σₜ)
+    (lbdist, ubdist) = distance_bound_fun(x.μ, y.μ, σᵣ, σₜ)
 
     if length(x.dirs) == 0 || length(y.dirs) == 0
         lbdot = 1.
@@ -63,7 +63,7 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
     end
 
     # evaluate objective function at each distance to get upper and lower bounds
-    return SearchRegionBounds(-overlap(distbounds.lowerbound^2, s, w, lbdot), -overlap(distbounds.upperbound^2, s, w, cosγ))
+    return -overlap(lbdist^2, s, w, lbdot), -overlap(ubdist^2, s, w, cosγ)
 end
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
@@ -88,12 +88,10 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ
     ub = 0.
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            gaussbounds = gauss_l2_bounds(x, y, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)
-            lb += gaussbounds.lowerbound
-            ub += gaussbounds.upperbound
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
         end
     end
-    return SearchRegionBounds(lb, ub)
+    return lb, ub
 end
 
 function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing)
@@ -106,11 +104,9 @@ function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ
     lb = 0.
     ub = 0.
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        gmmbounds = gauss_l2_bounds(x, y, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)
-        lb += gmmbounds.lowerbound
-        ub += gmmbounds.upperbound
+        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ, mpσ[key], mpϕ[key])
     end
-    return SearchRegionBounds(lb, ub)
+    return lb, ub
 end
 
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...

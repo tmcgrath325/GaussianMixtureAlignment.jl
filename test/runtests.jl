@@ -149,14 +149,17 @@ end
     @test isapprox(rocs_align(gmmx, gmmy; objfun=overlapobj).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 
-@testset "GO-IH runs without errors" begin
+@testset "GO-ICP and GO-IH run without errors" begin
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
 
     xset = PointSet(xpts);
     yset = PointSet(ypts);
 
-    res1 = goih_align(xset, yset)
+    goicp_res = goicp_align(xset, yset)
+    @test goicp_res.tform(xset.coords) ≈ yset.coords
+    goih_res = goih_align(xset, yset)
+    @test goih_res.tform(xset.coords) ≈ yset.coords
 
     mxset = MultiPointSet(Dict(
         :x => xset,
@@ -164,7 +167,11 @@ end
     myset = MultiPointSet(Dict(
         :x => yset,
     ))
-    goih_align(mxset, myset)
+    multi_goicp_res = goicp_align(mxset, myset)
+    @test multi_goicp_res.tform(xset.coords) ≈ yset.coords
+    multi_goih_res = goih_align(mxset, myset)
+    @test multi_goih_res.tform(xset.coords) ≈ yset.coords
+
 end
 
 @testset "GOGMA with directions" begin
@@ -255,7 +262,7 @@ end
 end
 
 @testset "GO-ICP" begin
-    ycoords = rand(3,5) * 5 .- 10;
+    ycoords = rand(3,50) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
     xcoords = randtform(ycoords)
 

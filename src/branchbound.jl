@@ -11,7 +11,7 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    progress::Vector{Tuple{Int,T}}
+    progress::Vector{Tuple{Int,T}}   
 end
 
 # Keyword arguments:\n
@@ -60,15 +60,12 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         searchspace = blockfun(x, y)
     end
     ndims = length(searchspace.ranges)
-    initbounds::SearchRegionBounds = boundsfun(x, y, searchspace)
-    lb = initbounds.lowerbound
+    lb, ub = boundsfun(x, y, searchspace)
     ub, bestloc = localfun(x, y, searchspace, args...)
     pq = PriorityQueue{blockfun{t}, t}()
     enqueue!(pq, searchspace, lb)
 
     progress = [(0, ub)]
-
-    sbnds::Vector{SearchRegionBounds} = fill(initbounds, nsplits^ndims);
     
     # split cubes until convergence
     ndivisions = 0
@@ -91,12 +88,10 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
 
         # split up the block into `nsplits` smaller blocks across each dimension
         sblks = subregions(bl)
-        for i=1:length(sbnds)
-            sbnds[i] = boundsfun(x,y,sblks[i])
-        end
-        
+        sbnds = [boundsfun(x,y,sblk) for sblk in sblks]
+
         # reset the upper bound if appropriate
-        minub, ubidx = findmin([sbnd.upperbound for sbnd in sbnds])
+        minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
             ub, bestloc = localfun(x, y, sblks[ubidx])
             push!(progress, (ndivisions, ub))
@@ -118,11 +113,10 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
 
         # only add sub-blocks to the queue if they present possibility for improvement
         for (i,sblk) in enumerate(sblks)
-            if sbnds[i].lowerbound < ub
-                enqueue!(pq, sblk => sbnds[i].lowerbound)
+            if sbnds[i][1] < ub
+                enqueue!(pq, sblk => sbnds[i][1])
             end
         end
-        # @show (length(pq), lb, ub, minub)
     end
     if isempty(pq)
         return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
