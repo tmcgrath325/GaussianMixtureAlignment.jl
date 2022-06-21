@@ -8,8 +8,15 @@ closest_points(P::AbstractMatrix, Q::AbstractMatrix) = closest_points(P, KDTree(
 closest_points(P::AbstractSinglePointSet, Q::AbstractSinglePointSet) = closest_points(P.coords, Q.coords)
 
 # Hungarian algorithm for assignment
-function hungarian_assignment(P::AbstractMatrix,Q::AbstractMatrix,metric=SqEuclidean())
-    weights = pairwise(metric, P, Q; dims=2)
+function hungarian_assignment(P::AbstractMatrix{S}, Q::AbstractMatrix{T}, metric=SqEuclidean()) where {S,T}
+    # weights = pairwise(metric, P, Q; dims=2)
+    numtype = promote_type(S,T)
+    weights = Matrix{numtype}(undef, size(P,2), size(Q,2))
+    for i=1:size(P,2)
+        for j=1:size(Q,2)
+            weights[i,j] = sum(abs2, P[:,i] .- Q[:,j])
+        end
+    end
     assignment, cost = hungarian(weights)
     matches = Tuple{Int,Int}[]
     for (i,a) in enumerate(assignment)
