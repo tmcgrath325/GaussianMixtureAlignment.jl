@@ -14,7 +14,6 @@ function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     lb, ub = max(ubdist - γₜ - γᵣ, 0), ubdist
     numtype = promote_type(typeof(lb), typeof(ub))
     return numtype(lb), numtype(ub)
-
 end
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ
     ) = loose_distance_bounds(R*x, y-T, σᵣ, σₜ) # sum(abs2, [R.sx, R.sy, R.sz]) > pisq ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ)

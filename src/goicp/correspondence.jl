@@ -7,6 +7,23 @@ end
 closest_points(P::AbstractMatrix, Q::AbstractMatrix) = closest_points(P, KDTree(Q, Euclidean()))
 closest_points(P::AbstractSinglePointSet, Q::AbstractSinglePointSet) = closest_points(P.coords, Q.coords)
 
+# function closest_points(P::AbstractMatrix, Q::AbstractMatrix)
+#     matches = Vector{Tuple{Int,Int}}(undef, size(P,2))
+#     for i=1:size(P,2)
+#         lowestDistSq = Inf
+#         bestIdx = 0
+#         for j=1:size(Q,2)
+#             distSq = sum(abs2, P[:,i] .- Q[:,j])
+#             if distSq < lowestDistSq
+#                 bestIdx = j
+#                 lowestDistSq = distSq
+#             end
+#         end
+#         matches[i] = (i,bestIdx)
+#     end
+#     return matches
+# end
+
 # Hungarian algorithm for assignment
 function hungarian_assignment(P::AbstractMatrix{S}, Q::AbstractMatrix{T}, metric=SqEuclidean()) where {S,T}
     # weights = pairwise(metric, P, Q; dims=2)

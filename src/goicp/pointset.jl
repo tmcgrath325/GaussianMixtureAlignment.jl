@@ -2,7 +2,7 @@ import Base: eltype, length, size, getindex, iterate, convert, promote_rule, key
 
 abstract type AbstractPoint{N,T} end
 abstract type AbstractPointSet{N,T} <: AbstractModel{N,T} end
-abstract type AbstractSinglePointSet{N,T,L} <: AbstractPointSet{N,T} end
+abstract type AbstractSinglePointSet{N,T} <: AbstractPointSet{N,T} end
 abstract type AbstractMultiPointSet{N,T,K} <: AbstractPointSet{N,T} end
 
 # Base methods for Points
@@ -16,12 +16,12 @@ size(::AbstractPoint{N,T}, idx::Int) where {N,T} = (N,)[idx]
 numbertype(::AbstractPointSet{N,T}) where {N,T} = T
 dims(::AbstractPointSet{N,T}) where {N,T} = N
 
-length(x::AbstractSinglePointSet{N,T,L}) where {N,T,L} = L
+length(x::AbstractSinglePointSet{N,T}) where {N,T} = size(x.coords,2)
 getindex(x::AbstractSinglePointSet, idx) = getpoint(x, idx)
 iterate(x::AbstractSinglePointSet) = iterate(x, 1)
 iterate(x::AbstractSinglePointSet, i) = i > length(x) ? nothing : (getindex(x, i), i+1)
-size(x::AbstractSinglePointSet{N,T,L}) where {N,T,L} = (N,L)
-size(x::AbstractSinglePointSet{N,T,L}, idx::Int) where {N,T,L} = (N,L)[idx]
+size(x::AbstractSinglePointSet{N,T}) where {N,T} = (N,length(x))
+size(x::AbstractSinglePointSet{N,T}, idx::Int) where {N,T} = size(x)[idx]
 
 length(x::AbstractMultiPointSet) = length(x.pointsets)
 getindex(x::AbstractMultiPointSet, key) = x.pointsets[key]
@@ -54,16 +54,16 @@ end
 """
 A point set made consisting of a matrix of coordinate positions with corresponding weights.
 """
-struct PointSet{N,T,L,E} <: AbstractSinglePointSet{N,T,L}
-    coords::SMatrix{N,L,T,E}
-    weights::SVector{L,T}
+struct PointSet{N,T} <: AbstractSinglePointSet{N,T}
+    coords::Matrix{T}
+    weights::Vector{T}
 end
 
-getpoint(x::PointSet{N,T,L}, idx::Int) where {N,L,T} = Point{N,T}(x.coords[:,idx], x.weights[idx])
+getpoint(x::PointSet{N,T}, idx::Int) where {N,T} = Point{N,T}(x.coords[:,idx], x.weights[idx])
 
-eltype(::Type{PointSet{N,T,L}}) where {N,T,L} = Point{N,T}
+eltype(::Type{PointSet{N,T}}) where {N,T} = Point{N,T}
 convert(t::Type{PointSet}, p::AbstractPointSet) = t(p.coords, p.weights)
-promote_rule(::Type{PointSet{N,T,L}}, ::Type{PointSet{N,S,M}}) where {T,S,N,L,M} = PointSet{N,promote_type(T,S)}
+promote_rule(::Type{PointSet{N,T}}, ::Type{PointSet{N,S}}) where {T,S,N} = PointSet{N,promote_type(T,S)}
 
 weights(ps::PointSet) = ps.weights
 
@@ -79,14 +79,13 @@ function Base.:-(p::PointSet, T::AbstractVector)
     return PointSet(p.coords.-T, p.weights)
 end
 
-function PointSet(coords::AbstractMatrix{T}, weights::AbstractVector{T} = ones(T, size(coords,2))) where T
-    (dim, len) = size(coords);
-    return PointSet{dim,T,len,dim*len}(SMatrix{size(coords)...}(coords), SVector{length(weights)}(weights))
+function PointSet(coords::AbstractMatrix{S}, weights::AbstractVector{T} = ones(T, size(coords,2))) where {S,T}
+    dim = size(coords,1)
+    numtype = promote_type(S,T)
+    return PointSet{dim,numtype}(Matrix{numtype}(coords), Vector{numtype}(weights))
 end
 
-PointSet(coords::AbstractVector{<:SVector{3,T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet(hcat(coords...), SVector{length(weights), T}(weights))
-
-PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet([SVector{3,T}(c) for c in coords], weights)
+PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet(hcat(coords...), weights)
 
 """
 A collection of labeled point sets, to each be considered separately during an alignment procedure. That is, 

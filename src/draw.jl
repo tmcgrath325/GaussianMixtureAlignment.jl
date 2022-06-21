@@ -14,7 +14,7 @@ const default_colors =
     "#bcbd22",  # curry yellow-green
     "#17becf"]  # blue-teal
 
-function plotdrawing(traces::AbstractVector{AbstractTrace}; plotsize=nothing)
+function plotdrawing(traces::AbstractVector{<:AbstractTrace}; plotsize=nothing)
     layout = Layout(autosize=false, width=800, height=600,
                     margin=attr(l=0, r=0, b=0, t=65),
                     scene= isnothing(plotsize) ? attr(aspectmode="data",
@@ -140,6 +140,37 @@ function draw_arrows(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; siz
                  colorscale=[[0,color],[1,color]], opacity=opacity,
                  sizemode="absolute", sizeref=0.25,
                  showlegend=false, showscale=false, name="", hoverinfo="skip")
+end
+
+function drawPointSet(ps::AbstractSinglePointSet; markerSize=8, color=default_colors[1], name=nothing, opacity=1.0) 
+    xs, ys, zs, ws = Float64[], Float64[], Float64[], Float64[]
+    for point in ps
+        x,y,z = point.coords
+        append!(xs,x)
+        append!(ys,y)
+        append!(zs,z)
+        append!(ws,point.weight)
+    end
+
+    len = Int(length(xs))
+    cdata = [[xs[i],
+              ys[i],
+              zs[i],
+              ws[i]] 
+            for i=1:length(xs)];
+
+    hovertemp = join(["position = [%{customdata[0]:.3e}, %{customdata[1]:.3e}, %{customdata[2]:.3e}]<br>",
+                      "weight = %{customdata[3]:.3e}<br>",])
+    
+    return scatter3d(;x=xs, y=ys, z=zs, 
+                      customdata=cdata,
+                      mode="markers",
+                      marker=attr(color=color, size=markerSize),
+                      opacity=opacity,
+                      showlegend=!isnothing(name), name=isnothing(name) ? "" : name,
+                      hovertemplate=hovertemp, 
+                      hoverinfo=isnothing(name) ? "skip" : nothing,
+            )
 end
 
 function drawGaussians(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; sizecoef=1., kwargs...)

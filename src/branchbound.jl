@@ -11,7 +11,8 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    progress::Vector{Tuple{Int,T}}   
+    progress::Vector{Tuple{Int,T}}
+    terminated_by::String
 end
 
 # Keyword arguments:\n
@@ -83,7 +84,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
+            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -93,7 +94,13 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
-            ub, bestloc = localfun(x, y, sblks[ubidx])
+            nextub, nextbestloc = localfun(x, y, sblks[ubidx])
+            @show minub, nextub
+            if minub < nextub
+                ub, bestloc = minub, center(sblks[ubidx])
+            else
+                ub, bestloc = nextub, nextbestloc
+            end
             push!(progress, (ndivisions, ub))
             sinceimprove = 0
         end
@@ -117,11 +124,16 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
                 enqueue!(pq, sblk => sbnds[i][1])
             end
         end
+        if isempty(pq)
+            @show lb
+            @show center(bl)
+            @show sbnds
+        end
     end
     if isempty(pq)
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "priority queue empty")
     else
-        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress)
+        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "terminated early")
     end
 end
 
@@ -190,13 +202,14 @@ function planefit(mgmm::AbstractIsotropicMultiGMM, R)
     return planefit(R * ptsmat)
 end
 
-function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel, tivy::AbstractModel; localfun=local_align, kwargs...)
+function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel, tivy::AbstractModel; boundsfun=tight_distance_bounds, rot_boundsfun=boundsfun, localfun=local_align, kwargs...)
     t = promote_type(numbertype(x),numbertype(y))
     p = t(π)
     z = zero(t)
     zeroTranslation = SVector{3}(z,z,z)
     
-    rot_res = rot_branchbound(tivx, tivy; localfun=localfun, kwargs...)
+    println("Rotation search")
+    rot_res = rot_branchbound(tivx, tivy; localfun=localfun, boundsfun=rot_boundsfun, kwargs...)
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
     rotscore, rotpos = localfun(tivx, tivy, rotblock)
 
@@ -212,15 +225,17 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     end
 
     # perform translation alignment of original models
-    trl_res = trl_branchbound(RotationVec(rotpos)*x, y; localfun=localfun, kwargs...)
+    println("Translation search")
+    trl_res = trl_branchbound(RotationVec(rotpos)*x, y; localfun=localfun, boundsfun=boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space
     trlim = translation_limit(x, y)
     localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
     min, bestpos = localfun(x, y, localblock)
-
+ 
     return GlobalAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
                                 rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
-                                rot_res.num_blocks+trl_res.num_blocks, trl_res.stagnant_splits, trl_res.progress)
+                                rot_res.num_blocks+trl_res.num_blocks, trl_res.stagnant_splits, [rot_res.progress..., trl_res.progress...],
+                                rot_res.terminated_by * ", " * trl_res.terminated_by)
 end
