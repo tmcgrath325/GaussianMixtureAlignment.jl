@@ -11,8 +11,22 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    progress::Vector{Tuple{Int,T}}
+    progress::Vector{Tuple{Int,T,NTuple{N,T}}}
     terminated_by::String
+end
+
+struct TIVAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:AbstractModel{D,T},TD,TN,TF<:AbstractAffineMap,RD,RN,RF<:AbstractAffineMap,RX<:AbstractModel{TD,S},RY<:AbstractModel{TD,T}} <: AlignmentResults
+    x::X
+    y::Y
+    upperbound::T
+    lowerbound::T
+    tform::F
+    tform_params::NTuple{N,T}
+    obj_calls::Int
+    num_splits::Int
+    num_blocks::Int
+    rotation_result::GlobalAlignmentResult{RD,S,T,RN,RF,RX,RY}
+    translation_result::GlobalAlignmentResult{TD,S,T,TN,TF,X,Y}
 end
 
 # Keyword arguments:\n
@@ -42,8 +56,8 @@ a lower bound on the alignment objective function, an `AffineMap` which aligns `
 number of evaluations during the alignment procedure. 
 """ 
 function branchbound(x::AbstractModel, y::AbstractModel, args...;
-                     nsplits=2, searchspace=nothing,
-                     blockfun=UncertaintyRegion, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
+                     nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
+                     boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
@@ -58,7 +72,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
 
     # initialization
     if isnothing(searchspace)
-        searchspace = blockfun(x, y)
+        searchspace = blockfun(x, y, R, T)
     end
     ndims = length(searchspace.ranges)
     lb, ub = boundsfun(x, y, searchspace)
@@ -66,7 +80,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
     pq = PriorityQueue{blockfun{t}, t}()
     enqueue!(pq, searchspace, lb)
 
-    progress = [(0, ub)]
+    progress = [(0, ub, bestloc)]
     
     # split cubes until convergence
     ndivisions = 0
@@ -101,7 +115,7 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
             else
                 ub, bestloc = nextub, nextbestloc
             end
-            push!(progress, (ndivisions, ub))
+            push!(progress, (ndivisions, ub, bestloc))
             sinceimprove = 0
         end
 
@@ -123,11 +137,6 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
             if sbnds[i][1] < ub
                 enqueue!(pq, sblk => sbnds[i][1])
             end
-        end
-        if isempty(pq)
-            @show lb
-            @show center(bl)
-            @show sbnds
         end
     end
     if isempty(pq)
@@ -165,7 +174,7 @@ That is, only rigid rotation is allowed.
 
 For details about keyword arguments, see `gogma_align()`.
 """
-function trl_branchbound(x::AbstractModel, y::AbstractModel;  kwargs...)
+function trl_branchbound(x::AbstractModel, y::AbstractModel; kwargs...)
     return branchbound(x, y; blockfun=TranslationRegion, tformfun=Translation, kwargs...)
 end
 
@@ -210,8 +219,12 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     
     println("Rotation search")
     rot_res = rot_branchbound(tivx, tivy; localfun=localfun, boundsfun=rot_boundsfun, kwargs...)
-    rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, 2*p)
+    rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, p)
     rotscore, rotpos = localfun(tivx, tivy, rotblock)
+    if rot_res.upperbound < rotscore
+        println("local rot opt fail")
+        rotscore, rotpos = rot_res.upperbound, rot_res.tform_params
+    end
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
     R = RotationVec(rot_res.tform_params...)
@@ -219,6 +232,7 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = localfun(tivx, tivy, spinblock)
     if spinscore < rotscore
+        println("Spin")
         rotpos = RotationVec(spinrotpos...)
     else
         rotpos = RotationVec(rotpos...)
@@ -226,16 +240,22 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
 
     # perform translation alignment of original models
     println("Translation search")
-    trl_res = trl_branchbound(RotationVec(rotpos)*x, y; localfun=localfun, boundsfun=boundsfun, kwargs...)
+    trl_res = trl_branchbound(x, y; R=rotpos, localfun=localfun, boundsfun=boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space
     trlim = translation_limit(x, y)
     localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
     min, bestpos = localfun(x, y, localblock)
+    @show min, trl_res.upperbound
+    if trl_res.upperbound < min
+        println("local trl opt fail")
+        min = trl_res.upperbound
+        bestpos = (rot_res.tform_params...,  trl_res.tform_params...)
+    end
  
-    return GlobalAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
-                                rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
-                                rot_res.num_blocks+trl_res.num_blocks, trl_res.stagnant_splits, [rot_res.progress..., trl_res.progress...],
-                                rot_res.terminated_by * ", " * trl_res.terminated_by)
+    return TIVAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
+                              rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
+                              rot_res.num_blocks+trl_res.num_blocks,
+                              rot_res, trl_res)
 end

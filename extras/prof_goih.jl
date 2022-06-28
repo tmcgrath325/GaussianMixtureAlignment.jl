@@ -8,6 +8,7 @@ using BenchmarkTools
 
 using PlotlyJS
 using GaussianMixtureAlignment: plotdrawing, drawPointSet
+const GMA = GaussianMixtureAlignment
 
 ## Perfectly matched points
 
@@ -43,16 +44,20 @@ using GaussianMixtureAlignment: plotdrawing, drawPointSet
 ## with missing points
 numpts = 10;
 size = 50;
-num_missing = 1;
-tiv_factor = 2;
+num_missing = 2;
+num_extra = 1;
+tiv_factor = 1;
 randpts = size / 2 * rand(3,numpts) .- size;
+extrapts = size / 2 * rand(3,num_extra) .- size;
 randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(size/4*rand(3)...));
 weights = ones(Float64, numpts);
-xset = PointSet(randpts[:, 1:end-num_missing], weights[1:end-num_missing]);
+xset = PointSet(hcat(randpts[:, 1:end-num_missing], extrapts), vcat(weights[1:end-num_missing], ones(num_extra)));
 yset = PointSet(randtform(randpts), weights);
 
 @time res = tiv_goih_align(xset, yset, tiv_factor, tiv_factor)
+# @time res = goih_align(xset, yset)
 @show inv(res.tform) ∘ randtform 
 @show res.num_splits
 
+# plotdrawing([drawPointSet(res.rotation_result.tform(res.rotation_result.x); opacity=0.5), drawPointSet(res.rotation_result.y; color=GMA.default_colors[2], opacity=0.5)])
 plotdrawing([drawPointSet(res.tform(xset); opacity=0.5), drawPointSet(yset; color=GMA.default_colors[2], opacity=0.5)])
