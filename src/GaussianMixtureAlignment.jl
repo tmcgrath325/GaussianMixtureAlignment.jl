@@ -56,6 +56,7 @@ include("goicp/correspondence.jl")
 include("goicp/kabsch.jl")
 include("goicp/icp.jl")
 include("goicp/rmsd.jl")
+include("goicp/local.jl")
 
 include("localalign.jl")
 include("branchbound.jl")

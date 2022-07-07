@@ -4,8 +4,6 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
     # initial correspondences
     matches = correspondence(P,Q)
     prevmatches = matches
-    originalmatches = matches
-    originalscore = squared_deviation(P,Q,matches)
     tform = identity
     # iterate until convergence
     it = 0
@@ -19,7 +17,6 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
         tform = kabsch(P, Q, matches, wp, wq)
         score = squared_deviation(tform(P),Q,matches)
         if prevscore < score
-            @show it
             matches = prevmatches
             break
         end
@@ -27,13 +24,9 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
         prevmatches = matches
         matches = correspondence(tform(P),Q)
         if matches == prevmatches
-            @show it
             break
         end
     end
-    finalscore = squared_deviation(tform(P),Q,matches)
-    @show originalmatches, originalscore
-    @show matches, finalscore
     return matches
 end
 
@@ -62,7 +55,6 @@ function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, bloc
     matches = matching_fun(tformedx, y; kwargs...)
     tform = kabsch(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
-    @show matches, score
     R = RotationVec(tform.linear)
     params = (R.sx, R.sy, R.sz)
     return (score, params)
@@ -73,7 +65,6 @@ function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, bloc
     matches = matching_fun(tformedx, y; kwargs...)
     tform = kabsch(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
-    @show matches, score
     params = (tform.translation...,)
     return (score, params)
 end

@@ -109,7 +109,6 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
             nextub, nextbestloc = localfun(x, y, sblks[ubidx])
-            @show minub, nextub
             if minub < nextub
                 ub, bestloc = minub, center(sblks[ubidx])
             else
@@ -211,18 +210,29 @@ function planefit(mgmm::AbstractIsotropicMultiGMM, R)
     return planefit(R * ptsmat)
 end
 
-function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel, tivy::AbstractModel; boundsfun=tight_distance_bounds, rot_boundsfun=boundsfun, localfun=local_align, kwargs...)
+function tiv_branchbound(   x::AbstractModel, 
+                            y::AbstractModel, 
+                            tivx::AbstractModel, 
+                            tivy::AbstractModel; 
+                            boundsfun=tight_distance_bounds, 
+                            rot_boundsfun=boundsfun, 
+                            trl_boundsfun=boundsfun, 
+                            localfun=local_align, 
+                            rot_localfun=localfun,
+                            trl_localfun=localfun,
+                            kwargs...)
     t = promote_type(numbertype(x),numbertype(y))
     p = t(π)
     z = zero(t)
     zeroTranslation = SVector{3}(z,z,z)
     
     println("Rotation search")
-    rot_res = rot_branchbound(tivx, tivy; localfun=localfun, boundsfun=rot_boundsfun, kwargs...)
+    rot_res = rot_branchbound(tivx, tivy; localfun=rot_localfun, boundsfun=rot_boundsfun, kwargs...)
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, p)
     rotscore, rotpos = localfun(tivx, tivy, rotblock)
     if rot_res.upperbound < rotscore
-        println("local rot opt fail")
+        println("local rotation optimization failed")
+        @show rotscore
         rotscore, rotpos = rot_res.upperbound, rot_res.tform_params
     end
 
@@ -237,10 +247,11 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     else
         rotpos = RotationVec(rotpos...)
     end
+    @show rotscore, rot_res.upperbound
 
     # perform translation alignment of original models
     println("Translation search")
-    trl_res = trl_branchbound(x, y; R=rotpos, localfun=localfun, boundsfun=boundsfun, kwargs...)
+    trl_res = trl_branchbound(x, y; R=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space
@@ -249,7 +260,7 @@ function tiv_branchbound(x::AbstractModel, y::AbstractModel, tivx::AbstractModel
     min, bestpos = localfun(x, y, localblock)
     @show min, trl_res.upperbound
     if trl_res.upperbound < min
-        println("local trl opt fail")
+        println("local optimization failed")
         min = trl_res.upperbound
         bestpos = (rot_res.tform_params...,  trl_res.tform_params...)
     end

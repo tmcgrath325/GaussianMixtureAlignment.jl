@@ -44,8 +44,8 @@ const GMA = GaussianMixtureAlignment
 ## with missing points
 numpts = 10;
 size = 50;
-num_missing = 2;
-num_extra = 1;
+num_missing = 0;
+num_extra = 0;
 tiv_factor = 1;
 randpts = size / 2 * rand(3,numpts) .- size;
 extrapts = size / 2 * rand(3,num_extra) .- size;
@@ -54,8 +54,8 @@ weights = ones(Float64, numpts);
 xset = PointSet(hcat(randpts[:, 1:end-num_missing], extrapts), vcat(weights[1:end-num_missing], ones(num_extra)));
 yset = PointSet(randtform(randpts), weights);
 
-@time res = tiv_goih_align(xset, yset, tiv_factor, tiv_factor)
-# @time res = goih_align(xset, yset)
+# @time res = tiv_goih_align(xset, yset, tiv_factor, tiv_factor)
+@time res = goih_align(xset, yset)
 @show inv(res.tform) ∘ randtform 
 @show res.num_splits
 
