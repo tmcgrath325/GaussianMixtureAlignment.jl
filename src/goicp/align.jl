@@ -1,7 +1,7 @@
 function goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet; kwargs...)
     kdtree = KDTree(y.coords, Euclidean())
     correspondence(xx::AbstractMatrix, yy::AbstractMatrix) = closest_points(xx, kdtree)
-    boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = correspondence, distance_bound_fun = tight_distance_bounds)
+    boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = correspondence, distance_bound_fun = loose_distance_bounds)
     localfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, block::SearchRegion) = local_icp(xx, yy, block; kdtree=kdtree)
 
     return branchbound(x, y; boundsfun=boundsfun, localfun=localfun, kwargs...)
@@ -18,8 +18,8 @@ function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, c
     tiv_kdtree = KDTree(tivy.coords, Euclidean())
     correspondence(xx::AbstractMatrix, yy::AbstractMatrix) = closest_points(xx, kdtree)
     rot_correspondence(xx::AbstractMatrix, yy::AbstractMatrix) = closest_points(xx, tiv_kdtree)
-    boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = correspondence, distance_bound_fun = tight_distance_bounds)
-    rot_boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = rot_correspondence, distance_bound_fun = tight_distance_bounds)
+    boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = correspondence, distance_bound_fun = loose_distance_bounds)
+    rot_boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = rot_correspondence, distance_bound_fun = loose_distance_bounds)
     localfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, block::SearchRegion) = local_icp(xx, yy, block; kdtree=kdtree)
     objfun(X, x, y) = distanceobj(X, x, y; correspondence = correspondence);
     rot_objfun(X, x, y) = distanceobj(X, x, y; correspondence = rot_correspondence);

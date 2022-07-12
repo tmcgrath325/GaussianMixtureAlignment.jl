@@ -15,17 +15,21 @@ function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSe
         lb += matchlb^2
         ub += matchub^2
     end
-    return lb, ub
+    return lb, ub, matches
 end
 
-function squared_dist_bounds(x::AbstractMultiPointSet, y::AbstractMultiPointSet, σᵣ, σₜ; kwargs...)
+function squared_dist_bounds(x::AbstractMultiPointSet{N,T,K}, y::AbstractMultiPointSet{N,S,L}, σᵣ, σₜ; kwargs...) where {N,T,K,S,L}
     # sum bounds for each matched pair of pointsets
     lb = 0.
     ub = 0.
+    matches = Dict{promote_type(K,L), Vector{Tuple{Int,Int}}}()
     for key in keys(x.pointsets) ∩ keys(y.pointsets)
-        lb, ub = (lb, ub) .+ squared_dist_bounds(x.pointsets[key], y.pointsets[key], σᵣ, σₜ; kwargs...)
+        keylb, keyub, keymatches = squared_dist_bounds(x.pointsets[key], y.pointsets[key], σᵣ, σₜ; kwargs...)
+        lb += keylb
+        ub += keyub
+        push!(matches, keymatches)
     end
-    return lb, ub
+    return lb, ub, matches
 end
 
 squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number; kwargs...

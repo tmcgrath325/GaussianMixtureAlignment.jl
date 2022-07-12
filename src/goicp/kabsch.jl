@@ -66,10 +66,11 @@ end
 
 # centroid of positions in A, weighted by weights in w (assumed to sum to 1)
 centroid(A, w=fill(1/size(A,2), size(A,2))) = A*w
+centroid(ps::AbstractSinglePointSet) = centroid(ps.coords, ps.weights / sum(ps.weights))
 
 # translation moving centroid to origin
 center_translation(A, w=fill(1/size(A,2), size(A,2))) = Translation(-centroid(A,w))
-
+center_translation(ps:: AbstractSinglePointSet) = Translation(-centroid(ps))
 
 
 # align via translation only (no rotation)

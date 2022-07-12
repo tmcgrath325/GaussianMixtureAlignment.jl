@@ -29,6 +29,10 @@ struct TIVAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:
     translation_result::GlobalAlignmentResult{TD,S,T,TN,TF,X,Y}
 end
 
+priority(block::UncertaintyRegion, lb, ub) = lb # * ub # * block.σᵣ^3 * block.σₜ^3;
+priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σᵣ^3;
+priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σₜ^3;
+
 # Keyword arguments:\n
 #     nsplits     - an integer representing the number of splits that should be made along each dimension during branching\n
 #     searchspace - an `UncertaintyRegion` that defines the searchspace, which defaults to the smallest space gauranteed to contain the global minimum\n
@@ -55,10 +59,12 @@ Returns a `GlobalAlignmentResult` that contains the maximized overlap of the two
 a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
 number of evaluations during the alignment procedure. 
 """ 
-function branchbound(x::AbstractModel, y::AbstractModel, args...;
+function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
-                     boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
+                     centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
+    x = xinput
+    y = yinput
     if isodd(nsplits)
         throw(ArgumentError("`nsplits` must be even"))
     end
@@ -70,15 +76,30 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
     # end
     t = promote_type(numbertype(x), numbertype(y))
 
+    centerx_tform = Translation([0,0,0])
+    centery_tform = Translation([0,0,0])
+    if centerinputs
+        centerx_tform = center_translation(x)
+        centery_tform = center_translation(y)
+        x = centerx_tform(x)
+        y = centery_tform(y)
+    end
+    @show centroid(x), centerx_tform, centroid(xinput)
+    @show centroid(y), centery_tform, centroid(yinput)
+
     # initialization
     if isnothing(searchspace)
         searchspace = blockfun(x, y, R, T)
     end
     ndims = length(searchspace.ranges)
     lb, ub = boundsfun(x, y, searchspace)
+    pqval = priority(searchspace, lb, ub)
     ub, bestloc = localfun(x, y, searchspace, args...)
-    pq = PriorityQueue{blockfun{t}, t}()
-    enqueue!(pq, searchspace, lb)
+    @show ub
+    pq = PriorityQueue{blockfun{t}, Tuple{t,t,t}}()
+    lbq = PriorityQueue{blockfun{t}, t}()
+    enqueue!(pq, searchspace => (pqval, lb, ub))
+    enqueue!(lbq, searchspace => lb)
 
     progress = [(0, ub, bestloc)]
     
@@ -94,21 +115,32 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
         sinceimprove += 1
 
         # take the block with the lowest lower bound
-        bl, lb = dequeue_pair!(pq)
+        bl, (pqval, boxlb, boxub) = dequeue_pair!(pq)
+        delete!(lbq, bl)
+        if !isempty(lbq)
+            lb = first(lbq)[2]
+        end
+
+        # @show pqval, boxlb, boxub, lb, ub, bl.σᵣ, bl.σₜ
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "optimum within tolerance")
+            tform = tformfun(bestloc)
+            if centerinputs
+                tform = centerx_tform ∘ tform ∘  inv(centery_tform) 
+            end
+            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
-        sblks = subregions(bl)
+        sblks = subregions(bl, nsplits)
         sbnds = [boundsfun(x,y,sblk) for sblk in sblks]
 
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
             nextub, nextbestloc = localfun(x, y, sblks[ubidx])
+            @show ub, minub, nextub
             if minub < nextub
                 ub, bestloc = minub, center(sblks[ubidx])
             else
@@ -118,29 +150,39 @@ function branchbound(x::AbstractModel, y::AbstractModel, args...;
             sinceimprove = 0
         end
 
-        # # remove all blocks in the queue that can now be eliminated (no possible improvement)
-        # if !isempty(pq)
-        #     del = false
-        #     for p in pq
-        #         if !del
-        #             del = p[2] > ub
-        #         end                       
-        #         if del
-        #             delete!(pq, p[1])
-        #         end
-        #     end
-        # end
+
+        # # for correspondence-based alignment, check if the matches for the subregions are all the same
+        same_matches = length(sbnds[1]) == 3
+        for i = 2:length(sblks)
+            if !same_matches
+                break
+            end
+            same_matches = sbnds[i][3] == sbnds[i-1][3]
+        end
 
         # only add sub-blocks to the queue if they present possibility for improvement
-        for (i,sblk) in enumerate(sblks)
-            if sbnds[i][1] < ub
-                enqueue!(pq, sblk => sbnds[i][1])
+        if !same_matches
+            for (i,sblk) in enumerate(sblks)
+                if sbnds[i][1] < ub
+                    enqueue!(pq, sblk => (priority(sblk, sbnds[i][1], sbnds[i][2]), sbnds[i][1], sbnds[i][2]))
+                    enqueue!(lbq, sblk => sbnds[i][1])
+                end
             end
+        else 
+            println("all subregions have the same set of correspondences, and are thrown out")
         end
     end
     if isempty(pq)
+        tform = tformfun(bestloc)
+        if centerinputs
+            tform = centerx_tform ∘ tform ∘  inv(centery_tform)
+        end
         return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "priority queue empty")
     else
+        tform = tformfun(bestloc)
+        if centerinputs
+            tform = centerx_tform ∘ tform ∘  inv(centery_tform)
+        end
         return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "terminated early")
     end
 end
