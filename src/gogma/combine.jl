@@ -14,20 +14,22 @@ function combine(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
     return t(vcat(gmmx.gaussians, gmmy.gaussians))
 end
 
-function combine(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
-    if dims(gmmx) != dims(mgmmy)
+function combine(mgmmx::IsotropicMultiGMM, mgmmy::IsotropicMultiGMM)
+    if dims(mgmmx) != dims(mgmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
-    t = IsotropicGMM{dims(gmmx),promote_type(numbertype(mgmmx), numbertype(mgmmy))}
-    gmms = Dict{Symbol, t}()
+    t = IsotropicGMM{dims(mgmmx),promote_type(numbertype(mgmmx), numbertype(mgmmy))}
+    d = promote_type(typeof(mgmmx.gmms), typeof(mgmmy.gmms))
+    gmms = d()
     xkeys, ykeys = keys(mgmmx.gmms), keys(mgmmy.gmms)
     for key in xkeys ∪ ykeys
         if key ∈ xkeys && key ∈ykeys
-            push!(gmms, Pair(key, t(combine(mgmmx.gmms[key], mgmmy.gmms[key]))))
+            push!(gmms, Pair(key, convert(t, combine(mgmmx.gmms[key], mgmmy.gmms[key]))))
         elseif key ∈ xkeys
-            push!(gmms, Pair(key, t(mgmmx.gmms[key])))
+            push!(gmms, Pair(key, convert(t, mgmmx.gmms[key])))
         else
-            push!(gmms, Pair(key, t(mgmmy.gmms[key])))
+            @show convert(t,mgmmy.gmms[key])
+            push!(gmms, Pair(key, convert(t, mgmmy.gmms[key])))
         end
     end
     return promote_type(typeof(mgmmx), typeof(mgmmy))(gmms)
