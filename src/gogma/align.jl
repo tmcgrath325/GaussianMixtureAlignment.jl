@@ -1,0 +1,4 @@
+gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, localfun=local_align, kwargs...)
+rot_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = rot_branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, localfun=local_align, kwargs...)
+trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...) = trl_branchbound(gmmx, gmmy; boundsfun=gauss_l2_bounds, localfun=local_align, kwargs...)
+tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; kwargs...) = tiv_branchbound(gmmx, gmmy, tivgmm(gmmx, cx), tivgmm(gmmy, cy); boundsfun=gauss_l2_bounds, localfun=local_align, kwargs...)
