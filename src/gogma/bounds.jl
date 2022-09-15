@@ -40,8 +40,8 @@ the uncertainty region is assumed to be centered at the origin (i.e. x has alrea
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
-    (lbdist, ubdist) = distance_bound_fun(x.μ, y.μ, σᵣ, σₜ)
+function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
+    (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ)
 
     if length(x.dirs) == 0 || length(y.dirs) == 0
         lbdot = 1.
@@ -66,8 +66,8 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
     return -overlap(lbdist^2, s, w, lbdot), -overlap(ubdist^2, s, w, cosγ)
 end
 
-gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
-    ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
+# gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
+#     ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
 
 gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
@@ -77,7 +77,7 @@ gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s
 
 
 
-function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing; kwargs...)
+function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing; kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -88,13 +88,13 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ
     ub = 0.
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
         end
     end
     return lb, ub
 end
 
-function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing)
+function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
@@ -104,13 +104,13 @@ function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ
     lb = 0.
     ub = 0.
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], σᵣ, σₜ, mpσ[key], mpϕ[key])
+        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], R, T, σᵣ, σₜ, mpσ[key], mpϕ[key])
     end
     return lb, ub
 end
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
-    ) = gauss_l2_bounds(R*x, y-T, args...; kwargs...)
+# gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
+#     ) = gauss_l2_bounds(R*x, y-T, args...; kwargs...)
 
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args...; kwargs...
     ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, args...; kwargs...)

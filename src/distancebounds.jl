@@ -31,8 +31,9 @@ See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
 function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     # prepare positions and angles
-    xnorm, ynorm = norm(x), norm(y)
-    if xnorm*ynorm == 0
+    xsq, ysq = sum(abs2,x), sum(abs2,y)
+    xnorm, ynorm = sqrt(xsq), sqrt(ysq)
+    if xsq*ysq == 0
         cosα = one(promote_type(eltype(x),eltype(y)))
     else
         cosα = dot(x, y)/(xnorm*ynorm) 
@@ -46,7 +47,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     if cosα >= cosβ
         lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ, 0)
     else
-        lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
+        lbdist = try max(√(xsq + ysq - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
         catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
             0
         end

@@ -31,7 +31,7 @@ end
 
 priority(block::UncertaintyRegion, lb, ub) = lb # * ub # * block.σᵣ^3 * block.σₜ^3;
 priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σᵣ^3;
-priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σₜ^3;
+priority(block::TranslationRegion, lb, ub) = lb # * ub # * block.σₜ^3;
 
 # Keyword arguments:\n
 #     nsplits     - an integer representing the number of splits that should be made along each dimension during branching\n
@@ -59,7 +59,7 @@ Returns a `GlobalAlignmentResult` that contains the maximized overlap of the two
 a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
 number of evaluations during the alignment procedure. 
 """ 
-function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
+function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
                      centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
@@ -71,9 +71,6 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
     if dims(x) != dims(y)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
-    # if isnothing(pσ) || isnothing(pϕ)
-    #     pσ, pϕ = pairwise_consts(x, y)
-    # end
     t = promote_type(numbertype(x), numbertype(y))
 
     centerx_tform = Translation([0,0,0])
@@ -84,22 +81,25 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
         x = centerx_tform(x)
         y = centery_tform(y)
     end
-    @show centroid(x), centerx_tform, centroid(xinput)
-    @show centroid(y), centery_tform, centroid(yinput)
+    # @show centroid(x), centerx_tform, centroid(xinput)
+    # @show centroid(y), centery_tform, centroid(yinput)
 
     # initialization
     if isnothing(searchspace)
         searchspace = blockfun(x, y, R, T)
     end
     ndims = length(searchspace.ranges)
+    nsblks = nsplits^ndims
+    sblks = fill(searchspace, nsblks)
+
     lb, ub = boundsfun(x, y, searchspace)
+    sbnds = fill((lb, ub), nsblks)
+
     pqval = priority(searchspace, lb, ub)
-    ub, bestloc = localfun(x, y, searchspace, args...)
+    ub, bestloc = localfun(x, y, searchspace)
     @show ub
     pq = PriorityQueue{blockfun{t}, Tuple{t,t,t}}()
-    lbq = PriorityQueue{blockfun{t}, t}()
     enqueue!(pq, searchspace => (pqval, lb, ub))
-    enqueue!(lbq, searchspace => lb)
 
     progress = [(0, ub, bestloc)]
     
@@ -115,11 +115,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
         sinceimprove += 1
 
         # take the block with the lowest lower bound
-        bl, (pqval, boxlb, boxub) = dequeue_pair!(pq)
-        delete!(lbq, bl)
-        if !isempty(lbq)
-            lb = first(lbq)[2]
-        end
+        bl, (pqval, lb, boxub) = dequeue_pair!(pq)
 
         # @show pqval, boxlb, boxub, lb, ub, bl.σᵣ, bl.σₜ
 
@@ -133,8 +129,10 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
-        sblks = subregions(bl, nsplits)
-        sbnds = [boundsfun(x,y,sblk) for sblk in sblks]
+        subregions!(sblks, bl, nsplits)
+        for i=1:nsblks
+            sbnds[i] = boundsfun(x,y,sblks[i])
+        end
 
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
@@ -151,26 +149,25 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
         end
 
 
-        # # for correspondence-based alignment, check if the matches for the subregions are all the same
-        same_matches = length(sbnds[1]) == 3
-        for i = 2:length(sblks)
-            if !same_matches
-                break
-            end
-            same_matches = sbnds[i][3] == sbnds[i-1][3]
-        end
+        # # # for correspondence-based alignment, check if the matches for the subregions are all the same
+        # same_matches = length(sbnds[1]) == 3
+        # for i = 2:length(sblks)
+        #     if !same_matches
+        #         break
+        #     end
+        #     same_matches = sbnds[i][3] == sbnds[i-1][3]
+        # end
 
         # only add sub-blocks to the queue if they present possibility for improvement
-        if !same_matches
-            for (i,sblk) in enumerate(sblks)
-                if sbnds[i][1] < ub
-                    enqueue!(pq, sblk => (priority(sblk, sbnds[i][1], sbnds[i][2]), sbnds[i][1], sbnds[i][2]))
-                    enqueue!(lbq, sblk => sbnds[i][1])
-                end
+        # if !same_matches
+        for i=1:length(sblks)
+            if sbnds[i][1] < ub
+                enqueue!(pq, sblks[i] => (priority(sblks[i], sbnds[i][1], sbnds[i][2]), sbnds[i][1], sbnds[i][2]))
             end
-        else 
-            println("all subregions have the same set of correspondences, and are thrown out")
         end
+        # else 
+        #     println("all subregions have the same set of correspondences, and are thrown out")
+        # end
     end
     if isempty(pq)
         tform = tformfun(bestloc)
@@ -183,13 +180,8 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel, args...;
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "terminated early")
     end
-end
-
-function branchbound(x::AbstractGMM, y::AbstractGMM; kwargs...)
-    pσ, pϕ = pairwise_consts(x,y)
-    return branchbound(x,y,pσ,pϕ; kwargs...)
 end
 
 

@@ -15,7 +15,7 @@ function squared_dist_bounds(x::AbstractSinglePointSet, y::AbstractSinglePointSe
         lb += matchlb^2
         ub += matchub^2
     end
-    return lb, ub, matches
+    return lb, ub # , matches
 end
 
 function squared_dist_bounds(x::AbstractMultiPointSet{N,T,K}, y::AbstractMultiPointSet{N,S,L}, σᵣ, σₜ; kwargs...) where {N,T,K,S,L}
@@ -29,7 +29,7 @@ function squared_dist_bounds(x::AbstractMultiPointSet{N,T,K}, y::AbstractMultiPo
         ub += keyub
         push!(matches, keymatches)
     end
-    return lb, ub, matches
+    return lb, ub # , matches
 end
 
 squared_dist_bounds(x::AbstractPointSet, y::AbstractPointSet, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number; kwargs...
