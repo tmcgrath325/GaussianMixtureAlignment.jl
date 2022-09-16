@@ -33,6 +33,15 @@ priority(block::UncertaintyRegion, lb, ub) = lb # * ub # * block.σᵣ^3 * block
 priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σᵣ^3;
 priority(block::TranslationRegion, lb, ub) = lb # * ub # * block.σₜ^3;
 
+function lowestlbnode(hull::MutableLowerConvexHull)
+    node = PairedLinkedLists.head(hull.hull)
+    for n in HullNodeIterator(hull)
+        n.data[1] != node.data[1] && break
+        node = n
+    end
+    return node
+end
+
 # Keyword arguments:\n
 #     nsplits     - an integer representing the number of splits that should be made along each dimension during branching\n
 #     searchspace - an `UncertaintyRegion` that defines the searchspace, which defaults to the smallest space gauranteed to contain the global minimum\n
@@ -81,25 +90,21 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         x = centerx_tform(x)
         y = centery_tform(y)
     end
-    # @show centroid(x), centerx_tform, centroid(xinput)
-    # @show centroid(y), centery_tform, centroid(yinput)
 
     # initialization
     if isnothing(searchspace)
         searchspace = blockfun(x, y, R, T)
     end
-    ndims = length(searchspace.ranges)
+    ndims = length(center(searchspace))
     nsblks = nsplits^ndims
     sblks = fill(searchspace, nsblks)
 
     lb, ub = boundsfun(x, y, searchspace)
     sbnds = fill((lb, ub), nsblks)
 
-    pqval = priority(searchspace, lb, ub)
     ub, bestloc = localfun(x, y, searchspace)
-    @show ub
-    pq = PriorityQueue{blockfun{t}, Tuple{t,t,t}}()
-    enqueue!(pq, searchspace => (pqval, lb, ub))
+    hull = MutableLowerConvexHull{Tuple{t,t,typeof(searchspace)}}()
+    addpoint!(hull, (lb, ub, searchspace))
 
     progress = [(0, ub, bestloc)]
     
@@ -107,17 +112,17 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     ndivisions = 0
     sinceimprove = 0
     evalsperdiv = length(x)*length(y)*nsplits^ndims
-    while !isempty(pq)
-        if (length(pq) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
+    while !isempty(hull)
+        if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
         end
         ndivisions += 1
         sinceimprove += 1
 
         # take the block with the lowest lower bound
-        bl, (pqval, lb, boxub) = dequeue_pair!(pq)
-
-        # @show pqval, boxlb, boxub, lb, ub, bl.σᵣ, bl.σₜ
+        lbnode = lowestlbnode(hull)
+        (lb, boxub, bl) = lbnode.data
+        removepoint!(hull, lbnode)
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
@@ -125,20 +130,21 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             if centerinputs
                 tform = centerx_tform ∘ tform ∘  inv(centery_tform) 
             end
-            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "optimum within tolerance")
+            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
         subregions!(sblks, bl, nsplits)
         for i=1:nsblks
             sbnds[i] = boundsfun(x,y,sblks[i])
+            # println(center(sblks[i]))
+            # println(sbnds[i])
         end
 
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
         if minub < ub
             nextub, nextbestloc = localfun(x, y, sblks[ubidx])
-            @show ub, minub, nextub
             if minub < nextub
                 ub, bestloc = minub, center(sblks[ubidx])
             else
@@ -148,39 +154,25 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             sinceimprove = 0
         end
 
-
-        # # # for correspondence-based alignment, check if the matches for the subregions are all the same
-        # same_matches = length(sbnds[1]) == 3
-        # for i = 2:length(sblks)
-        #     if !same_matches
-        #         break
-        #     end
-        #     same_matches = sbnds[i][3] == sbnds[i-1][3]
-        # end
-
-        # only add sub-blocks to the queue if they present possibility for improvement
-        # if !same_matches
         for i=1:length(sblks)
             if sbnds[i][1] < ub
-                enqueue!(pq, sblks[i] => (priority(sblks[i], sbnds[i][1], sbnds[i][2]), sbnds[i][1], sbnds[i][2]))
+                addpoint!(hull, (sbnds[i][1], sbnds[i][2], sblks[i]))
             end
         end
-        # else 
-        #     println("all subregions have the same set of correspondences, and are thrown out")
-        # end
+
     end
-    if isempty(pq)
+    if isempty(hull)
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "priority queue empty")
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
     else
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, dequeue_pair!(pq)[2][1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(pq), sinceimprove, progress, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
     end
 end
 

@@ -49,15 +49,14 @@ struct UncertaintyRegion{N<:Real} <: SearchRegion{N}
     T::SVector{3,N}
     σᵣ::N
     σₜ::N
-    ranges::NTuple{6,Tuple{N,N}}
 end
 
 function UncertaintyRegion(R::RotationVec,T::SVector{3},σᵣ::Number,σₜ::Number)
     t = promote_type(eltype(R), eltype(T), typeof(σᵣ), typeof(σₜ))
-    return UncertaintyRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ), t(σₜ), NTuple{6,Tuple{t,t}}(cuberanges(R,T,σᵣ,σₜ)))
+    return UncertaintyRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ), t(σₜ))
 end
 UncertaintyRegion(σᵣ::Number, σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), σᵣ, σₜ)    
-UncertaintyRegion(σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), 2π, σₜ)
+UncertaintyRegion(σₜ::Number) = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, σₜ)
 UncertaintyRegion() = UncertaintyRegion(one(RotationVec), zero(SVector{3}), π, 1.0)
 UncertaintyRegion(block::UncertaintyRegion) = block;
 
@@ -76,13 +75,12 @@ struct RotationRegion{N<:Real} <: SearchRegion{N}
     R::RotationVec{N}
     T::SVector{3,N}
     σᵣ::N
-    ranges::NTuple{3,Tuple{N,N}}
 end
 function RotationRegion(R::RotationVec,T::SVector{3},σᵣ::Number)
     t = promote_type(eltype(R), eltype(T), typeof(σᵣ))
-    return RotationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ), NTuple{3,Tuple{t,t}}(cuberanges(R,σᵣ)))
+    return RotationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ))
 end
-RotationRegion(R,T,σᵣ::Number) = RotationRegion(R, T, σᵣ, cuberanges(R, σᵣ))
+RotationRegion(R,T,σᵣ::Number) = RotationRegion(R, T, σᵣ)
 RotationRegion(σᵣ::Number) = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
 RotationRegion() = RotationRegion(Float64(π))
 
@@ -105,13 +103,12 @@ struct TranslationRegion{N<:Real} <: SearchRegion{N}
     R::RotationVec{N}
     T::SVector{3,N}
     σₜ::N
-    ranges::NTuple{3,Tuple{N,N}}
 end
 function TranslationRegion(R::RotationVec,T::SVector{3},σₜ::Number)
     t = promote_type(eltype(R), eltype(T), typeof(σₜ))
-    return TranslationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σₜ), NTuple{3,Tuple{t,t}}(cuberanges(T,σₜ)))
+    return TranslationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σₜ))
 end
-TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ, cuberanges(T, σₜ))
+TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ)
 TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec{typeof(σₜ)}), zero(SVector{3, typeof(σₜ)}), σₜ)
 TranslationRegion()         = TranslationRegion(1.0)
 
@@ -130,14 +127,16 @@ end
 
 # Split SearchRegion
 function subregions!(subregionvec::Vector{<:UncertaintyRegion}, ur::UncertaintyRegion, nsplits=2)
-    sranges = subranges(ur.ranges, nsplits)
+    # scenters = subranges(ur.ranges, nsplits)
     σᵣ = ur.σᵣ / nsplits
     σₜ = ur.σₜ / nsplits
-    for (i,sr) in enumerate(sranges)
-        c = center(sr)
-        R = RotationVec(c[1:3]...)
-        T = SVector{3}(c[4:6]...)
-        subregionvec[i] = UncertaintyRegion(R,T,σᵣ,σₜ,sr)
+    lowercorner = center(ur) .- (ur.σᵣ, ur.σᵣ, ur.σᵣ, ur.σₜ, ur.σₜ, ur.σₜ) .+ (σᵣ, σᵣ, σᵣ, σₜ, σₜ, σₜ)
+    for (i,I) in enumerate(CartesianIndices(NTuple{6,UnitRange{Int}}(fill(0:nsplits-1, 6))))
+        idxs = Tuple(I)
+        c = lowercorner .+ (2*idxs[1]*σᵣ, 2*idxs[2]*σᵣ, 2*idxs[3]*σᵣ, 2*idxs[4]*σₜ, 2*idxs[5]*σₜ, 2*idxs[6]*σₜ)
+        R = RotationVec(c[1], c[2], c[3])
+        T = SVector{3}(c[4], c[5], c[6])
+        subregionvec[i] = UncertaintyRegion(R,T,σᵣ,σₜ)
     end
 end
 function subregions!(subregionvec::Vector{<:RotationRegion}, rr::RotationRegion, nsplits=2)

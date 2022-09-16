@@ -24,7 +24,8 @@ abstract type AbstractModel{N,T} end
 using StaticArrays
 using LinearAlgebra
 using GenericLinearAlgebra
-using DataStructures
+using PairedLinkedLists
+using MutableConvexHulls
 using Rotations
 using CoordinateTransformations
 using Distances
