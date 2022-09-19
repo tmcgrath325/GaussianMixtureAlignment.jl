@@ -12,6 +12,8 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_blocks::Int
     stagnant_splits::Int
     progress::Vector{Tuple{Int,T,NTuple{N,T}}}
+    removedpoints::Vector{Tuple{T,T}}
+    addedpoints::Vector{Vector{Tuple{T,T}}}
     terminated_by::String
 end
 
@@ -100,13 +102,15 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sblks = fill(searchspace, nsblks)
 
     lb, ub = boundsfun(x, y, searchspace)
-    sbnds = fill((lb, ub), nsblks)
-
-    ub, bestloc = localfun(x, y, searchspace)
-    hull = MutableLowerConvexHull{Tuple{t,t,typeof(searchspace)}}()
+    hull = MutableLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
     addpoint!(hull, (lb, ub, searchspace))
 
+    sbnds = fill((lb, ub), nsblks)
+    ub, bestloc = localfun(x, y, searchspace)
+
     progress = [(0, ub, bestloc)]
+    removedpoints = Tuple{t,t}[]
+    addedpoints = Vector{Vector{Tuple{t,t}}}()
     
     # split cubes until convergence
     ndivisions = 0
@@ -121,8 +125,20 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
 
         # take the block with the lowest lower bound
         lbnode = lowestlbnode(hull)
-        (lb, boxub, bl) = lbnode.data
+        (boxlb, boxub, bl) = lbnode.data
         removepoint!(hull, lbnode)
+        lb = boxlb
+
+        # # take a random block that lies on the convex hull
+        # randidx = rand(1:length(hull))
+        # lbnode = getnode(hull.hull, randidx)
+        # (boxlb, boxub, bl) = lbnode.data
+        # removepoint!(hull, lbnode)
+        # if boxlb == lb && !isempty(hull)
+        #     lb = lowestlbnode(hull).data[1]
+        # end
+
+        push!(removedpoints, (boxlb, boxub))
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
@@ -130,7 +146,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             if centerinputs
                 tform = centerx_tform ∘ tform ∘  inv(centery_tform) 
             end
-            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "optimum within tolerance")
+            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -154,25 +170,40 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             sinceimprove = 0
         end
 
+        # for i=1:length(sblks)
+        #     if sbnds[i][1] < ub
+        #         addpoint!(hull, (sbnds[i][1], sbnds[i][2], sblks[i]))
+        #     end
+        # end
+        addblks = eltype(hull)[]
+        addbnds = eltype(sbnds)[]
         for i=1:length(sblks)
-            if sbnds[i][1] < ub
-                addpoint!(hull, (sbnds[i][1], sbnds[i][2], sblks[i]))
+            diff = abs(sbnds[i][2] - sbnds[i][1])
+            if sbnds[i][1] < ub && diff >= atol && abs(diff/sbnds[i][1]) >= rtol
+                push!(addblks, (sbnds[i][1], sbnds[i][2], sblks[i]))
+                push!(addbnds, sbnds[i])
             end
         end
-
+        try mergepoints!(hull, addblks)
+        catch e
+            # @show addbnds
+            @show ndivisions
+            throw(ErrorException("Merging points failed."))
+        end
+        push!(addedpoints, addbnds)
     end
     if isempty(hull)
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "priority queue empty")
     else
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "terminated early")
     end
 end
 
