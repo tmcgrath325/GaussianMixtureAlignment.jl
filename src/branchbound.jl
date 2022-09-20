@@ -116,27 +116,37 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     ndivisions = 0
     sinceimprove = 0
     evalsperdiv = length(x)*length(y)*nsplits^ndims
+
+    numaddedafterremoval = 0
+
+    @show lb, ub
     while !isempty(hull)
+        if ndivisions % 10000 == 0
+            @show ndivisions, length(hull.points), length(hull.hull), numaddedafterremoval
+        end
         if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
         end
         ndivisions += 1
         sinceimprove += 1
 
-        # take the block with the lowest lower bound
-        lbnode = lowestlbnode(hull)
-        (boxlb, boxub, bl) = lbnode.data
-        removepoint!(hull, lbnode)
-        lb = boxlb
-
-        # # take a random block that lies on the convex hull
-        # randidx = rand(1:length(hull))
-        # lbnode = getnode(hull.hull, randidx)
+        # # take the block with the lowest lower bound
+        # lbnode = lowestlbnode(hull)
         # (boxlb, boxub, bl) = lbnode.data
         # removepoint!(hull, lbnode)
-        # if boxlb == lb && !isempty(hull)
-        #     lb = lowestlbnode(hull).data[1]
-        # end
+        # lb = boxlb
+
+        # take a random block that lies on the convex hull
+        randidx = rand(1:length(hull))
+        lbnode = getnode(hull.hull, randidx)
+        (boxlb, boxub, bl) = lbnode.data
+        prevlen = length(hull)
+        removepoint!(hull, lbnode)
+        postlen = length(hull)
+        if boxlb == lb && !isempty(hull)
+            lb = lowestlbnode(hull).data[1]
+        end
+        numaddedafterremoval::Int += postlen - prevlen
 
         push!(removedpoints, (boxlb, boxub))
 
@@ -183,6 +193,9 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                 push!(addblks, (sbnds[i][1], sbnds[i][2], sblks[i]))
                 push!(addbnds, sbnds[i])
             end
+        end
+        if isempty(hull)
+            lb = minimum(addbnds)[1]
         end
         try mergepoints!(hull, addblks)
         catch e

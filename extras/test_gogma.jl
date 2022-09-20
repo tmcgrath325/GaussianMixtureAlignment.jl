@@ -9,6 +9,8 @@ gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
 gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
 # make sure this runs without an error
-@time res1 = gogma_align(gmmx, gmmy; maxblocks=1E5)
-# @ProfileView.profview gogma_align(gmmx, gmmy)
+println("start GOGMA")
+res1 = gogma_align(gmmx, gmmy; maxsplits=100)
+res1 = gogma_align(gmmx, gmmy; maxsplits=300000)
+# @ProfileView.profview gogma_align(gmmx, gmmy; maxsplits=10000)
 # res2 = tiv_gogma_align(gmmx, gmmy; maxblocks=1E5)

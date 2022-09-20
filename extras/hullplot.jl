@@ -28,7 +28,7 @@ niters = length(res1.addedpoints)
 @show niters
 @show interval
 @show nframes
-record(f, "simple_lowestlb_gogma.mp4", 1:nframes) do frame
+record(f, "randblock_gogma.mp4", 1:nframes) do frame
     if frame == 1
         removepoint!(hull, head(hull.hull))
         mergepoints!(hull, res1.addedpoints[1])
@@ -48,8 +48,8 @@ record(f, "simple_lowestlb_gogma.mp4", 1:nframes) do frame
             mergepoints!(hull, res1.addedpoints[i])
         end
 
-        currentub = findfirst(x -> x[1] >= idx, res1.progress)
-        currentub = isnothing(currentub) ? res1.progress[end][2] : currentub[2]
+        ubidx = findfirst(x -> x[1] >= idx, res1.progress)
+        currentub = isnothing(ubidx) ? res1.progress[end][2] : res1.progress[ubidx][2]
         empty!(ubline.val)
         push!(ubline.val, (currentub, -9), (currentub, 0))
     end 
