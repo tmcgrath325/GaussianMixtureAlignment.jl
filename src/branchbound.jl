@@ -12,8 +12,8 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_blocks::Int
     stagnant_splits::Int
     progress::Vector{Tuple{Int,T,NTuple{N,T}}}
-    removedpoints::Vector{Tuple{T,T}}
-    addedpoints::Vector{Vector{Tuple{T,T}}}
+    removedpoints::Vector{<:Tuple{T,T,<:SearchRegion{T}}}
+    addedpoints::Vector{<:Vector{<:Tuple{T,T,<:SearchRegion{T}}}}
     terminated_by::String
 end
 
@@ -31,13 +31,26 @@ struct TIVAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:
     translation_result::GlobalAlignmentResult{TD,S,T,TN,TF,X,Y}
 end
 
-priority(block::UncertaintyRegion, lb, ub) = lb # * ub # * block.σᵣ^3 * block.σₜ^3;
-priority(block::RotationRegion, lb, ub) = lb # * ub # * block.σᵣ^3;
-priority(block::TranslationRegion, lb, ub) = lb # * ub # * block.σₜ^3;
+function lowestlbblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, lb::T) where T
+    lbnode = lowestlbnode(hull)
+    (boxlb, boxub, bl) = lbnode.data
+    lb = boxlb
+    return lbnode, bl, boxlb, boxub, lb
+end
 
-function lowestlbnode(hull::MutableLowerConvexHull)
+function randomblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, lb::T) where T
+    randidx = rand(1:length(hull))
+    lbnode = getnode(hull.hull, randidx)
+    (boxlb, boxub, bl) = lbnode.data
+    if boxlb == lb && !isempty(hull)
+        lb = lowestlbnode(hull).data[1]
+    end
+    return lbnode, bl, boxlb, boxub, lb
+end
+
+function lowestlbnode(hull::ChanLowerConvexHull)
     node = PairedLinkedLists.head(hull.hull)
-    for n in HullNodeIterator(hull)
+    for n in ListNodeIterator(hull.hull)
         n.data[1] != node.data[1] && break
         node = n
     end
@@ -72,7 +85,7 @@ number of evaluations during the alignment procedure.
 """ 
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
-                     centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
+                     nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
     x = xinput
     y = yinput
@@ -102,27 +115,27 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sblks = fill(searchspace, nsblks)
 
     lb, ub = boundsfun(x, y, searchspace)
-    hull = MutableLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
+    hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
     addpoint!(hull, (lb, ub, searchspace))
 
     sbnds = fill((lb, ub), nsblks)
     ub, bestloc = localfun(x, y, searchspace)
 
     progress = [(0, ub, bestloc)]
-    removedpoints = Tuple{t,t}[]
-    addedpoints = Vector{Vector{Tuple{t,t}}}()
+    removedpoints = Vector{Tuple{t,t,typeof(searchspace)}}()
+    addedpoints = Vector{Vector{Tuple{t,t,typeof(searchspace)}}}()
     
     # split cubes until convergence
     ndivisions = 0
     sinceimprove = 0
     evalsperdiv = length(x)*length(y)*nsplits^ndims
 
-    numaddedafterremoval = 0
-
     @show lb, ub
     while !isempty(hull)
         if ndivisions % 10000 == 0
-            @show ndivisions, length(hull.points), length(hull.hull), numaddedafterremoval
+            npts = sum(x -> length(x.points), hull.subhulls)
+            nshullpts = sum(length, hull.subhulls)
+            @show ndivisions, npts, nshullpts, length(hull.hull)
         end
         if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
@@ -130,25 +143,14 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         ndivisions += 1
         sinceimprove += 1
 
-        # # take the block with the lowest lower bound
-        # lbnode = lowestlbnode(hull)
-        # (boxlb, boxub, bl) = lbnode.data
-        # removepoint!(hull, lbnode)
-        # lb = boxlb
+        # pick the next search region to subdivide
+        lbnode, bl, boxlb, boxub, lb = nextblockfun(hull, lb)
 
-        # take a random block that lies on the convex hull
-        randidx = rand(1:length(hull))
-        lbnode = getnode(hull.hull, randidx)
-        (boxlb, boxub, bl) = lbnode.data
-        prevlen = length(hull)
-        removepoint!(hull, lbnode)
-        postlen = length(hull)
-        if boxlb == lb && !isempty(hull)
-            lb = lowestlbnode(hull).data[1]
-        end
-        numaddedafterremoval::Int += postlen - prevlen
-
-        push!(removedpoints, (boxlb, boxub))
+        # delete the chosen search region from the convex hull
+        subhull = getfirst(x -> x.points===lbnode.target.list, hull.subhulls)
+        removepoint!(subhull, lbnode.target)
+        deletenode!(lbnode)
+        push!(removedpoints, (boxlb, boxub, bl))
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
@@ -197,13 +199,8 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         if isempty(hull)
             lb = minimum(addbnds)[1]
         end
-        try mergepoints!(hull, addblks)
-        catch e
-            # @show addbnds
-            @show ndivisions
-            throw(ErrorException("Merging points failed."))
-        end
-        push!(addedpoints, addbnds)
+        mergepoints!(hull, addblks)
+        push!(addedpoints, addblks)
     end
     if isempty(hull)
         tform = tformfun(bestloc)
