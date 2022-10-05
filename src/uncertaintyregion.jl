@@ -140,19 +140,23 @@ function subregions!(subregionvec::Vector{<:UncertaintyRegion}, ur::UncertaintyR
     end
 end
 function subregions!(subregionvec::Vector{<:RotationRegion}, rr::RotationRegion, nsplits=2)
-    sranges = subranges(rr.ranges, nsplits)
     σᵣ = rr.σᵣ / nsplits
-    for (i,sr) in enumerate(sranges)
-        R = RotationVec(center(sr)...)
-        subregionvec[i] = RotationRegion(R,rr.T,σᵣ,sr)
+    lowercorner = (center(rr) .- rr.σᵣ) .+ σᵣ
+    for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
+        idxs = Tuple(I)
+        c = lowercorner .+ (2*idxs[1]*σᵣ, 2*idxs[2]*σᵣ, 2*idxs[3]*σᵣ)
+        R = RotationVec(c[1], c[2], c[3])
+        subregionvec[i] = RotationRegion(R,rr.T,σᵣ)
     end
 end
 function subregions!(subregionvec::Vector{<:TranslationRegion}, tr::TranslationRegion, nsplits=2)
-    sranges = subranges(tr.ranges, nsplits)
     σₜ = tr.σₜ / nsplits
-    for (i,sr) in enumerate(sranges)
-        T = SVector{3}(center(sr))
-        subregionvec[i] = TranslationRegion(tr.R,T,σₜ,sr)
+    lowercorner = (center(tr) .- tr.σₜ) .+ σₜ
+    for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
+        idxs = Tuple(I)
+        c = lowercorner .+ (2*idxs[1]*σₜ, 2*idxs[2]*σₜ, 2*idxs[3]*σₜ)
+        T = SVector{3}(c[1], c[2], c[3])
+        subregionvec[i] = TranslationRegion(tr.R,T,σₜ)
     end
 end
 

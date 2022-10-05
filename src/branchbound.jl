@@ -11,7 +11,7 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    progress::Vector{Tuple{Int,T,NTuple{N,T}}}
+    progress::Vector{Tuple{Int,T,T,NTuple{N,T}}}
     removedpoints::Vector{<:Tuple{T,T,<:SearchRegion{T}}}
     addedpoints::Vector{<:Vector{<:Tuple{T,T,<:SearchRegion{T}}}}
     terminated_by::String
@@ -114,14 +114,14 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     nsblks = nsplits^ndims
     sblks = fill(searchspace, nsblks)
 
-    lb, ub = boundsfun(x, y, searchspace)
+    lb, centerub = boundsfun(x, y, searchspace)
     hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
-    addpoint!(hull, (lb, ub, searchspace))
+    addpoint!(hull, (lb, centerub, searchspace))
 
-    sbnds = fill((lb, ub), nsblks)
+    sbnds = fill((lb, centerub), nsblks)
     ub, bestloc = localfun(x, y, searchspace)
 
-    progress = [(0, ub, bestloc)]
+    progress = [(0, ub, centerub, bestloc)]
     removedpoints = Vector{Tuple{t,t,typeof(searchspace)}}()
     addedpoints = Vector{Vector{Tuple{t,t,typeof(searchspace)}}}()
     
@@ -130,7 +130,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sinceimprove = 0
     evalsperdiv = length(x)*length(y)*nsplits^ndims
 
-    @show lb, ub
+    @show lb, ub, centerub
     while !isempty(hull)
         if ndivisions % 10000 == 0
             npts = sum(x -> length(x.points), hull.subhulls)
@@ -171,14 +171,19 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
 
         # reset the upper bound if appropriate
         minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
-        if minub < ub
+        if minub < centerub
+            centerub = minub
             nextub, nextbestloc = localfun(x, y, sblks[ubidx])
             if minub < nextub
-                ub, bestloc = minub, center(sblks[ubidx])
+                if minub < ub
+                    ub, bestloc = minub, center(sblks[ubidx])
+                end
             else
-                ub, bestloc = nextub, nextbestloc
+                if nextub < ub
+                    ub, bestloc = nextub, nextbestloc
+                end
             end
-            push!(progress, (ndivisions, ub, bestloc))
+            push!(progress, (ndivisions, ub, centerub, bestloc))
             sinceimprove = 0
         end
 
@@ -197,7 +202,9 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             end
         end
         if isempty(hull)
-            lb = minimum(addbnds)[1]
+            if !isempty(addbnds)
+                lb = minimum(addbnds)[1]
+            end
         end
         mergepoints!(hull, addblks)
         push!(addedpoints, addblks)
