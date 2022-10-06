@@ -4,6 +4,7 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 using MolecularGraph
+using PlyIO
 using MutableConvexHulls
 using PairedLinkedLists
 using CairoMakie
@@ -43,26 +44,57 @@ psy = PointSet(ypts)
 ps1 = PointSet(mol1pts)
 ps2 = PointSet(mol2pts)
 
-println("Steroid, lowest lb block")
+# Stanford Bunny, downsampled
+include("bunny.jl")
+bungmm1 = IsotropicGMM([IsotropicGaussian(x, 0.02, ϕ) for x in downpts])
+R = RotationVec(π/4, π/4, π/4) 
+bungmm2 = R * bungmm1
+
+# println("Steroid, lowest lb block")
+# # res = GMA.trl_goicp_align(ps1, ps2; atol=0.0001, maxsplits=1000, nextblockfun=GMA.lowestlbblock);
+# res = gogma_align(gmm1, gmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.lowestlbblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
+# searchregion = TranslationRegion(gmm1, gmm2)
+# fname = "steroid_translation_volume_lowestlb.mp4"
+# lim = (-300, 0) # boundsfun(gmm1, gmm2, searchregion)
+# firstpoint = boundsfun(gmm1, gmm2, searchregion)
+# volumeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memory
+# res = nothing
+# GC.gc()
+
+# println("Steroid, rand lb block")
+# # res = GMA.trl_goicp_align(ps1, ps2; atol=0.0001, maxsplits=1000, nextblockfun=GMA.lowestlbblock);
+# res = gogma_align(gmm1, gmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.randomblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
+# searchregion = TranslationRegion(gmm1, gmm2)
+# fname = "steroid_translation_volume_rand.mp4"
+# lim = (-300, 0) # boundsfun(gmm1, gmm2, searchregion)
+# firstpoint = boundsfun(gmm1, gmm2, searchregion)
+# volumeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memory
+# res = nothing
+# GC.gc()
+
+println("Bunny, lowest lb block")
 # res = GMA.trl_goicp_align(ps1, ps2; atol=0.0001, maxsplits=1000, nextblockfun=GMA.lowestlbblock);
-res = gogma_align(gmm1, gmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.lowestlbblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
-searchregion = TranslationRegion(gmm1, gmm2)
+res = gogma_align(bungmm1, bungmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.lowestlbblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
+searchregion = TranslationRegion(bungmm1, bungmm2)
 fname = "steroid_translation_volume_lowestlb.mp4"
-lim = (-300, 0) # boundsfun(gmm1, gmm2, searchregion)
-firstpoint = boundsfun(gmm1, gmm2, searchregion)
+lim = (-300, 0) # boundsfun(bungmm1, bungmm2, searchregion)
+firstpoint = boundsfun(bungmm1, bungmm2, searchregion)
 volumeplot(res, searchregion, fname, lim, firstpoint)
 # attempt to free memory
 res = nothing
 GC.gc()
 
-println("Steroid, rand lb block")
+println("Bunny, rand lb block")
 # res = GMA.trl_goicp_align(ps1, ps2; atol=0.0001, maxsplits=1000, nextblockfun=GMA.lowestlbblock);
-res = gogma_align(gmm1, gmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.randomblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
-searchregion = TranslationRegion(gmm1, gmm2)
+res = gogma_align(bungmm1, bungmm2; atol=0.0000001, maxsplits=600, nextblockfun=GMA.randomblock, blockfun=GMA.TranslationRegion, tformfun=Translation)
+searchregion = TranslationRegion(bungmm1, bungmm2)
 fname = "steroid_translation_volume_rand.mp4"
-lim = (-300, 0) # boundsfun(gmm1, gmm2, searchregion)
-firstpoint = boundsfun(gmm1, gmm2, searchregion)
+lim = (-300, 0) # boundsfun(bungmm1, bungmm2, searchregion)
+firstpoint = boundsfun(bungmm1, bungmm2, searchregion)
 volumeplot(res, searchregion, fname, lim, firstpoint)
 # attempt to free memory
 res = nothing
 GC.gc()
+

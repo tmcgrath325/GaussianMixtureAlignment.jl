@@ -105,6 +105,9 @@ IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
 convert(t::Type{IsotropicMultiGMM}, mgmm::AbstractIsotropicMultiGMM) = t(mgmm.gmms)
 promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}}) where {N,T,S,K} = IsotropicMultiGMM{N,promote_type(T,S),K}
 
+coords(gmm::AbstractSingleGMM) = hcat([g.μ for g in gmm.gaussians]...)
+weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
+
 # descriptive display
 # TODO update to display type parameters, make use of supertypes, etc
 

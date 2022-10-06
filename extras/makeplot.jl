@@ -31,7 +31,7 @@ function makeplot(res, searchregion, fname, lim, firstpoint)
 
     # plot a frame after a specified interval
     interval = 1
-    nframes = Int(floor(length(res.removedpoints)/interval)+2) # length(res.removedpoints) # Int(floor(length(res.removedpoints)/interval)+2)
+    nframes = Int(floor(length(res.removedpoints)/interval)+1) # length(res.removedpoints) # Int(floor(length(res.removedpoints)/interval)+2)
     niters = length(res.addedpoints)
     @show niters
     @show interval

@@ -161,7 +161,7 @@ function subregions!(subregionvec::Vector{<:TranslationRegion}, tr::TranslationR
 end
 
 function subregions(sr::SearchRegion, nsplits=2)
-    subregionvec = fill(sr, nsplits^length(sr.ranges))
+    subregionvec = fill(sr, nsplits^length(center(sr)))
     subregions!(subregionvec, sr, nsplits)
     return subregionvec
 end

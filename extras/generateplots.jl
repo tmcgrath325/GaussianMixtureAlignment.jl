@@ -2,6 +2,8 @@ using GaussianMixtureAlignment
 using MolecularGraph
 using MutableConvexHulls
 using PairedLinkedLists
+using StaticArrays
+using Rotations
 using CairoMakie
 
 using GaussianMixtureAlignment: UncertaintyRegion, gauss_l2_bounds
@@ -34,9 +36,23 @@ psy = PointSet(ypts)
 ps1 = PointSet(mol1pts)
 ps2 = PointSet(mol2pts)
 
-# boundsfun = (x, y, bl) -> GMA.gauss_l2_bounds(x, y, bl)
+# Stanford Bunny, downsampled
+include("bunny.jl")
+bungmm1 = IsotropicGMM([IsotropicGaussian(x, 0.005, 1.0) for x in downpts])
+R = RotationVec(π/4, π/2, π/4)
+bungmm2 = R * bungmm1
+
+psbun1 = PointSet(downpts)
+psbun2 = R * psbun1
+
+ppsbun1 = R*PointSet(leftbunpts)
+ppsbun2 = PointSet(rightbunpts)
+pgmmbun1 = R*(IsotropicGMM([IsotropicGaussian(x, 0.005, 1.0) for x in leftbunpts]) - GMA.centroid(hcat(leftbunpts...)))
+pgmmbun2 = IsotropicGMM([IsotropicGaussian(x, 0.005, 1.0) for x in rightbunpts]) - GMA.centroid(hcat(rightbunpts...))
+
+boundsfun = (x, y, bl) -> GMA.gauss_l2_bounds(x, y, bl)
 # boundsfun = (x, y, bl) -> GMA.squared_dist_bounds(x, y, bl; correspondence = GMA.hungarian_assignment, distance_bound_fun = GMA.tight_distance_bounds)
-boundsfun = (x, y, bl) -> GMA.squared_dist_bounds(x, y, bl; correspondence = GMA.closest_points, distance_bound_fun = GMA.tight_distance_bounds)
+# boundsfun = (x, y, bl) -> GMA.squared_dist_bounds(x, y, bl; correspondence = GMA.closest_points, distance_bound_fun = GMA.tight_distance_bounds)
 
 ### Generate plots 
 # Plot 1
@@ -63,25 +79,69 @@ boundsfun = (x, y, bl) -> GMA.squared_dist_bounds(x, y, bl; correspondence = GMA
 # res = nothing
 # GC.gc()
 
-# Plot 3
-println("\tSteroids, lowest lb block")
-res = goicp_align(ps1, ps2; maxsplits=200, nextblockfun=GMA.lowestlbblock, atol=0.001)
-searchregion = UncertaintyRegion(ps1, ps2)
-fname = "steroids_lowestlb_goicp.mp4"
-lim = (0., 400.) # GMA.squared_dist_bounds(ps1, ps
-firstpoint = boundsfun(ps1, ps2, searchregion)
+# # Plot 3
+# println("\tSteroids, lowest lb block")
+# res = goicp_align(ps1, ps2; maxsplits=200, nextblockfun=GMA.lowestlbblock, atol=0.001)
+# searchregion = UncertaintyRegion(ps1, ps2)
+# fname = "steroids_lowestlb_goicp.mp4"
+# lim = (0., 400.) # GMA.squared_dist_bounds(ps1, ps
+# firstpoint = boundsfun(ps1, ps2, searchregion)
+# makeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memory
+# res = nothing
+# GC.gc()
+
+# # Plot 4
+# println("\tSteroids, random block")
+# res = goicp_align(ps1, ps2; maxsplits=1000, nextblockfun=GMA.randomblock, atol=0.001)
+# searchregion = UncertaintyRegion(ps1, ps2)
+# fname = "steroids_rand_goicp.mp4"
+# lim = lim = (0., 400.) # GMA.squared_dist_bounds(p
+# firstpoint = boundsfun(ps1, ps2, searchregion)
+# makeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memoryres = nothing
+# GC.gc()
+
+# # Plot 5
+# println("\tBunny, lowest lb block")
+# res = goicp_align(psbun1, psbun2; maxsplits=1000, nextblockfun=GMA.lowestlbblock, atol=0.001)
+# searchregion = UncertaintyRegion(psbun1, psbun2)
+# fname = "bun_lowestlb_goicp.mp4"
+# lim = boundsfun(psbun1, psbun2, searchregion) # (-2000., 0.)
+# firstpoint = boundsfun(psbun1, psbun2, searchregion)
+# makeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memory
+# res = nothing
+# GC.gc()
+
+# # Plot 6
+# println("\tBunny, random block")
+# res = goicp_align(psbun1, psbun2; maxsplits=1000, nextblockfun=GMA.randomblock, atol=0.001)
+# searchregion = UncertaintyRegion(psbun1, psbun2)
+# fname = "bun_rand_goicp.mp4"
+# lim = boundsfun(psbun1, psbun2, searchregion)
+# firstpoint = boundsfun(psbun1, psbun2, searchregion)
+# makeplot(res, searchregion, fname, lim, firstpoint)
+# # attempt to free memoryres = nothing
+# GC.gc()
+
+# Plot 7
+println("\tPartial Bun, lowest lb block")
+res = gogma_align(pgmmbun1, pgmmbun2; maxsplits=1000, nextblockfun=GMA.lowestlbblock, atol=0.001)
+searchregion = UncertaintyRegion(pgmmbun1, pgmmbun2)
+fname = "partialbun_lowestlb_gogma.mp4"
+lim = (-4000., -100.) # boundsfun(pgmmbun1, pgmmbun2, searchregion) # 
+firstpoint = boundsfun(pgmmbun1, pgmmbun2, searchregion)
 makeplot(res, searchregion, fname, lim, firstpoint)
 # attempt to free memory
 res = nothing
 GC.gc()
 
-# Plot 4
-println("\tSteroids, random block")
-res = goicp_align(ps1, ps2; maxsplits=1000, nextblockfun=GMA.randomblock, atol=0.001)
-searchregion = UncertaintyRegion(ps1, ps2)
-fname = "steroids_rand_goicp.mp4"
-lim = lim = (0., 400.) # GMA.squared_dist_bounds(p
-firstpoint = boundsfun(ps1, ps2, searchregion)
+# Plot 8
+println("\tPartial Bun, random block")
+res = gogma_align(pgmmbun1, pgmmbun2; maxsplits=1000, nextblockfun=GMA.randomblock, atol=0.001)
+searchregion = UncertaintyRegion(pgmmbun1, pgmmbun2)
+fname = "partialbun_rand_gogma.mp4"
+lim = (-4000., -100.) #  boundsfun(pgmmbun1, pgmmbun2, searchregion)
+firstpoint = boundsfun(pgmmbun1, pgmmbun2, searchregion)
 makeplot(res, searchregion, fname, lim, firstpoint)
-# attempt to free memoryres = nothing
-GC.gc()
