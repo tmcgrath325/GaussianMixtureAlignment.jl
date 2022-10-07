@@ -1,24 +1,23 @@
 """
-    ovlp = overlap(distsq, s, w, dirdot)
+    ovlp = overlap(distsq, s, w)
 
 Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
-weight `w', and squared distance `distsq`, and geometric scaling factor `dirdot`.
+weight `w', and squared distance `distsq`.
 """
-function overlap(distsq::Real, s::Real, w::Real, dirdot::Real)
-    return w * 0.5*(1+dirdot) * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
+function overlap(distsq::Real, s::Real, w::Real)
+    return w * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
     # Note, the normalization term for the Gaussians is left out, since it is not required that the total "volume" of each Gaussian
     # is equal to 1 (e.g. satisfying the requirements for a probability distribution)
 end
 
 """
-    ovlp = overlap(dist, σx, σy, ϕx, ϕy, dirdot)
+    ovlp = overlap(dist, σx, σy, ϕx, ϕy)
 
 Calculates the unnormalized overlap between two Gaussian distributions with variances
-`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`, scaled
-by the dot product obtained from geometric constraints `dirdot`.
+`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`.
 """
-function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real, dirdot::Real) 
-    return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy, dirdot)
+function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real) 
+    return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy)
 end
 
 """
@@ -33,17 +32,7 @@ function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=n
     if isnothing(w)
         w = x.ϕ*y.ϕ
     end
-    if length(x.dirs) == 0 || length(y.dirs) == 0
-        cosγ = 1.
-    else
-        cosγ = -1
-        for xdir in x.dirs
-            for ydir in y.dirs
-                cosγ = max(cosγ, dot(xdir, ydir))
-            end
-        end
-    end
-    return overlap(sum(abs2, x.μ.-y.μ), s, w, cosγ) 
+    return overlap(sum(abs2, x.μ.-y.μ), s, w) 
 end
 
 """

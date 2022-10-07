@@ -57,26 +57,22 @@ eltype(mgmm::AbstractMultiGMM) = eltype(mgmm.gmms);
 """
 A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`, 
 and scaling factor `ϕ`. 
-
-An `IsotropicGaussian` can also be assigned directions `dirs` which enforce a penalty for misalignment with the `dirs` of 
-another `IsotropicGaussian`.
 """
 struct IsotropicGaussian{N,T} <: AbstractIsotropicGaussian{N,T}
     μ::SVector{N,T}
     σ::T
     ϕ::T
-    dirs::Vector{SVector{N,T}}
 end
-IsotropicGaussian(μ::SVector{N,T},σ::T,ϕ::T,dirs::Vector{SVector{N,T}}) where {N,T<:Real} = IsotropicGaussian{N,T}(μ,σ,ϕ,dirs)
+IsotropicGaussian(μ::SVector{N,T},σ::T,ϕ::T) where {N,T<:Real} = IsotropicGaussian{N,T}(μ,σ,ϕ)
 
-function IsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real, dirs::AbstractArray=SVector{length(μ),eltype(μ)}[])
-    t = promote_type(eltype(μ), typeof(σ), typeof(ϕ), eltype(eltype(dirs)))
-    return IsotropicGaussian{length(μ),t}(SVector{length(μ),t}(μ), t(σ), t(ϕ), SVector{length(μ),t}[SVector{length(μ),t}(dir/norm(dir)) for dir in dirs])
+function IsotropicGaussian(μ::AbstractArray{<:Real}, σ::Real, ϕ::Real)
+    t = promote_type(eltype(μ), typeof(σ), typeof(ϕ))
+    return IsotropicGaussian{length(μ),t}(SVector{length(μ),t}(μ), t(σ), t(ϕ))
 end
 
-IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, g.ϕ, g.dirs)
+IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, g.ϕ)
 
-convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ), Vector{SVector{N,T}}(g.dirs))
+convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ))
 promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)} 
 
 
@@ -113,8 +109,7 @@ weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
 
 Base.show(io::IO, g::AbstractIsotropicGaussian) = println(io,
     summary(g),
-    " with mean $(g.μ), standard deviation $(g.σ), amplitude $(g.ϕ),\n",
-    " and $(length(g.dirs)) directional constraints."
+    " with mean $(g.μ), standard deviation $(g.σ), and amplitude $(g.ϕ)."
 )
 
 Base.show(io::IO, gmm::AbstractIsotropicGMM) = println(io,
