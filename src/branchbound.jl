@@ -11,9 +11,7 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     num_splits::Int
     num_blocks::Int
     stagnant_splits::Int
-    progress::Vector{Tuple{Int,T,T,NTuple{N,T}}}
-    removedpoints::Vector{<:Tuple{T,T,<:SearchRegion{T}}}
-    addedpoints::Vector{<:Vector{<:Tuple{T,T,<:SearchRegion{T}}}}
+    progress::Vector{Tuple{Int,T,NTuple{N,T}}}
     terminated_by::String
 end
 
@@ -58,19 +56,22 @@ function lowestlbnode(hull::ChanLowerConvexHull)
 end
 
 # Keyword arguments:\n
-#     nsplits     - an integer representing the number of splits that should be made along each dimension during branching\n
-#     searchspace - an `UncertaintyRegion` that defines the searchspace, which defaults to the smallest space gauranteed to contain the global minimum\n
-#     rot         - a three-tuple containing a rotation position, which is passed to the `blockfun`\n
-#     trl         - a three-tuple containing a translation position, which is passed to the `blockfun`\n
-#     blockfun    - the function used for generating `Block`s that define search subspaces (i.e. fullBlock, rotBlock, trlBlock)\n
-#     objfun      - the objective function used for local alignment\n
-#     atol        - absolute tolerance. Search terminates when the upper bound is within `atol` of the lower bound\n
-#     rtol        - relative tolerance. Search terminates when the upper bound is within `rtol*lb` of the lower bound `lb`\n
-#     maxblocks   - the maximum number of `Block`s that can be held in the priority queue before search termination\n
-#     maxsplits   - the maximum number of `Block` splits that are allowed before search termination\n
-#     maxevals    - the maximum number of objective function evaluations allowed before search termination\n
-#     maxstagnant - the maximum number of `Block` splits allowed without improvement before search termination\n
-#     threads     - when true, utilizes multithreading for performing `Block` splitting. More useful when `nsplits` is large.\n
+#     nsplits       - an integer representing the number of splits that should be made along each dimension during branching
+#     searchspace   - an `UncertaintyRegion` that defines the searchspace, which defaults to the smallest space gauranteed to contain the global minimum
+#     R             - a `Rotationvec` containing a rotation position, which is passed to the `blockfun`
+#     T             - an `SVector{3}` containing a translation position, which is passed to the `blockfun`
+#     centerinputs  - a `Bool` indicating whether to center the input models (at their respective centroids) prior to starting the search
+#     blockfun      - the function used for generating `SearchRegion`s that define search subspaces (i.e. UncertaintyRegion, TranslationRegion, RotationRegion)
+#     nextblockfun  - the function used for selecting the next "block" to be investigated (i.e. randomblock, lowestlbblock)
+#     localfun      - the function used for local alignment
+#     boundsfun     - the function used to calculate the bounds on each `SearchRegion`
+#     tformfun      - the function used to convert the center of a `SearchRegion` to a rigid transformation (i.e. AffinMap, LinearMap, Translation)
+#     atol          - absolute tolerance. Search terminates when the upper bound is within `atol` of the lower bound
+#     rtol          - relative tolerance. Search terminates when the upper bound is within `rtol*lb` of the lower bound `lb`
+#     maxblocks     - the maximum number of `Block`s that can be held in the priority queue before search termination
+#     maxsplits     - the maximum number of `Block` splits that are allowed before search termination
+#     maxevals      - the maximum number of objective function evaluations allowed before search termination
+#     maxstagnant   - the maximum number of `Block` splits allowed without improvement before search termination
 """
     result = branchbound(x, y; nsplits=2, searchspace=nothing, 
                          rot=nothing, trl=nothing, blockfun=fullBlock, objfun=alignment_objective,
@@ -121,22 +122,14 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sbnds = fill((lb, centerub), nsblks)
     ub, bestloc = localfun(x, y, searchspace)
 
-    progress = [(0, ub, centerub, bestloc)]
-    removedpoints = Vector{Tuple{t,t,typeof(searchspace)}}()
-    addedpoints = Vector{Vector{Tuple{t,t,typeof(searchspace)}}}()
+    progress = [(0, ub, bestloc)]
     
     # split cubes until convergence
     ndivisions = 0
     sinceimprove = 0
     evalsperdiv = length(x)*length(y)*nsplits^ndims
 
-    @show lb, ub, centerub
     while !isempty(hull)
-        if ndivisions % 10000 == 0
-            npts = sum(x -> length(x.points), hull.subhulls)
-            nshullpts = sum(length, hull.subhulls)
-            @show ndivisions, npts, nshullpts, length(hull.hull)
-        end
         if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
         end
@@ -150,7 +143,6 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         subhull = getfirst(x -> x.points===lbnode.target.list, hull.subhulls)
         removepoint!(subhull, lbnode.target)
         deletenode!(lbnode)
-        push!(removedpoints, (boxlb, boxub, bl))
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
@@ -158,15 +150,13 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             if centerinputs
                 tform = centerx_tform ∘ tform ∘  inv(centery_tform) 
             end
-            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "optimum within tolerance")
+            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
         subregions!(sblks, bl, nsplits)
         for i=1:nsblks
             sbnds[i] = boundsfun(x,y,sblks[i])
-            # println(center(sblks[i]))
-            # println(sbnds[i])
         end
 
         # reset the upper bound if appropriate
@@ -183,15 +173,10 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                     ub, bestloc = nextub, nextbestloc
                 end
             end
-            push!(progress, (ndivisions, ub, centerub, bestloc))
+            push!(progress, (ndivisions, ub, bestloc))
             sinceimprove = 0
         end
 
-        # for i=1:length(sblks)
-        #     if sbnds[i][1] < ub
-        #         addpoint!(hull, (sbnds[i][1], sbnds[i][2], sblks[i]))
-        #     end
-        # end
         addblks = eltype(hull)[]
         addbnds = eltype(sbnds)[]
         for i=1:length(sblks)
@@ -207,20 +192,19 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             end
         end
         mergepoints!(hull, addblks)
-        push!(addedpoints, addblks)
     end
     if isempty(hull)
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "priority queue empty")
+        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
     else
         tform = tformfun(bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, removedpoints, addedpoints, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
     end
 end
 
@@ -300,15 +284,9 @@ function tiv_branchbound(   x::AbstractModel,
     z = zero(t)
     zeroTranslation = SVector{3}(z,z,z)
     
-    println("Rotation search")
     rot_res = rot_branchbound(tivx, tivy; localfun=rot_localfun, boundsfun=rot_boundsfun, kwargs...)
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, p)
     rotscore, rotpos = localfun(tivx, tivy, rotblock)
-    if rot_res.upperbound < rotscore
-        println("local rotation optimization failed")
-        @show rotscore
-        rotscore, rotpos = rot_res.upperbound, rot_res.tform_params
-    end
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
     R = RotationVec(rot_res.tform_params...)
@@ -316,15 +294,12 @@ function tiv_branchbound(   x::AbstractModel,
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = localfun(tivx, tivy, spinblock)
     if spinscore < rotscore
-        println("Spin")
         rotpos = RotationVec(spinrotpos...)
     else
         rotpos = RotationVec(rotpos...)
     end
-    @show rotscore, rot_res.upperbound
 
     # perform translation alignment of original models
-    println("Translation search")
     trl_res = trl_branchbound(x, y; R=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
@@ -332,9 +307,7 @@ function tiv_branchbound(   x::AbstractModel,
     trlim = translation_limit(x, y)
     localblock = UncertaintyRegion(rotpos, trlpos, 2*p, trlim)
     min, bestpos = localfun(x, y, localblock)
-    @show min, trl_res.upperbound
     if trl_res.upperbound < min
-        println("local optimization failed")
         min = trl_res.upperbound
         bestpos = (rot_res.tform_params...,  trl_res.tform_params...)
     end
