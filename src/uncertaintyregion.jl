@@ -126,8 +126,7 @@ function Base.hash(B::TranslationRegion, h::UInt)
 end
 
 # Split SearchRegion
-function subregions!(subregionvec::Vector{<:UncertaintyRegion}, ur::UncertaintyRegion, nsplits=2)
-    # scenters = subranges(ur.ranges, nsplits)
+function subregions!(subregionvec::Vector{S}, ur::S, nsplits=2) where S<:UncertaintyRegion 
     σᵣ = ur.σᵣ / nsplits
     σₜ = ur.σₜ / nsplits
     lowercorner = center(ur) .- (ur.σᵣ, ur.σᵣ, ur.σᵣ, ur.σₜ, ur.σₜ, ur.σₜ) .+ (σᵣ, σᵣ, σᵣ, σₜ, σₜ, σₜ)
@@ -139,7 +138,7 @@ function subregions!(subregionvec::Vector{<:UncertaintyRegion}, ur::UncertaintyR
         subregionvec[i] = UncertaintyRegion(R,T,σᵣ,σₜ)
     end
 end
-function subregions!(subregionvec::Vector{<:RotationRegion}, rr::RotationRegion, nsplits=2)
+function subregions!(subregionvec::Vector{S}, rr::S, nsplits=2) where S<:RotationRegion 
     σᵣ = rr.σᵣ / nsplits
     lowercorner = (center(rr) .- rr.σᵣ) .+ σᵣ
     for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
@@ -149,7 +148,7 @@ function subregions!(subregionvec::Vector{<:RotationRegion}, rr::RotationRegion,
         subregionvec[i] = RotationRegion(R,rr.T,σᵣ)
     end
 end
-function subregions!(subregionvec::Vector{<:TranslationRegion}, tr::TranslationRegion, nsplits=2)
+function subregions!(subregionvec::Vector{S}, tr::S, nsplits=2) where S<:TranslationRegion 
     σₜ = tr.σₜ / nsplits
     lowercorner = (center(tr) .- tr.σₜ) .+ σₜ
     for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
@@ -163,6 +162,39 @@ end
 function subregions(sr::SearchRegion, nsplits=2)
     subregionvec = fill(sr, nsplits^length(center(sr)))
     subregions!(subregionvec, sr, nsplits)
+    return subregionvec
+end
+
+# split only along translation or rotation axes
+function rot_subregions!(subregionvec::Vector{S}, ur::S, nsplits=2) where S<:UncertaintyRegion
+    σᵣ = ur.σᵣ / nsplits
+    lowercorner = (ur.R.sx, ur.R.sy, ur.R.sz) .- (ur.σᵣ, ur.σᵣ, ur.σᵣ) .+ (σᵣ, σᵣ, σᵣ)
+    for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
+        idxs = Tuple(I)
+        R = RotationVec((lowercorner .+ (2*idxs[1]*σᵣ, 2*idxs[2]*σᵣ, 2*idxs[3]*σᵣ))...)
+        subregionvec[i] = UncertaintyRegion(R, ur.T, σᵣ, ur.σₜ)
+    end
+end
+
+function trl_subregions!(subregionvec::Vector{S}, ur::S, nsplits=2) where S<:UncertaintyRegion
+    σₜ = ur.σₜ / nsplits
+    lowercorner = ur.T .- (ur.σₜ, ur.σₜ, ur.σₜ) .+ (σₜ, σₜ, σₜ)
+    for (i,I) in enumerate(CartesianIndices(NTuple{3,UnitRange{Int}}(fill(0:nsplits-1, 3))))
+        idxs = Tuple(I)
+        T = lowercorner .+ (2*idxs[1]*σₜ, 2*idxs[2]*σₜ, 2*idxs[3]*σₜ)
+        subregionvec[i] = UncertaintyRegion(ur.R, T, ur.σᵣ, σₜ)
+    end
+end
+
+function rot_subregions(sr::UncertaintyRegion, nsplits=2)
+    subregionvec = fill(sr, nsplits^3)
+    rot_subregions!(subregionvec, sr, nsplits)
+    return subregionvec
+end
+
+function trl_subregions(sr::UncertaintyRegion, nsplits=2)
+    subregionvec = fill(sr, nsplits^3)
+    trl_subregions!(subregionvec, sr, nsplits)
     return subregionvec
 end
 

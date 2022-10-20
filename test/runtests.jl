@@ -6,6 +6,7 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 
+using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
 
@@ -40,20 +41,20 @@ const GMA = GaussianMixtureAlignment
     ### Gaussian L2 bounds
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
-    lb, ub = gauss_l2_bounds(x,y,π,0)
+    lb, ub = gauss_l2_bounds(x,y,RotationRegion(0.))
     @test lb ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
-    lb, ub = gauss_l2_bounds(RotationVec(0,0,π)*x,y,π,0)
+    lb, ub = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
     @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
     # region with closest alignment at 90 degree rotation
-    lb = gauss_l2_bounds(x,y,π/2/sqrt3,0)[1]
+    lb = gauss_l2_bounds(x,y,RotationRegion(π/2/sqrt3))[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
-    lb = gauss_l2_bounds(RotationVec(0,0,π/4)*x,y,π/4/(sqrt3),0)[1]
+    lb = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
     
     # translation distance, no rotation
     # translation region centered at origin
-    lb, ub = gauss_l2_bounds(x,y,0,1/sqrt3)
+    lb, ub = gauss_l2_bounds(x,y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x

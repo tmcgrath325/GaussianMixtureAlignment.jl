@@ -33,7 +33,7 @@ function lowestlbblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, l
     lbnode = lowestlbnode(hull)
     (boxlb, boxub, bl) = lbnode.data
     lb = boxlb
-    return lbnode, bl, boxlb, boxub, lb
+    return lbnode, bl, lb
 end
 
 function randomblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, lb::T) where T
@@ -43,7 +43,7 @@ function randomblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, lb:
     if boxlb == lb && !isempty(hull)
         lb = lowestlbnode(hull).data[1]
     end
-    return lbnode, bl, boxlb, boxub, lb
+    return lbnode, bl, lb
 end
 
 function lowestlbnode(hull::ChanLowerConvexHull)
@@ -87,7 +87,7 @@ number of evaluations during the alignment procedure.
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
                      nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
-                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf)
+                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, separatesplit=false)
     x = xinput
     y = yinput
     if isodd(nsplits)
@@ -107,19 +107,23 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         y = centery_tform(y)
     end
 
+
     # initialization
     if isnothing(searchspace)
         searchspace = blockfun(x, y, R, T)
     end
     ndims = length(center(searchspace))
-    nsblks = nsplits^ndims
+    rot_trl_split = separatesplit && typeof(searchspace) <: UncertaintyRegion
+    nsblks = rot_trl_split ? nsplits^3 : nsplits^ndims
     sblks = fill(searchspace, nsblks)
+    sblks2 = fill(searchspace, rot_trl_split ? nsblks : 0)
 
     lb, centerub = boundsfun(x, y, searchspace)
     hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
     addpoint!(hull, (lb, centerub, searchspace))
 
     sbnds = fill((lb, centerub), nsblks)
+    sbnds2 = fill((lb, centerub), rot_trl_split ? nsblks : 0)
     ub, bestloc = localfun(x, y, searchspace)
 
     progress = [(0, ub, bestloc)]
@@ -127,8 +131,8 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     # split cubes until convergence
     ndivisions = 0
     sinceimprove = 0
-    evalsperdiv = length(x)*length(y)*nsplits^ndims
-
+    evalsperdiv = rot_trl_split ? length(x)*length(y)*2*nsplits^3 : length(x)*length(y)*nsplits^ndims
+    
     while !isempty(hull)
         if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
@@ -137,7 +141,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         sinceimprove += 1
 
         # pick the next search region to subdivide
-        lbnode, bl, boxlb, boxub, lb = nextblockfun(hull, lb)
+        lbnode, bl, lb = nextblockfun(hull, lb)
 
         # delete the chosen search region from the convex hull
         subhull = getfirst(x -> x.points===lbnode.target.list, hull.subhulls)
@@ -154,9 +158,26 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
-        subregions!(sblks, bl, nsplits)
-        for i=1:nsblks
-            sbnds[i] = boundsfun(x,y,sblks[i])
+        if rot_trl_split # split rotation and translation separately
+            rot_subregions!(sblks, bl, nsplits)
+            for i=1:nsblks
+                sbnds[i] = boundsfun(x,y,sblks[i])
+            end
+            trl_subregions!(sblks2, bl, nsplits)
+            for i=1:nsblks
+                sbnds2[i] = boundsfun(x,y,sblks2[i])
+            end
+            if sum(x -> x[1], sbnds) < sum(x -> x[1], sbnds2) # pick whichever maximizes summed lower bounds
+                for i=1:nsblks
+                    sblks[i] = sblks2[i]
+                    sbnds[i] = sbnds2[i]
+                end
+            end
+        else # split rotation and translation simultaneously
+            subregions!(sblks, bl, nsplits)
+            for i=1:nsblks
+                sbnds[i] = boundsfun(x,y,sblks[i])
+            end
         end
 
         # reset the upper bound if appropriate
@@ -191,7 +212,14 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                 lb = minimum(addbnds)[1]
             end
         end
-        mergepoints!(hull, addblks)
+        try mergepoints!(hull, addblks)
+        catch e
+            @show lbnode.data[1], lbnode.data[2]
+            @show ndivisions
+            @show sbnds
+            @show sbnds == sbnds2
+            throw(e)
+        end
     end
     if isempty(hull)
         tform = tformfun(bestloc)
