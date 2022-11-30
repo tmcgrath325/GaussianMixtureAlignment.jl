@@ -14,34 +14,33 @@ const default_colors =
     "#bcbd22",  # curry yellow-green
     "#17becf"]  # blue-teal
 
-function plotdrawing(traces::AbstractVector{AbstractTrace})
+function plotdrawing(traces::AbstractVector{<:AbstractTrace}; plotsize=nothing)
     layout = Layout(autosize=false, width=800, height=600,
                     margin=attr(l=0, r=0, b=0, t=65),
-                    scene=attr(),
-                        # aspectmode="cube",)
-                        # xaxis=attr(visible=false,), # range=[-size/2, size/2]),
-                        # yaxis=attr(visible=false,), # range=[-size/2, size/2]),
-                        # zaxis=attr(visible=false,), # range=[-size/2, size/2]))
+                    scene= isnothing(plotsize) ? attr(aspectmode="data",
+                                                      xaxis=attr(visible=false,), 
+                                                      yaxis=attr(visible=false,), 
+                                                      zaxis=attr(visible=false,), 
+                                                     ) :
+                                                 attr(aspectmode="cube",
+                                                      xaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                      yaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                      zaxis=attr(visible=false, range=[-plotsize/2, plotsize/2]),
+                                                     ),
+                                        
                     )
     plt = plot(traces, layout)
+
+                            
     return plt
 end
 
-function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; size=100)
+function plotdrawing(traces::AbstractVector{<:AbstractVector{<:AbstractTrace}}; kwargs...)
     tracesvec = AbstractTrace[]
     for trs in traces
         append!(tracesvec, trs)
     end
-    layout = Layout(autosize=false, width=800, height=600,
-                    margin=attr(l=0, r=0, b=0, t=65),
-                    scene=attr(
-                        aspectmode="cube",
-                        xaxis=attr(visible=false, range=[-size/2, size/2]),
-                        yaxis=attr(visible=false, range=[-size/2, size/2]),
-                        zaxis=attr(visible=false, range=[-size/2, size/2]))
-                    )
-    plt = plot(tracesvec, layout)
-    return plt
+    plotdrawing(tracesvec; kwargs...)
 end
 
 function wireframe_sphere(pos, r, npts=11)
@@ -143,6 +142,37 @@ function draw_arrows(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; siz
                  showlegend=false, showscale=false, name="", hoverinfo="skip")
 end
 
+function drawPointSet(ps::AbstractSinglePointSet; markerSize=8, color=default_colors[1], name=nothing, opacity=1.0) 
+    xs, ys, zs, ws = Float64[], Float64[], Float64[], Float64[]
+    for point in ps
+        x,y,z = point.coords
+        append!(xs,x)
+        append!(ys,y)
+        append!(zs,z)
+        append!(ws,point.weight)
+    end
+
+    len = Int(length(xs))
+    cdata = [[xs[i],
+              ys[i],
+              zs[i],
+              ws[i]] 
+            for i=1:length(xs)];
+
+    hovertemp = join(["position = [%{customdata[0]:.3e}, %{customdata[1]:.3e}, %{customdata[2]:.3e}]<br>",
+                      "weight = %{customdata[3]:.3e}<br>",])
+    
+    return scatter3d(;x=xs, y=ys, z=zs, 
+                      customdata=cdata,
+                      mode="markers",
+                      marker=attr(color=color, size=markerSize),
+                      opacity=opacity,
+                      showlegend=!isnothing(name), name=isnothing(name) ? "" : name,
+                      hovertemplate=hovertemp, 
+                      hoverinfo=isnothing(name) ? "skip" : nothing,
+            )
+end
+
 function drawGaussians(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; sizecoef=1., kwargs...)
     # spheres to represent Gaussian distributions
     positions = [gauss.μ for gauss in gaussians]
@@ -171,17 +201,17 @@ function drawIsotropicGMMs(gmms::AbstractVector{<:AbstractIsotropicGMM};
     return traces
 end
 
-function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, names=keys(mgmm), kwargs...)
+function drawMultiGMM(mgmm::AbstractMultiGMM; colordict=Dict{Symbol, String}(), colors=default_colors, names=collect(keys(mgmm.gmms)), kwargs...)
     # add traces from each GMM
-    i = 1
+    coloridx = 1
     traces = AbstractTrace[]
-    for (i,key) in enumerate(keys(mgmm))
+    for (i,key) in enumerate(keys(mgmm.gmms))
         # assign a color if the Dict doesn't include the key for a feature
         if key ∉ keys(colordict)
-            push!(colordict, Pair(key, colors[mod(i-1, length(colors))+1]))
-            i += i
+            push!(colordict, Pair(key, colors[mod(coloridx-1, length(colors))+1]))
+            coloridx += 1
         end
-        push!(traces, drawIsotropicGMM(mgmm[key]; color=colordict[key], name=names[i], kwargs...)...)
+        push!(traces, drawIsotropicGMM(mgmm.gmms[key]; color=colordict[key], name=names[i], kwargs...)...)
     end
     return traces
 end

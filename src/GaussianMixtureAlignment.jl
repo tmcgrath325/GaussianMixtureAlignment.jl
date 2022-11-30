@@ -19,35 +19,55 @@ REPL help
 """
 module GaussianMixtureAlignment
 
+abstract type AbstractModel{N,T} end
+
 using StaticArrays
 using LinearAlgebra
 using GenericLinearAlgebra
-using DataStructures
+using PairedLinkedLists
+using MutableConvexHulls
 using Rotations
 using CoordinateTransformations
+using Distances
+using NearestNeighbors
+using Hungarian
 using Optim
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
-export rotmat
-export overlap, distance, tanimoto
-export local_align
-export gogma_align, rot_gogma_align, trl_gogma_align
-export tivgmm, tiv_gogma_align
+export overlap, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
-export rocs_gogma_align
+export PointSet, MultiPointSet
+export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
-include("gmm.jl")
-include("transformation.jl")
-include("overlap.jl")
-include("bounds.jl")
-include("block.jl")
+include("tforms.jl")
+
+include("goicp/pointset.jl")
+include("gogma/gmm.jl")
+
+include("uncertaintyregion.jl")
+include("distancebounds.jl")
+
+include("gogma/combine.jl")
+include("gogma/transformation.jl")
+include("gogma/overlap.jl")
+include("gogma/bounds.jl")
+
+include("goicp/bounds.jl")
+include("goicp/correspondence.jl")
+include("goicp/kabsch.jl")
+include("goicp/icp.jl")
+include("goicp/rmsd.jl")
+include("goicp/local.jl")
+
 include("localalign.jl")
 include("branchbound.jl")
-include("tiv.jl")
-include("combine.jl")
-include("rocsalign.jl")
-include("rocsgogma.jl")
+
+include("gogma/tiv.jl")
+include("gogma/align.jl")
+include("goicp/tiv.jl")
+include("goicp/align.jl")
+include("rocs/rocsalign.jl")
 
 using Requires
 
