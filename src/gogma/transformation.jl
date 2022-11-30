@@ -22,7 +22,7 @@ end
 
 Base.:-(x::IsotropicGMM, T::AbstractVector,) = x + (-T)
 
-function  Base.:*(R::AbstractVector{W}, x::IsotropicMultiGMM{N,V,K}) where {N,V,K,W}
+function  Base.:*(R::AbstractMatrix{W}, x::IsotropicMultiGMM{N,V,K}) where {N,V,K,W}
     numtype = promote_type(V, W)
     gmmdict = Dict{K, IsotropicGMM{N,numtype}}()
     for (key, gmm) in x.gmms

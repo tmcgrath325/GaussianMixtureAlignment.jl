@@ -17,8 +17,12 @@ function trl_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; kwargs...)
     trl_branchbound(gmmx, gmmy; boundsfun=boundsfun, localfun=localfun, kwargs...)
 end
 function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM, cx=Inf, cy=Inf; kwargs...)
+    tivgmmx, tivgmmy = tivgmm(gmmx, cx), tivgmm(gmmy, cy)
     pσ, pϕ = pairwise_consts(gmmx,gmmy)
+    tivpσ, tivpϕ = pairwise_consts(tivgmmx,tivgmmy)
     boundsfun(x,y,block) = gauss_l2_bounds(x,y,block,pσ,pϕ)
+    rot_boundsfun(x,y,block) = gauss_l2_bounds(x,y,block,tivpσ,tivpϕ)
     localfun(x,y,block) = local_align(x,y,block,pσ,pϕ)
-    tiv_branchbound(gmmx, gmmy, tivgmm(gmmx, cx), tivgmm(gmmy, cy); boundsfun=boundsfun, localfun=localfun, kwargs...)
+    rot_localfun(x,y,block) = local_align(x,y,block,tivpσ,tivpϕ)
+    tiv_branchbound(gmmx, gmmy, tivgmm(gmmx, cx), tivgmm(gmmy, cy); boundsfun=boundsfun, rot_boundsfun=rot_boundsfun, localfun=localfun, rot_localfun=rot_localfun, kwargs...)
 end

@@ -42,7 +42,7 @@ const GMA = GaussianMixtureAlignment
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(0.))
-    @test lb ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
+    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
     @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
@@ -58,11 +58,11 @@ const GMA = GaussianMixtureAlignment
     @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 1 in +x
-    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,0,1/sqrt3)
+    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
     # centered with translation of 3 in +y 
-    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,0,1/sqrt3)
+    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
     @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
 
@@ -119,16 +119,6 @@ end
     end
 end
 
-# @testset "ROCS alignment" begin
-#     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
-#     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
-#     σ = ϕ = 1.
-#     gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
-#     gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
-
-    
-# end
-
 @testset "GOGMA runs without errors" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
@@ -138,16 +128,16 @@ end
     gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
 
     # make sure this runs without an error
-    res1 = gogma_align(gmmx, gmmy; maxblocks=1E5)
-    res2 = tiv_gogma_align(gmmx, gmmy; maxblocks=1E5)
+    res1 = gogma_align(gmmx, gmmy; maxsplits=1E3)
+    res2 = tiv_gogma_align(gmmx, gmmy; maxsplits=1E3)
 
-    mgmmx = IsotropicMultiGMM(Dict(:x => gmmx, :y => gmmy))
-    mgmmy = IsotropicMultiGMM(Dict(:y => gmmx, :x => gmmy))
-    res3 = gogma_align(mgmmx, mgmmy; maxblocks=1E5)
+    mgmmx = IsotropicMultiGMM(Dict(:x => gmmx, :y => gmmx))
+    mgmmy = IsotropicMultiGMM(Dict(:x => gmmy, :y => gmmy))
+    res3 = gogma_align(mgmmx, mgmmy; maxsplits=1E3)
     res4 = tiv_gogma_align(mgmmx, mgmmy)
 
     # ROCS alignment should work perfectly for these GMMs
-    @test isapprox(rocs_align(gmmx, gmmy; objfun=overlapobj).minimum, -overlap(gmmx,gmmx); atol=1E-12)
+    @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 
 @testset "GO-ICP and GO-IH run without errors" begin
@@ -162,72 +152,6 @@ end
     goih_res = goih_align(xset, yset)
     @test goih_res.tform(xset.coords) ≈ yset.coords
 
-    mxset = MultiPointSet(Dict(
-        :x => xset,
-    ))
-    myset = MultiPointSet(Dict(
-        :x => yset,
-    ))
-    multi_goicp_res = goicp_align(mxset, myset)
-    @test multi_goicp_res.tform(xset.coords) ≈ yset.coords
-    multi_goih_res = goih_align(mxset, myset)
-    @test multi_goih_res.tform(xset.coords) ≈ yset.coords
-
-end
-
-@testset "GOGMA with directions" begin
-    xpt = [1.,0.,0.]
-    ypt = [1.,0.,0.]
-    xdir = [0.,1.,0.]
-    ydir = [1.,0.,0.]
-    σ = ϕ = 1.
-    x = IsotropicGaussian(xpt, σ, ϕ, [xdir])
-    y = IsotropicGaussian(ypt, σ, ϕ, [ydir])
-    @test gauss_l2_bounds(x,y,0.,0.) == (-0.5,-0.5)
-    @test gauss_l2_bounds(x,y,π/(6*GMA.sqrt3),0.) == (-0.75,-0.5)
-    @test gauss_l2_bounds(x,y,π/(2*GMA.sqrt3),0.) == (-1.0,-0.5)
-
-    xpt = [1.,0.,0.]
-    ypt = [1.,0.,0.]
-    xdir = [-1.,0.,0.]
-    ydir = [1.,0.,0.]
-    σ = ϕ = 1.
-    x = IsotropicGaussian(xpt, σ, ϕ, [xdir])
-    y = IsotropicGaussian(ypt, σ, ϕ, [ydir])
-    @test gauss_l2_bounds(x,y,0.,0.) == (0.,0.)
-    
-
-    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
-    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
-    σ = ϕ = 1.
-    xdirs = [[0.,-1.,0], [1.,0.,0.], [0.,1.,0.]]
-    ydirs = [[0.,0.,1.], [0.,-1.,0.], [0.,0.,-1]]
-    dgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i]]) for (i,x) in enumerate(xpts)])
-    dgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
-    objminxy = tiv_gogma_align(dgmmx, dgmmy).upperbound
-    objminxx = tiv_gogma_align(dgmmx, dgmmx).upperbound
-    objminyy = tiv_gogma_align(dgmmy, dgmmy).upperbound
-    @test objminxy ≈ objminxx ≈ objminyy
-
-    randdgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [2*rand(3).-1]) for (i,y) in enumerate(ypts)])
-    randobjminxy = tiv_gogma_align(dgmmx, randdgmmy).upperbound
-    @test randobjminxy > objminxy
-
-    # when σ is very small, only very well aligned Gaussians will contribute to the overlap
-    σ = 0.001
-    ddgmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ, [xdirs[i], normalize(2*rand(3).-1)]) for (i,x) in enumerate(xpts)])
-    ddgmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ, [ydirs[i]]) for (i,y) in enumerate(ypts)])
-    ddobjmin = tiv_gogma_align(ddgmmx, ddgmmy).upperbound
-    @test ddobjmin ≈ -3.0
-
-    mgmmx = IsotropicMultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(xpts[1], σ, ϕ, [xdirs[1]])]),
-                                   :two => IsotropicGMM([IsotropicGaussian(xpts[2], σ, ϕ, [xdirs[2]])]),
-                                   :three => IsotropicGMM([IsotropicGaussian(xpts[3], σ, ϕ, [xdirs[3]])])))
-    mgmmy = IsotropicMultiGMM(Dict(:one => IsotropicGMM([IsotropicGaussian(ypts[1], σ, ϕ, [ydirs[1]])]),
-                                   :two => IsotropicGMM([IsotropicGaussian(ypts[2], σ, ϕ, [ydirs[2]])]),
-                                   :three => IsotropicGMM([IsotropicGaussian(ypts[3], σ, ϕ, [ydirs[3]])])))
-    mobjminxy = tiv_gogma_align(mgmmx, mgmmy).upperbound
-    @test mobjminxy ≈ -3.0
 end
 
 @testset "Kabsch" begin
@@ -240,26 +164,6 @@ end
     tform = kabsch(xset, yset)
 
     @test yset.coords ≈ tform(xset).coords
-end
-
-# @testset "ICP" begin
-#     ycoords = rand(3,10) * 5 .- 10;
-#     randtform = AffineMap(RotationVec(π/4*rand(3)...), SVector{3}(5*rand(3)...))
-#     xcoords = randtform(ycoords)
-
-#     matches = icp(ycoords, xcoords)
-# end
-
-@testset "ICP" begin
-    for i=1:10
-        ycoords = rand(3,10) * 5 .- 10;
-        randtform = AffineMap(RotationVec(π/16*rand(3)...), SVector{3}(0*rand(3)...))
-        xcoords = randtform(ycoords)
-
-        matches = icp(ycoords, xcoords)
-
-        @test([m[1] for m in matches] == [m[2] for m in matches])
-    end
 end
 
 @testset "GO-ICP" begin
@@ -275,18 +179,6 @@ end
     @test res.upperbound < 1e-15
 end
 
-@testset "Iterative Hungarian" begin
-    for i=1:10
-        ycoords = rand(3,10) * 5 .- 10;
-        randtform = AffineMap(RotationVec(π/8*rand(3)...), SVector{3}(0*rand(3)...))
-        xcoords = randtform(ycoords)
-
-        matches = iterative_hungarian(ycoords, xcoords)
-
-        @test([m[1] for m in matches] == [m[2] for m in matches])
-    end
-end
-
 @testset "globally optimal iterative hungarian" begin
     ycoords = rand(3,5) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
@@ -299,101 +191,3 @@ end
     @test res.lowerbound == 0
     @test res.upperbound < 1e-15
 end
-
-# @testset "TIV-GOGMA (perfect alignment)" begin
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
-#         gmmy = randtform(gmmx)
-#         min_overlap_score = -overlap(gmmx,gmmx)
-#         res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E3)
-#         @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
-#         @test isapprox(overlap(res.tform(gmmx), gmmy), -min_overlap_score; rtol=0.01)
-#     end
-
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:Int(size(randpts,2)/5)]) for j=1:5]))
-#         mgmmy = randtform(mgmmx)
-#         min_overlap_score = -overlap(mgmmx,mgmmx)
-#         res = tiv_gogma_align(mgmmx,mgmmy,0.5,0.5; maxstagnant=1E3)
-#         @test isapprox(res.upperbound, min_overlap_score; rtol=0.01)
-#         @test isapprox(overlap(res.tform(mgmmx), mgmmy), -min_overlap_score; rtol=0.01)
-#     end
-# end
-
-# @testset "ROCS (perfect alignment)" begin
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
-#         gmmy = randtform(gmmx)
-#         min_overlap_score = -overlap(gmmx,gmmx)
-#         rocs_res = rocs_align(gmmx,gmmy)
-#         ovlp, tform  = rocs_res.minimum, rocs_res.tform
-#         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
-#         @test isapprox(overlap(tform(gmmx), gmmy), -min_overlap_score; atol=1E-12)
-#     end
-
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:Int(size(randpts,2)/5)]) for j=1:5]))
-#         mgmmy = randtform(mgmmx)
-#         min_overlap_score = -overlap(mgmmx,mgmmx)
-#         rocs_res = rocs_align(mgmmx,mgmmy)
-#         ovlp, tform  = rocs_res.minimum, rocs_res.tform
-#         @test isapprox(ovlp, min_overlap_score; atol=1E-12)
-#         @test isapprox(overlap(tform(mgmmx), mgmmy), -min_overlap_score; atol=1E-12)
-#     end
-# end
-
-# @testset "TIV-GOGMA (missing data alignment)" begin
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
-#         gmmy = randtform(IsotropicGMM(gmmx.gaussians[1:40]))
-#         min_overlap_score = -overlap(gmmx,inv(randtform)(gmmy))
-#         res = tiv_gogma_align(gmmx,gmmy,0.5,0.5; maxstagnant=1E4)
-#         @test res.upperbound <= min_overlap_score*0.99
-#         @test -overlap(res.tform(gmmx), gmmy) <= min_overlap_score*0.99   
-#     end
-
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:10]) for j=1:5]))
-#         mgmmy = randtform(IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:8]) for j=1:5])))
-#         min_overlap_score = -overlap(mgmmx,inv(randtform)(mgmmy))
-#         res = tiv_gogma_align(mgmmx,mgmmy,0.5,0.5; maxstagnant=1E4)
-#         @test res.upperbound <= min_overlap_score*0.99
-#         @test -overlap(res.tform(mgmmx), mgmmy) <= min_overlap_score*0.99   
-#     end
-# end
-
-# @testset "ROCS-GOGMA (missing data alignment)" begin
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         gmmx = IsotropicGMM([IsotropicGaussian(randpts[:,i],1,1) for i=1:size(randpts,2)])
-#         gmmy = randtform(IsotropicGMM(gmmx.gaussians[1:40]))
-#         min_overlap_score = -overlap(gmmx,inv(randtform)(gmmy))
-#         res = rocs_gogma_align(gmmx,gmmy; maxstagnant=1E4)
-#         @test res.upperbound <= min_overlap_score*0.99
-#         @test -overlap(res.tform(gmmx), gmmy) <= min_overlap_score*0.99
-#     end
-
-#     for i=1:10
-#         randpts = 10*rand(3,50)
-#         randtform = AffineMap(10*rand(6)...)
-#         mgmmx = IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:10]) for j=1:5]))
-#         mgmmy = randtform(IsotropicMultiGMM(Dict([Symbol(j)=>IsotropicGMM([IsotropicGaussian(randpts[:,i+10*(j-1)],1,1) for i=1:8]) for j=1:5])))
-#         min_overlap_score = -overlap(mgmmx,inv(randtform)(mgmmy))
-#         res = rocs_gogma_align(mgmmx, mgmmy; maxstagnant=1E4)
-#         @test res.upperbound <= min_overlap_score*0.99
-#         @test -overlap(res.tform(mgmmx), mgmmy) <= min_overlap_score*0.99
-#     end
-# end

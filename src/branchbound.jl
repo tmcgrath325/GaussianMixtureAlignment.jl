@@ -314,13 +314,13 @@ function tiv_branchbound(   x::AbstractModel,
     
     rot_res = rot_branchbound(tivx, tivy; localfun=rot_localfun, boundsfun=rot_boundsfun, kwargs...)
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, p)
-    rotscore, rotpos = localfun(tivx, tivy, rotblock)
+    rotscore, rotpos = rot_localfun(tivx, tivy, rotblock)
 
     # spin the moving tivgmm around to check for a better rotation (helps when the Gaussians are largely coplanar)
     R = RotationVec(rot_res.tform_params...)
     spinvec, dist = planefit(tivx, R)
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
-    spinscore, spinrotpos = localfun(tivx, tivy, spinblock)
+    spinscore, spinrotpos = rot_localfun(tivx, tivy, spinblock)
     if spinscore < rotscore
         rotpos = RotationVec(spinrotpos...)
     else
