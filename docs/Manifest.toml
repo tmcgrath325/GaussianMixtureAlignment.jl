@@ -27,6 +27,11 @@ git-tree-sha1 = "2498c3704e9cd26bf586a351473417881676bb2d"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "0.27.21"
 
+[[deps.GaussianMixtureAlignment]]
+path = ".."
+uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
+version = "0.1.5"
+
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
 git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
@@ -56,11 +61,6 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
-
-[[deps.MutableConvexHulls]]
-path = ".."
-uuid = "948c7aac-0e5e-4631-af23-7a6bb7a17825"
-version = "0.1.0"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
