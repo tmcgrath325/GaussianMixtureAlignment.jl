@@ -1,11 +1,11 @@
 function Base.:*(R::AbstractMatrix{W}, x::IsotropicGaussian{N,V}) where {N,V,W}
     numtype = promote_type(V, W)
-    return IsotropicGaussian{N,numtype}(R*x.μ, x.σ, x.ϕ, [R*dir for dir in x.dirs])
+    return IsotropicGaussian{N,numtype}(R*x.μ, x.σ, x.ϕ)
 end
 
 function Base.:+(x::IsotropicGaussian{N,V}, T::AbstractVector{W}) where {N,V,W}
     numtype = promote_type(V, W)
-    return IsotropicGaussian{N,numtype}(x.μ.+T, x.σ, x.ϕ, x.dirs)
+    return IsotropicGaussian{N,numtype}(x.μ.+T, x.σ, x.ϕ)
 end
 
 Base.:-(x::IsotropicGaussian, T::AbstractVector,) = x + (-T)
