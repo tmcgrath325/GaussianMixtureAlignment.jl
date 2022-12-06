@@ -42,29 +42,29 @@ const GMA = GaussianMixtureAlignment
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(0.))
-    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.) atol=1e-16
-    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ) atol=1e-16
+    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
-    @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ)
     # region with closest alignment at 90 degree rotation
     lb = gauss_l2_bounds(x,y,RotationRegion(π/2/sqrt3))[1]
-    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
     lb = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
-    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ, 1.) 
+    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ) 
     
     # translation distance, no rotation
     # translation region centered at origin
     lb, ub = gauss_l2_bounds(x,y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 1 in +x
     lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 3 in +y 
     lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ, 1.)
-    @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ, 1.)
+    @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ)
 
 end
 

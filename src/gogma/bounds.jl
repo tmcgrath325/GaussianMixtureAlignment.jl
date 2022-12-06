@@ -43,27 +43,8 @@ See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
     (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ)
 
-    if length(x.dirs) == 0 || length(y.dirs) == 0
-        lbdot = 1.
-        cosγ = 1.
-    else
-        cosβ = cos(min(sqrt3*σᵣ, π))
-        cosγ = -1.
-        for xdir in x.dirs
-            for ydir in y.dirs
-                cosγ = max(cosγ, dot(xdir, ydir))
-            end
-        end
-        if cosγ >= cosβ
-            lbdot = 1.
-        else
-            lbdot = cosγ*cosβ + √(1-cosγ^2)*√(1-cosβ^2)
-            # lbdot = cosγ*cosβ + √(1 - cosγ^2 - cosβ^2 + cosγ^2*cosβ^2)
-        end
-    end
-
     # evaluate objective function at each distance to get upper and lower bounds
-    return -overlap(lbdist^2, s, w, lbdot), -overlap(ubdist^2, s, w, cosγ)
+    return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
 end
 
 # gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
