@@ -1,7 +1,7 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
-version = "0.1.5"
+version = "0.1.6"
 
 [deps]
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
