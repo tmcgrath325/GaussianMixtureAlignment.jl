@@ -43,6 +43,10 @@ size(gmm::AbstractSingleGMM{N,T}) where {N,T} = (length(gmm.gaussians), N)
 size(gmm::AbstractSingleGMM{N,T}, idx::Int) where {N,T} = (length(gmm.gaussians), N)[idx]
 eltype(gmm::AbstractSingleGMM) = eltype(gmm.gaussians);
 
+coords(gmm::AbstractSingleGMM) = hcat([g.μ for g in gmm.gaussians]...)
+weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
+widths(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
+
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
 keys(mgmm::AbstractMultiGMM) = keys(mgmm.gmms)
@@ -52,7 +56,9 @@ size(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = (length(mgmm.gmms), N)
 size(mgmm::AbstractMultiGMM{N,T,K}, idx::Int) where {N,T,K} = (length(mgmm.gmms), N)[idx]
 eltype(mgmm::AbstractMultiGMM) = eltype(mgmm.gmms);
 
-
+coords(mgmm::AbstractMultiGMM) = hcat([coords(gmm) for (k,gmm) in mgmm.gmms]...)
+weights(mgmm::AbstractMultiGMM) = vcat([weights(gmm) for (k,gmm) in mgmm.gmms]...)
+widths(mgmm::AbstractMultiGMM) = vcat([widths(gmm) for (k,gmm) in mgmm.gmms]...)
 
 """
 A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`, 
@@ -94,7 +100,7 @@ A collection of labeled `IsotropicGMM`s, to each be considered separately during
 only alignment scores between `IsotropicGMM`s with the same key are considered when aligning two `MultiGMM`s. 
 """
 struct IsotropicMultiGMM{N,T,K} <: AbstractIsotropicMultiGMM{N,T,K}
-    gmms::Dict{K, <:AbstractIsotropicGMM{N,T}}
+    gmms::Dict{K, IsotropicGMM{N,T}}
 end
 
 IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
@@ -102,23 +108,20 @@ IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
 convert(t::Type{IsotropicMultiGMM}, mgmm::AbstractIsotropicMultiGMM) = t(mgmm.gmms)
 promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}}) where {N,T,S,K} = IsotropicMultiGMM{N,promote_type(T,S),K}
 
-coords(gmm::AbstractSingleGMM) = hcat([g.μ for g in gmm.gaussians]...)
-weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
-
 # descriptive display
 # TODO update to display type parameters, make use of supertypes, etc
 
 Base.show(io::IO, g::AbstractIsotropicGaussian) = println(io,
     summary(g),
-    " with mean $(g.μ), standard deviation $(g.σ), and amplitude $(g.ϕ).\n"
+    " with μ = $(g.μ), σ = $(g.σ), and ϕ = $(g.ϕ).\n"
 )
 
-Base.show(io::IO, gmm::AbstractIsotropicGMM) = println(io,
+Base.show(io::IO, gmm::AbstractSingleGMM) = println(io,
     summary(gmm),
     " with $(length(gmm)) $(eltype(gmm.gaussians)) distributions."
 )
 
-Base.show(io::IO, mgmm::AbstractIsotropicMultiGMM) = println(io,
+Base.show(io::IO, mgmm::AbstractMultiGMM) = println(io,
     summary(mgmm),
-    " with $(length(mgmm)) labeled $(eltype(mgmm.gmms).parameters[2])s and a total of $(sum([length(gmm) for (key,gmm) in mgmm.gmms])) Gaussians."
+    " with $(length(mgmm)) labeled $(eltype(mgmm.gmms).parameters[2]) models made up of a total of $(sum([length(gmm) for (key,gmm) in mgmm.gmms])) $(eltype(values(mgmm.gmms))) distributions."
 )

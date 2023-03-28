@@ -45,6 +45,7 @@ include("tforms.jl")
 include("goicp/pointset.jl")
 include("gogma/gmm.jl")
 
+include("utils.jl")
 include("uncertaintyregion.jl")
 include("distancebounds.jl")
 

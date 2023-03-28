@@ -1,23 +1,31 @@
+# centroid of positions in A, weighted by weights in w (assumed to sum to 1)
+centroid(A, w=fill(1/size(A,2), size(A,2))) = A*w
+function centroid(m::AbstractModel)
+    w = weights(m)
+    return centroid(coords(m), w / sum(w))
+end
+
+# translation moving centroid to origin
+center_translation(A, w=fill(1/size(A,2), size(A,2))) = Translation(-centroid(A,w))
+center_translation(m::AbstractModel) = Translation(-centroid(m))
+
+
+# convert between pointsets and GMMs
+function IsotropicGMM(ps::AbstractSinglePointSet{N,T}, σs = ones(T, length(ps))) where {N,T}
+    μs = ps.coords
+    ϕs = ps.weights
+    return IsotropicGMM{N,T}([IsotropicGaussian(μs[:,i], σs[i], ϕs[i]) for i=1:length(ps)])
+end
+
+PointSet(gmm::AbstractSingleGMM{N,T}) where {N,T} = PointSet{N,T}(coords(gmm), weights(gmm))
+
+MultiPointSet(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = MultiPointSet{N,T,K}(Dict{K,PointSet{N,T}}([k => PointSet{N,T}(coords(gmm), weights(gmm)) for (k,gmm) in mgmm.gmms]...))
+
+
 """
     lim = translation_limit(gmmx, gmmy)
 
 Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
 """
-function translation_limit(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
-    trlim = typemin(promote_type(numbertype(gmmx),numbertype(gmmy)))
-    for gaussians in (gmmx.gaussians, gmmy.gaussians)
-        if !isempty(gaussians)
-            trlim = max(trlim, maximum(gaussians) do gauss
-                    maximum(abs, gauss.μ) end)
-        end
-    end
-    return trlim
-end
-
-function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
-    trlim = typemin(promote_type(numbertype(mgmmx),numbertype(mgmmy)))
-    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
-    end
-    return trlim
-end
+translation_limit(x::AbstractMatrix, y::AbstractMatrix) = max(maximum(abs.(x)), maximum(abs.(y)))
+translation_limit(x::AbstractModel, y::AbstractModel) = translation_limit(coords(x), coords(y))
