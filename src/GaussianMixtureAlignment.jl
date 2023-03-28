@@ -73,7 +73,11 @@ include("rocs/rocsalign.jl")
 using Requires
 
 function __init__()
-    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("draw.jl")
+    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("plotlydraw.jl")
+end
+
+function __init__()
+    @require MakieCore = "20f20a25-4f0e-4fdf-b5d1-57303727442b" include("makiedraw.jl")
 end
 
 end
