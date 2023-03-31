@@ -114,6 +114,7 @@ promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}})
 Base.show(io::IO, g::AbstractIsotropicGaussian) = println(io,
     summary(g),
     " with μ = $(g.μ), σ = $(g.σ), and ϕ = $(g.ϕ).\n"
+
 )
 
 Base.show(io::IO, gmm::AbstractSingleGMM) = println(io,
