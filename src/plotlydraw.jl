@@ -1,5 +1,3 @@
-using PlotlyJS
-
 export plotdrawing, drawGaussian, drawIsotropicGMM, drawIsotropicGMMs, drawMultiGMM, drawMultiGMMs
 
 const default_colors =     

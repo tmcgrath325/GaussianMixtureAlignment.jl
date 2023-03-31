@@ -45,6 +45,7 @@ include("tforms.jl")
 include("goicp/pointset.jl")
 include("gogma/gmm.jl")
 
+include("utils.jl")
 include("uncertaintyregion.jl")
 include("distancebounds.jl")
 
@@ -72,7 +73,8 @@ include("rocs/rocsalign.jl")
 using Requires
 
 function __init__()
-    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("draw.jl")
+    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("plotlydraw.jl")
+    @require Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a" include("makiedraw.jl")
 end
 
 end

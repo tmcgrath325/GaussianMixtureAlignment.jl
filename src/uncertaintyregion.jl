@@ -199,42 +199,6 @@ function trl_subregions(sr::UncertaintyRegion, nsplits=2)
 end
 
 # Initialize UncertaintyRegion for aligning two PointSets
-
-"""
-    lim = translation_limit(gmmx, gmmy)
-
-Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
-"""
-function translation_limit(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM)
-    trlim = typemin(promote_type(numbertype(gmmx),numbertype(gmmy)))
-    for gaussians in (gmmx.gaussians, gmmy.gaussians)
-        if !isempty(gaussians)
-            trlim = max(trlim, maximum(gaussians) do gauss
-                    maximum(abs, gauss.μ) end)
-        end
-    end
-    return trlim
-end
-
-function translation_limit(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM)
-    trlim = typemin(promote_type(numbertype(mgmmx),numbertype(mgmmy)))
-    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        trlim = max(trlim, translation_limit(mgmmx.gmms[key], mgmmy.gmms[key]))
-    end
-    return trlim
-end
-
-translation_limit(x::AbstractMatrix, y::AbstractMatrix) = max(maximum(abs.(x)), maximum(abs.(y)))
-translation_limit(x::AbstractSinglePointSet, y::AbstractSinglePointSet) = translation_limit(x.coords, y.coords)
-
-function translation_limit(x::AbstractMultiPointSet, y::AbstractMultiPointSet)
-    trlim = typemin(promote_type(numbertype(x),numbertype(y)))
-    for key in keys(x.pointsets) ∩ keys(y.pointsets)
-        trlim = max(trlim, translation_limit(x.pointsets[key], y.pointsets[key]))
-    end
-    return trlim
-end
-
 UncertaintyRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = UncertaintyRegion(translation_limit(x, y))
 TranslationRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = TranslationRegion(R, zero(SVector{3}), translation_limit(x, y))
 RotationRegion(x:: Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM},   R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = RotationRegion(RotationVec(0.0,0.0,0.0), T, π)

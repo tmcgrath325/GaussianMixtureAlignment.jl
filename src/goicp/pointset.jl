@@ -23,6 +23,10 @@ iterate(x::AbstractSinglePointSet, i) = i > length(x) ? nothing : (getindex(x, i
 size(x::AbstractSinglePointSet{N,T}) where {N,T} = (N,length(x))
 size(x::AbstractSinglePointSet{N,T}, idx::Int) where {N,T} = size(x)[idx]
 
+coords(x::AbstractSinglePointSet) = x.coords
+weights(x::AbstractSinglePointSet) = x.weights
+widths(x::AbstractSinglePointSet{N,T}) where {N,T} = fill(zero(T), length(x))
+
 length(x::AbstractMultiPointSet) = length(x.pointsets)
 getindex(x::AbstractMultiPointSet, key) = x.pointsets[key]
 keys(x::AbstractMultiPointSet) = keys(x.pointsets)
@@ -30,6 +34,10 @@ iterate(x::AbstractMultiPointSet) = iterate(x.pointsets)
 iterate(x::AbstractMultiPointSet, i) = iterate(x.pointsets, i)
 size(x::AbstractMultiPointSet{N,T,K}) where {N,T,K} = (length(x.pointsets), N)
 size(x::AbstractMultiPointSet{N,T,K}, idx::Int) where {N,T,K} = (length(x.pointsets), N)[idx]
+
+coords(x::AbstractMultiPointSet) = hcat([coords(ps) for (k,ps) in x.pointsets]...)
+weights(x::AbstractMultiPointSet) = vcat([weights(ps) for (k,ps) in x.pointsets]...)
+widths(x::AbstractMultiPointSet) = vcat([widths(ps) for (k,ps) in x.pointsets]...)
 
 """
 A coordinate position and a weight, to be used as part of a point set.
@@ -79,7 +87,7 @@ function Base.:-(p::PointSet, T::AbstractVector)
     return PointSet(p.coords.-T, p.weights)
 end
 
-function PointSet(coords::AbstractMatrix{S}, weights::AbstractVector{T} = ones(T, size(coords,2))) where {S,T}
+function PointSet(coords::AbstractMatrix{S}, weights::AbstractVector{T} = ones(S, size(coords,2))) where {S,T}
     dim = size(coords,1)
     numtype = promote_type(S,T)
     return PointSet{dim,numtype}(Matrix{numtype}(coords), Vector{numtype}(weights))
@@ -127,3 +135,18 @@ end
 function Base.:-(p::MultiPointSet, T::AbstractVector)
     return MultiPointSet([key => p[key]-T for key in keys(p)])
 end
+
+Base.show(io::IO, p::AbstractPoint) = println(io,
+    summary(p),
+    " with μ = $(p.coords) and ϕ = $(p.weight).\n"
+)
+
+Base.show(io::IO, ps::AbstractSinglePointSet) = println(io,
+    summary(ps),
+    " with $(length(ps)) points."
+)
+
+Base.show(io::IO, mps::AbstractMultiPointSet) = println(io,
+    summary(mps),
+    " with $(length(mps)) labeled $(eltype(mps.pointsets).parameters[2]) sets and a total of $(sum([length(ps) for (key,ps) in mps.pointsets])) points."
+)

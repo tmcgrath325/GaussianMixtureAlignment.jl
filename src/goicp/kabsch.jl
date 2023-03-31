@@ -64,19 +64,6 @@ function kabsch(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}
     return kabsch(matchedP, matchedQ, w)
 end
 
-# centroid of positions in A, weighted by weights in w (assumed to sum to 1)
-centroid(A, w=fill(1/size(A,2), size(A,2))) = A*w
-centroid(ps::AbstractSinglePointSet) = centroid(ps.coords, ps.weights / sum(ps.weights))
-function centroid(gmm::AbstractIsotropicGMM)
-    w = weights(gmm)
-    return centroid(coords(gmm), w / sum(w))
-end
-
-# translation moving centroid to origin
-center_translation(A, w=fill(1/size(A,2), size(A,2))) = Translation(-centroid(A,w))
-center_translation(ps::AbstractSinglePointSet) = Translation(-centroid(ps))
-
-
 # align via translation only (no rotation)
 function translation_align(P,Q,w)
     @assert size(P) == size(Q)

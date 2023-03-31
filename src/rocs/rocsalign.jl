@@ -48,7 +48,7 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
                              weights=ones(eltype(positions),size(positions,2)),
                              widths=zeros(eltype(positions),size(positions,2)); 
                              invert = false)
-    com = centroid(positions, weights)
+    com = centroid(positions, weights / sum(weights))
     massmat = mass_matrix(positions, weights, widths, com)
     evecs = eigvecs(massmat)
 
@@ -66,13 +66,11 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
 
     push!(tforms, inv(LinearMap(SMatrix{length(com),length(com)}(evecs))) ∘ Translation(-com))
 
-    # then rotate the first transformation about each coordinate axis by -π/2, π/2, and π
+    # then consider unique rotations made up of 180 degree rotations about the coordinate axes (out of all 2^3, there are 4 unique poses)
     for i=1:3
-        axis = zeros(N)
+        axis = zeros(T,N)
         axis[i] = one(T)
-        for angle in (π)
-            push!(tforms, LinearMap(AngleAxis(angle, axis...)) ∘  tforms[1])
-        end
+        push!(tforms, LinearMap(AngleAxis(π, axis...)) ∘  tforms[1])
     end
     if invert
         return [inv(tform) for tform in tforms]
@@ -81,16 +79,7 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
     end
 end
 
-inertial_transforms(x::AbstractPointSet; kwargs...) = inertial_transforms(x.coords, x.weights; kwargs...)
-
-inertial_transforms(gaussians::AbstractVector{<:AbstractIsotropicGaussian}; kwargs...
-    ) = inertial_transforms(hcat([g.μ for g in gaussians]...), [g.ϕ for g in gaussians], [g.σ for g in gaussians]; kwargs...)
-
-inertial_transforms(gmm::AbstractIsotropicGMM; kwargs...
-    ) = inertial_transforms(gmm.gaussians; kwargs...)
-
-inertial_transforms(mgmm::AbstractMultiGMM; kwargs...
-    ) = inertial_transforms(collect(Iterators.flatten([gmm.gaussians for (k,gmm) in mgmm])); kwargs...)
+inertial_transforms(x::AbstractModel; kwargs...) = inertial_transforms(coords(x), weights(x), widths(x); kwargs...)
 
 """
     score, tform, nevals = rocs_align_gmms(gmmfixed, gmmmoving; maxevals=1000)
