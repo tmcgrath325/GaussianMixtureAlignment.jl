@@ -44,3 +44,5 @@ function combine(gmms::Union{AbstractVector{<:AbstractSingleGMM},AbstractVector{
         throw(ArgumentError("provided no GMMs to combine"))
     end
 end
+
+combine(args...) = combine([args...])
