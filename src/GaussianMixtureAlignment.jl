@@ -32,6 +32,9 @@ using Distances
 using NearestNeighbors
 using Hungarian
 using Optim
+using MakieCore
+using GeometryBasics
+using Colors
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
@@ -39,6 +42,8 @@ export overlap, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
 export PointSet, MultiPointSet
 export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
+
+export gmmdisplay
 
 include("tforms.jl")
 
@@ -70,11 +75,6 @@ include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")
 
-using Requires
-
-function __init__()
-    @require PlotlyJS="f0f68f2c-4968-5e81-91da-67840de0976a" include("plotlydraw.jl")
-    @require Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a" include("makiedraw.jl")
-end
+include("draw.jl")
 
 end
