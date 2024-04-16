@@ -159,5 +159,3 @@ julia> # Draw the aligned GMMs. Note that the "steric" features (green) repulse 
 julia> gmmdisplay(res.tform(mgmmx), mgmmy)
 ```
 <img src="./assets/image/multi_example_aligned.png" width="400"/>
-
-## Align GMMs with different types of interacting features
