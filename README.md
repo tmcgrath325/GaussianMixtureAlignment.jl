@@ -151,7 +151,7 @@ julia> gmmdisplay(mgmmx)
 ```
 julia> gmmdisplay(mgmmy)
 ```
-<img src="./assets/image/multi_example_x.png" width="400"/>
+<img src="./assets/image/multi_example_y.png" width="400"/>
 
 ```julia
 julia> # Draw the aligned GMMs. Note that the "steric" features (green) repulse one another.
