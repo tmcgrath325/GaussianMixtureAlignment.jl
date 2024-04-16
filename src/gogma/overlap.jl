@@ -61,16 +61,18 @@ end
 
 Calculates the unnormalized overlap between two `AbstractMultiGMM` objects.
 """
-function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing)
+function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing, interactions=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
-        mpσ, mpϕ = pairwise_consts(x, y)
+        mpσ, mpϕ = pairwise_consts(x, y, interactions)
     end
     
     # sum overlaps from each keyed pairs of GMM
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
-    for k in keys(x.gmms) ∩ keys(y.gmms)
-        ovlp += overlap(x.gmms[k], y.gmms[k], mpσ[k], mpϕ[k])
+    for k1 in keys(mpσ)
+        for k2 in keys(mpσ[k1])
+            ovlp += overlap(x.gmms[k1], y.gmms[k2], mpσ[k1][k2], mpϕ[k1][k2])
+        end
     end
     return ovlp
 end

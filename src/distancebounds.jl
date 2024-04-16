@@ -7,29 +7,29 @@ function infbounds(x,y)
     return (typeinf, typeinf) 
 end
 
-function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
+function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number, maximize::Bool = false)
     ubdist = norm(x - y)
     γₜ = sqrt3 * σₜ 
     γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2) * norm(x)
-    lb, ub = max(ubdist - γₜ - γᵣ, 0), ubdist
+    lb, ub = maximize ? (max(ubdist - γₜ - γᵣ, 0), ubdist) : (ubddist + γₜ + γᵣ, ubdist)
     numtype = promote_type(typeof(lb), typeof(ub))
     return numtype(lb), numtype(ub)
 end
-loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ
-    ) = (R.sx^2 + R.sy^2 + R.sz^2) > pisq ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ) # loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
-loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
-loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::SearchRegion) = loose_distance_bounds(x, y, UncertaintyRegion(block))
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ, maximize::Bool = false,
+    ) = (R.sx^2 + R.sy^2 + R.sz^2) > pisq ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ, maximize) # loose_distance_bounds(R*x, y-T, σᵣ, σₜ)
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion, maximize::Bool = false) = loose_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, maximize)
+loose_distance_bounds(x::SVector{3}, y::SVector{3}, block::SearchRegion, maximize::Bool = false) = loose_distance_bounds(x, y, UncertaintyRegion(block), maximize)
 
 
 """
     lb, ub = tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
     lb, ub = tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T<:SVector{3}, σᵣ::Number, σₜ::Number)
 
-Within an uncertainty region, find the bounds on distance between two points x and y.
+Within an uncertainty region, find the bounds on distance between two points x and y. 
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number)
+function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, σᵣ::Number, σₜ::Number, maximize::Bool = false)
     # prepare positions and angles
     xnorm, ynorm = norm(x), norm(y)
     if xnorm*ynorm == 0
@@ -42,13 +42,23 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     # upper bound distance at hypercube center
     ubdist = norm(x - y)
     
-    # lower bound distance from the nearest point on the "spherical cap"
-    if cosα >= cosβ
-        lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ, 0)
+    if maximize
+        # this case is intended for situations where the objective function scales negatively with distance\
+        # lbdist, which will be the further point on the spherical cap, will be larger than ubdist
+        if cosα + cosβ >= π
+            lbdist = xnorm + ynorm + sqrt3*σₜ
+        else
+            lbdist = √(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ-√((1-cosα^2)*(1-cosβ^2)))) + sqrt3*σₜ
+        end
     else
-        lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
-        catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
-            0
+        # lower bound distance from the nearest point on the "spherical cap"
+        if cosα >= cosβ
+            lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ, 0)
+        else
+            lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
+            catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
+                0
+            end
         end
     end
 
@@ -57,7 +67,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     return (numtype(lbdist), numtype(ubdist))
 end
 
-tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number
-    ) = (R.sx^2 + R.sy^2 + R.sz^2) > pisq ? infbounds(x,y) : tight_distance_bounds(R*x, y-T, σᵣ, σₜ) # tight_distance_bounds(R*x, y-T, σᵣ, σₜ) 
-tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion) = tight_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ)
-tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::Union{RotationRegion, TranslationRegion}) = tight_distance_bounds(x, y, UncertaintyRegion(block))
+tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, maximize::Bool = false,
+    ) = (R.sx^2 + R.sy^2 + R.sz^2) > pisq ? infbounds(x,y) : tight_distance_bounds(R*x, y-T, σᵣ, σₜ, maximize) # tight_distance_bounds(R*x, y-T, σᵣ, σₜ) 
+tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::UncertaintyRegion, maximize::Bool = false) = tight_distance_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, maximize)
+tight_distance_bounds(x::SVector{3}, y::SVector{3}, block::Union{RotationRegion, TranslationRegion}, maximize::Bool = false) = tight_distance_bounds(x, y, UncertaintyRegion(block), maximize)

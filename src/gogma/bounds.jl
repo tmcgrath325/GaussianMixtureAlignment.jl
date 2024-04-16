@@ -2,7 +2,7 @@ loose_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = loose
 tight_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = tight_distance_bounds(x.μ, y.μ, args...)
 
 # prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
-function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM)
+function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions=nothing)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
@@ -14,13 +14,33 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM)
     return pσ, pϕ
 end
 
-function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}) where {N,T,S,K}
-    t = promote_type(numbertype(mgmmx),numbertype(mgmmy))
-    mpσ, mpϕ = Dict{K, Matrix{t}}(), Dict{K, Matrix{t}}()
-    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        pσ, pϕ = pairwise_consts(mgmmx.gmms[key], mgmmy.gmms[key])
-        push!(mpσ, Pair(key, pσ))
-        push!(mpϕ, Pair(key, pϕ))
+function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Union{Nothing,Dict{K,Dict{K,V}}}=nothing) where {N,T,S,K,V <: Number}
+    t = promote_type(numbertype(mgmmx),numbertype(mgmmy), isnothing(interactions) ? numbertype(mgmmx) : V)
+    xkeys = keys(mgmmx.gmms)
+    ykeys = keys(mgmmy.gmms)
+    if isnothing(interactions)
+        interactions = Dict{K, Dict{K, t}}()
+        for key in xkeys ∩ ykeys
+            interactions[key] = Dict{K, t}(key => one(t))
+        end
+    end
+    mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
+    for key1 in keys(interactions)
+        if key1 ∈ xkeys 
+            push!(mpσ, key1 => Dict{K, Matrix{t}}())
+            push!(mpϕ, key1 => Dict{K, Matrix{t}}())
+            for key2 in keys(interactions[key1])
+                if key2 ∈ ykeys 
+                    pσ, pϕ = pairwise_consts(mgmmx.gmms[key1], mgmmy.gmms[key2])
+                    push!(mpσ[key1], key2 => pσ)
+                    push!(mpϕ[key1], key2 => interactions[key1][key2] .* pϕ)
+                end
+            end
+            if isempty(mpσ[key1])
+                delete!(mpσ, key1)
+                delete!(mpϕ, key1)
+            end
+        end
     end
     return mpσ, mpϕ
 end
@@ -41,7 +61,7 @@ the uncertainty region is assumed to be centered at the origin (i.e. x has alrea
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
 function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
-    (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ)
+    (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ, w < 0)
 
     # evaluate objective function at each distance to get upper and lower bounds
     return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
@@ -58,7 +78,7 @@ gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s
 
 
 
-function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing; kwargs...)
+function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -75,17 +95,19 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::Ro
     return lb, ub
 end
 
-function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing)
+function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
-        mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy)
+        mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy, interactions)
     end
 
     # sum bounds for each pair of points
     lb = 0.
     ub = 0.
-    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
-        lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key], mgmmy.gmms[key], R, T, σᵣ, σₜ, mpσ[key], mpϕ[key])
+    for (key1, intrs) in mpσ
+        for (key2, pσ) in intrs
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], R, T, σᵣ, σₜ, pσ, mpϕ[key1][key2])
+        end
     end
     return lb, ub
 end

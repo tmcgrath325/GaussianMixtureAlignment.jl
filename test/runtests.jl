@@ -140,6 +140,40 @@ end
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 
+@testset "MultiGMMs with interactions" begin
+    tetrahedral = [
+        [0.,0.,1.],
+        [sqrt(8/9), 0., -1/3],
+        [-sqrt(2/9),sqrt(2/3),-1/3],
+        [-sqrt(2/9),-sqrt(2/3),-1/3]
+    ]
+    ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
+    mgmmx = IsotropicMultiGMM(Dict(
+        :positive => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    mgmmy = IsotropicMultiGMM(Dict(
+        :negative => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    interactions = Dict(
+        :positive => Dict(
+            :positive => -1.0,
+            :negative => 1.0,
+        ),
+        :negative => Dict(
+            :positive => 1.0,
+            :negative => -1.0,
+        ),
+        :steric => Dict(
+            :steric => -1.0,
+        ),
+    )
+    randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
+    res = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
+end
+
 @testset "GO-ICP and GO-IH run without errors" begin
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]

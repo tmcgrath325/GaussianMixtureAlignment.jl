@@ -21,7 +21,7 @@ const DEFAULT_COLORS = [            # CUD colors: https://jfly.uni-koeln.de/colo
 const cosθs = [cos(θ) for θ in θs]
 const sinθs = [sin(θ) for θ in θs]
 
-equal_volume_radius(σ, ϕ) = (EQUAL_VOL_CONST*ϕ)^(1/3) * σ
+equal_volume_radius(σ, ϕ) = (EQUAL_VOL_CONST*abs(ϕ))^(1/3) * σ
 
 function flat_circle!(f, pos, r, dim::Int; kwargs...)
     if dim == 3
@@ -67,7 +67,7 @@ function plot!(gd::GaussianDisplay{<:NTuple{<:Any, <:AbstractIsotropicGaussian}}
     color = gd[:color][]
     plotfun = disp == :wire ? wire_sphere! : ( disp == :solid ? solid_sphere! : throw(ArgumentError("Unrecognized display option: `$disp`")))
     for g in gauss
-        plotfun(gd, g.μ, equal_volume_radius(g.σ, g.ϕ); color=color)
+        plotfun(gd, g.μ, g.σ; color=color)
     end
     return gd
 end
