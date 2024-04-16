@@ -1,4 +1,21 @@
 tformwithparams(X,x) = RotationVec(X[1:3]...)*x + SVector{3}(X[4:6]...)
+# function tformwithparams(X,x) 
+#     if sum(abs2, X[1:3]) == 0 # handled for autodiff around 0
+#         T = eltype(X)
+#         θ = norm(X[1:3])
+#         a = θ > 0 ? X[1] / θ : one(T)
+#         b = θ > 0 ? X[2] / θ : zero(T)
+#         c = θ > 0 ? X[3] / θ : zero(T)
+#         R = AngleAxis(θ, a, b, c)
+#         @show R
+#     else
+#         R = RotationVec(X[1:3]...)
+#     end
+#     t = SVector{3}(X[4:6]...)
+#     @show (R*x)[1]
+#     return R*x + t
+# end
+
 overlapobj(X,x,y,args...) = -overlap(tformwithparams(X,x), y, args...)
 
 function distanceobj(X, x, y; correspondence = hungarian_assignment)
@@ -34,6 +51,10 @@ function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, ar
 
     # set initial guess at the center of the block
     initial_X = center(block)
+    # if (typeof(block) <: UncertaintyRegion && sum(abs2, initial_X[1:Int(end/2)]) == 0) || (typeof(block) <: RotationRegion && sum(abs2, initial_X) == 0)
+    #     T = eltype(initial_X)
+    #     initial_X = initial_X .+ [eps(T), zeros(T, length(initial_X)-1)...]
+    # end
 
     # local optimization within the block
     f(X) = alignment_objective(X, x, y, block, args...; kwargs...)
