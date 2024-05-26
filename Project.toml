@@ -1,7 +1,7 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
-version = "0.1.9"
+version = "0.1.10"
 
 [deps]
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
@@ -20,6 +20,12 @@ Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 Rotations = "6038ab10-8711-5258-84ad-4b1120ba62dc"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+
+[extensions]
+GaussianMixtureAlignmentMakieExt = "Makie"
+
 [compat]
 CoordinateTransformations = "0.6"
 Distances = "0.10"
@@ -27,6 +33,7 @@ Colors = "0.12"
 GenericLinearAlgebra = "0.3"
 GeometryBasics = "0.4"
 Hungarian = "0.7"
+Makie = "0.21"
 MakieCore = "0.6, 0.7, 0.8"
 MutableConvexHulls = "0.2"
 NearestNeighbors = "0.4.1"
@@ -35,7 +42,7 @@ PairedLinkedLists = "0.2"
 Requires = "1.3"
 Rotations = "1.4"
 StaticArrays = "1.5"
-julia = "1.7"
+julia = "1.10"
 
 [extras]
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"

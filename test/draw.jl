@@ -20,5 +20,5 @@ using Test
         :positive => IsotropicGMM([ch_g]),
         :steric => IsotropicGMM(s_gs)
     ))
-    gmmdisplay(gmm)
+    gmmdisplay(mgmmx)
 end
