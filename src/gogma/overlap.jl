@@ -1,7 +1,7 @@
 """
     ovlp = overlap(distsq, s, w)
 
-Calculates the unnormalized overlap between two Gaussian distributions with width `s`, 
+Calculates the unnormalized overlap between two Gaussian distributions with width `s`,
 weight `w', and squared distance `distsq`.
 """
 function overlap(distsq::Real, s::Real, w::Real)
@@ -16,36 +16,30 @@ end
 Calculates the unnormalized overlap between two Gaussian distributions with variances
 `σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`.
 """
-function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real) 
+function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real)
     return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy)
 end
 
 """
-    ovlp = overlap(x::IsotropicGaussian, y::IsotropicGaussian, xtform=identity)
+    ovlp = overlap(x::IsotropicGaussian, y::IsotropicGaussian)
 
 Calculates the unnormalized overlap between two `IsotropicGaussian` objects.
 """
-function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=nothing, w=nothing)
-    if isnothing(s)
-        s = x.σ^2 + y.σ^2
-    end
-    if isnothing(w)
-        w = x.ϕ*y.ϕ
-    end
-    return overlap(sum(abs2, x.μ.-y.μ), s, w) 
+function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ)
+    return overlap(sum(abs2, x.μ.-y.μ), s, w)
 end
 
 """
-    ovlp = overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, xtform=identity)
+    ovlp = overlap(x::AbstractSingleGMM, y::AbstractSingleGMM)
 
 Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
 """
 function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
     # prepare pairwise widths and weights, if not provided
-    if isnothing(pσ) || isnothing(pϕ)
+    if isnothing(pσ) && isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
     end
-    
+
     # sum overlaps for all pairwise combinations of Gaussians between x and y
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for (i,gx) in enumerate(x.gaussians)
@@ -57,16 +51,16 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
 end
 
 """
-    ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, xtform=identity)
+    ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM)
 
 Calculates the unnormalized overlap between two `AbstractMultiGMM` objects.
 """
 function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing, interactions=nothing)
     # prepare pairwise widths and weights, if not provided
-    if isnothing(mpσ) || isnothing(mpϕ)
+    if isnothing(mpσ) && isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(x, y, interactions)
     end
-    
+
     # sum overlaps from each keyed pairs of GMM
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for k1 in keys(mpσ)
@@ -76,9 +70,9 @@ function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=no
     end
     return ovlp
 end
-    
+
 """
-l2dist = distance(x, y)
+    l2dist = distance(x, y)
 
 Calculates the L2 distance between two GMMs made up of spherical Gaussian distributions.
 """
@@ -87,7 +81,7 @@ function distance(x::AbstractGMM, y::AbstractGMM)
 end
 
 """
-tani = tanimoto(x, y)
+    tani = tanimoto(x, y)
 
 Calculates the tanimoto distance based on Gaussian overlap between two GMMs.
 """

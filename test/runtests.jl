@@ -50,8 +50,8 @@ const GMA = GaussianMixtureAlignment
     lb = gauss_l2_bounds(x,y,RotationRegion(π/2/sqrt3))[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
     lb = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
-    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ) 
-    
+    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
+
     # translation distance, no rotation
     # translation region centered at origin
     lb, ub = gauss_l2_bounds(x,y,TranslationRegion(1/sqrt3))
@@ -61,7 +61,7 @@ const GMA = GaussianMixtureAlignment
     lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
     @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ)
-    # centered with translation of 3 in +y 
+    # centered with translation of 3 in +y
     lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ)
     @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ)
@@ -97,7 +97,7 @@ end
 
 @testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
-    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
     σ = ϕ = 1.
     gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
@@ -121,7 +121,7 @@ end
 
 @testset "GOGMA runs without errors" begin
     # two sets of points, each forming a 3-4-5 triangle
-    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
     σ = ϕ = 1.
     gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
@@ -175,7 +175,7 @@ end
 end
 
 @testset "GO-ICP and GO-IH run without errors" begin
-    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
 
     xset = PointSet(xpts);
@@ -189,7 +189,7 @@ end
 end
 
 @testset "Kabsch" begin
-    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]] 
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
 
     xset = PointSet(xpts, ones(3))
