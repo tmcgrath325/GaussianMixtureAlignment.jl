@@ -5,6 +5,7 @@ using LinearAlgebra
 using StaticArrays
 using Rotations
 using CoordinateTransformations
+using ForwardDiff
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
@@ -172,6 +173,21 @@ end
     )
     randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
     res = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
+end
+
+@testset "Forces" begin
+    μx = randn(SVector{3,Float64})
+    μy = randn(SVector{3,Float64})
+    σx = 1 + rand()
+    σy = 1 + rand()
+    ϕx = 1 + rand()
+    ϕy = 1 + rand()
+    x = IsotropicGaussian(μx, σx, ϕx)
+    y = IsotropicGaussian(μy, σy, ϕy)
+    f = zeros(3)
+    force!(f, x, y)
+    ovlp(μ) = overlap(IsotropicGaussian(μ, σx, ϕx), y)
+    @test f ≈ ForwardDiff.gradient(ovlp, μx)
 end
 
 @testset "GO-ICP and GO-IH run without errors" begin
