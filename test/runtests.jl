@@ -188,6 +188,42 @@ end
     force!(f, x, y)
     ovlp(μ) = overlap(IsotropicGaussian(μ, σx, ϕx), y)
     @test f ≈ ForwardDiff.gradient(ovlp, μx)
+
+    tetrahedral = [
+        [0.,0.,1.],
+        [sqrt(8/9), 0., -1/3],
+        [-sqrt(2/9),sqrt(2/3),-1/3],
+        [-sqrt(2/9),-sqrt(2/3),-1/3]
+    ]
+    ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
+    mgmmx = IsotropicMultiGMM(Dict(
+        :positive => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    mgmmy = IsotropicMultiGMM(Dict(
+        :negative => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    fliptform = AffineMap(RotationVec(π,0,0),[0,0,3]) ∘ AffineMap(RotationVec(0,0,π),[0,0,0])
+    mgmmy = fliptform(mgmmy)
+    interactions = Dict(
+        :positive => Dict(
+            :positive => -1.0,
+            :negative => 1.0,
+        ),
+        :negative => Dict(
+            :positive => 1.0,
+            :negative => -1.0,
+        ),
+        :steric => Dict(
+            :steric => -1.0,
+        ),
+    )
+    f = zeros(3)
+    force!(f, mgmmx, mgmmy; interactions=interactions)
+    movlp(μ) = overlap(IsotropicMultiGMM(Dict(:positive => IsotropicGMM([ch_g + μ]),:steric => IsotropicGMM([g + μ for g in s_gs]))), mgmmy, nothing, nothing, interactions)
+    @test f ≈ ForwardDiff.gradient(movlp, zeros(3))
 end
 
 @testset "GO-ICP and GO-IH run without errors" begin

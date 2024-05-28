@@ -99,17 +99,36 @@ end
 
 function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian,
                 s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ; coef=1)
-        return force!(f, x.μ, y.μ, s, coef*w)
+    return force!(f, x.μ, y.μ, s, coef*w)
 end
 
-function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGMM; kwargs...)
-    for gy in y.gaussians
-        force!(f, x, gy; kwargs...)
+function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ = x.σ^2 .+ [gy.σ^2 for gy in y.gaussians]
+        pϕ = [ x.ϕ * gy.ϕ for gy in y.gaussians]
+    end
+    for (gy, s, w) in zip(y.gaussians, pσ, pϕ)
+        force!(f, x, gy, s, w; kwargs...)
     end
 end
 
-function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM; kwargs...)
-    for gx in x.gaussians
-        force!(f, gx, y; kwargs...)
+function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(x, y)
+    end
+    for (i,gx) in enumerate(x.gaussians)
+        force!(f, gx, y, pσ[i,:], pϕ[i,:]; kwargs...)
+    end
+end
+
+function force!(f::AbstractVector, x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing; interactions=nothing)
+    if isnothing(mpσ) && isnothing(mpϕ)
+        mpσ, mpϕ = pairwise_consts(x, y, interactions) 
+    end
+    for k1 in keys(mpσ)
+        for k2 in keys(mpσ[k1])
+            # don't pass coef as a keyword argument, since the interaction coefficient is baked into mpϕ
+            force!(f, x.gmms[k1], y.gmms[k2], mpσ[k1][k2], mpϕ[k1][k2])
+        end
     end
 end
