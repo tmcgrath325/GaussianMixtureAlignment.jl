@@ -2,8 +2,8 @@
 GaussianMixtureAlignment.jl
 ===========================
 
-GaussianMixtureAlignment.jl is a package used to align Gaussian mixture models. In particular, it uses an implementation 
-of the [GOGMA algorithm (Campbell, 2016)](https://arxiv.org/abs/1603.00150) to find globally optimal alignments of mixtures of 
+GaussianMixtureAlignment.jl is a package used to align Gaussian mixture models. In particular, it uses an implementation
+of the [GOGMA algorithm (Campbell, 2016)](https://arxiv.org/abs/1603.00150) to find globally optimal alignments of mixtures of
 isotropic (spherical) Gaussian distributions.
 
 REPL help
