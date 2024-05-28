@@ -89,3 +89,27 @@ function tanimoto(x::AbstractGMM, y::AbstractGMM)
     o = overlap(x,y)
     return o / (overlap(x,x) + overlap(y,y) - o)
 end
+
+## Forces
+
+function force!(f::AbstractVector, x::AbstractVector, y::AbstractVector, s::Real, w::Real)
+    Δ = y - x
+    f .+= Δ / s * overlap(sum(abs2, Δ), s, w)
+end
+
+function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian,
+                s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ; coef=1)
+        return force!(f, x.μ, y.μ, s, coef*w)
+end
+
+function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGMM; kwargs...)
+    for gy in y.gaussians
+        force!(f, x, gy; kwargs...)
+    end
+end
+
+function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM; kwargs...)
+    for gx in x.gaussians
+        force!(f, gx, y; kwargs...)
+    end
+end
