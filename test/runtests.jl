@@ -158,6 +158,15 @@ end
         :negative => IsotropicGMM([ch_g]),
         :steric => IsotropicGMM(s_gs)
     ))
+    # interaction validation
+    interactions = Dict(
+        (:positive, :negative) =>  1.0,
+        (:negative, :positive) => 1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
+    )
+    @test_throws AssertionError GMA.pairwise_consts(mgmmx, mgmmy, interactions)
     interactions = Dict(
         (:positive, :negative) =>  1.0,
         (:positive, :positive) => -1.0,
