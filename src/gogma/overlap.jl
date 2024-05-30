@@ -104,8 +104,9 @@ end
 
 function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
     if isnothing(pσ) && isnothing(pϕ)
-        pσ = x.σ^2 .+ [gy.σ^2 for gy in y.gaussians]
-        pϕ = x.ϕ * [gy.ϕ for gy in y.gaussians]
+        xσsq = x.σ^2
+        pσ = [xσsq + gy.σ^2 for gy in y.gaussians]
+        pϕ = [x.ϕ * gy.ϕ for gy in y.gaussians]
     end
     for (gy, s, w) in zip(y.gaussians, pσ, pϕ)
         force!(f, x, gy, s, w; kwargs...)

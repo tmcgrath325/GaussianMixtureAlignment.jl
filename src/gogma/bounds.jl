@@ -35,7 +35,7 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
             interactions[(key,key)] = one(t)
         end
     else
-        @assert validate_interactions(interactions) "Interactions not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
+        @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
     end
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
     ukeys = unique(Iterators.flatten(keys(interactions)))
