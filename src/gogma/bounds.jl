@@ -1,6 +1,17 @@
 loose_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = loose_distance_bounds(x.μ, y.μ, args...)
 tight_distance_bounds(x::AbstractGaussian, y::AbstractGaussian, args...) = tight_distance_bounds(x.μ, y.μ, args...)
 
+function validate_interactions(interactions::Dict{Tuple{K,K},V}) where {K,V<:Number}
+    for (k1,k2) in keys(interactions)
+        if k1 != k2
+            if haskey(interactions, (k2,k1))
+                return false
+            end
+        end
+    end
+    return true
+end
+
 # prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
 function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions=nothing)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
@@ -14,26 +25,31 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
-function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Union{Nothing,Dict{K,Dict{K,V}}}=nothing) where {N,T,S,K,V <: Number}
+function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Union{Nothing,Dict{Tuple{K,K},V}}=nothing) where {N,T,S,K,V <: Number}
     t = promote_type(numbertype(mgmmx),numbertype(mgmmy), isnothing(interactions) ? numbertype(mgmmx) : V)
     xkeys = keys(mgmmx.gmms)
     ykeys = keys(mgmmy.gmms)
     if isnothing(interactions)
-        interactions = Dict{K, Dict{K, t}}()
+        interactions = Dict{Tuple{K,K},t}()
         for key in xkeys ∩ ykeys
-            interactions[key] = Dict{K, t}(key => one(t))
+            interactions[(key,key)] = one(t)
         end
+    else
+        @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
     end
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
-    for key1 in keys(interactions)
+    ukeys = unique(Iterators.flatten(keys(interactions)))
+    for key1 in ukeys
         if key1 ∈ xkeys 
             push!(mpσ, key1 => Dict{K, Matrix{t}}())
             push!(mpϕ, key1 => Dict{K, Matrix{t}}())
-            for key2 in keys(interactions[key1])
-                if key2 ∈ ykeys 
+            for key2 in ukeys
+                keypair = (key1,key2)
+                keypair = haskey(interactions, keypair) ? keypair : (key2,key1)
+                if key2 ∈ ykeys && haskey(interactions, keypair)
                     pσ, pϕ = pairwise_consts(mgmmx.gmms[key1], mgmmy.gmms[key2])
                     push!(mpσ[key1], key2 => pσ)
-                    push!(mpϕ[key1], key2 => interactions[key1][key2] .* pϕ)
+                    push!(mpϕ[key1], key2 => interactions[keypair] .* pϕ)
                 end
             end
             if isempty(mpσ[key1])

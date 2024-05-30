@@ -158,18 +158,20 @@ end
         :negative => IsotropicGMM([ch_g]),
         :steric => IsotropicGMM(s_gs)
     ))
+    # interaction validation
     interactions = Dict(
-        :positive => Dict(
-            :positive => -1.0,
-            :negative => 1.0,
-        ),
-        :negative => Dict(
-            :positive => 1.0,
-            :negative => -1.0,
-        ),
-        :steric => Dict(
-            :steric => -1.0,
-        ),
+        (:positive, :negative) =>  1.0,
+        (:negative, :positive) => 1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
+    )
+    @test_throws AssertionError GMA.pairwise_consts(mgmmx, mgmmy, interactions)
+    interactions = Dict(
+        (:positive, :negative) =>  1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
     )
     randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
     res = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
@@ -208,17 +210,10 @@ end
     fliptform = AffineMap(RotationVec(π,0,0),[0,0,3]) ∘ AffineMap(RotationVec(0,0,π),[0,0,0])
     mgmmy = fliptform(mgmmy)
     interactions = Dict(
-        :positive => Dict(
-            :positive => -1.0,
-            :negative => 1.0,
-        ),
-        :negative => Dict(
-            :positive => 1.0,
-            :negative => -1.0,
-        ),
-        :steric => Dict(
-            :steric => -1.0,
-        ),
+        (:positive, :negative) =>  1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
     )
     f = zeros(3)
     force!(f, mgmmx, mgmmy; interactions=interactions)

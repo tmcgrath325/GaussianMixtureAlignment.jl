@@ -104,8 +104,9 @@ end
 
 function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
     if isnothing(pσ) && isnothing(pϕ)
-        pσ = x.σ^2 .+ [gy.σ^2 for gy in y.gaussians]
-        pϕ = [ x.ϕ * gy.ϕ for gy in y.gaussians]
+        xσsq = x.σ^2
+        pσ = [xσsq + gy.σ^2 for gy in y.gaussians]
+        pϕ = [x.ϕ * gy.ϕ for gy in y.gaussians]
     end
     for (gy, s, w) in zip(y.gaussians, pσ, pϕ)
         force!(f, x, gy, s, w; kwargs...)
@@ -121,10 +122,8 @@ function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropic
     end
 end
 
-function force!(f::AbstractVector, x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing; interactions=nothing)
-    if isnothing(mpσ) && isnothing(mpϕ)
-        mpσ, mpϕ = pairwise_consts(x, y, interactions) 
-    end
+function force!(f::AbstractVector, x::AbstractMultiGMM, y::AbstractMultiGMM; interactions=nothing)
+    mpσ, mpϕ = pairwise_consts(x, y, interactions) 
     for k1 in keys(mpσ)
         for k2 in keys(mpσ[k1])
             # don't pass coef as a keyword argument, since the interaction coefficient is baked into mpϕ
