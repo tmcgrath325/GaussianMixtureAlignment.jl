@@ -123,7 +123,7 @@ function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropic
 end
 
 function force!(f::AbstractVector, x::AbstractMultiGMM, y::AbstractMultiGMM; interactions=nothing)
-    mpσ, mpϕ = pairwise_consts(x, y, interactions) 
+    mpσ, mpϕ = pairwise_consts(x, y, interactions)
     for k1 in keys(mpσ)
         for k2 in keys(mpσ[k1])
             # don't pass coef as a keyword argument, since the interaction coefficient is baked into mpϕ

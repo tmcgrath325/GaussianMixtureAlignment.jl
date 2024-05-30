@@ -61,8 +61,8 @@ weights(mgmm::AbstractMultiGMM) = vcat([weights(gmm) for (k,gmm) in mgmm.gmms]..
 widths(mgmm::AbstractMultiGMM) = vcat([widths(gmm) for (k,gmm) in mgmm.gmms]...)
 
 """
-A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`, 
-and scaling factor `ϕ`. 
+A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`,
+and scaling factor `ϕ`.
 
 """
 struct IsotropicGaussian{N,T} <: AbstractIsotropicGaussian{N,T}
@@ -80,8 +80,9 @@ end
 IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, g.ϕ)
 
 convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ))
-promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)} 
+promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)}
 
+(g::IsotropicGaussian)(pos::AbstractVector) = exp(-sum(abs2, pos-g.μ)/(2*g.σ^2))*g.ϕ
 
 """
 A collection of `IsotropicGaussian`s, making up a Gaussian Mixture Model (GMM).
@@ -95,9 +96,11 @@ IsotropicGMM(gmm::AbstractIsotropicGMM) = IsotropicGMM(gmm.gaussians)
 convert(t::Type{IsotropicGMM}, gmm::AbstractIsotropicGMM) = t(gmm.gaussians)
 promote_rule(::Type{IsotropicGMM{N,T}}, ::Type{IsotropicGMM{N,S}}) where {T,S,N} = IsotropicGMM{N,promote_type(T,S)}
 
+(gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm.gaussians)
+
 """
-A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is, 
-only alignment scores between `IsotropicGMM`s with the same key are considered when aligning two `MultiGMM`s. 
+A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is,
+only alignment scores between `IsotropicGMM`s with the same key are considered when aligning two `MultiGMM`s.
 """
 struct IsotropicMultiGMM{N,T,K} <: AbstractIsotropicMultiGMM{N,T,K}
     gmms::Dict{K, IsotropicGMM{N,T}}
