@@ -96,6 +96,8 @@ end
     end
 end
 
+
+
 @testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
@@ -139,6 +141,17 @@ end
 
     # ROCS alignment should work perfectly for these GMMs
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
+end
+
+@testset "Evaluation at a point" begin
+    pts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
+    σ = ϕ = 1.
+    gmm = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in pts])
+
+    pt = [1, 1, 1]
+    gpt = [g(pt) for g in gmm.gaussians]
+    @test gpt ≈ [exp(-3/2), exp(-6/2), exp(-11/2)]
+    @test gmm(pt) == sum(gpt)
 end
 
 @testset "MultiGMMs with interactions" begin
