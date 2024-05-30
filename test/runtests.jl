@@ -96,8 +96,6 @@ end
     end
 end
 
-
-
 @testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
