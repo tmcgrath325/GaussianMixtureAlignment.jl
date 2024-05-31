@@ -9,7 +9,7 @@ isotropic (spherical) Gaussian distributions.
 REPL help
 =========
 
-? followed by an algorith or constructor name will print help to the terminal. See: \n
+? followed by an algorithm or constructor name will print help to the terminal. See: \n
     \t?IsotropicGaussian \n
     \t?IsotropicGMM \n
     \t?IsotropicMultiGMM \n

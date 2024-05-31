@@ -96,6 +96,50 @@ end
     end
 end
 
+@testset "GMM interface" begin
+    tetrahedral = [
+        [0.,0.,1.],
+        [sqrt(8/9), 0., -1/3],
+        [-sqrt(2/9),sqrt(2/3),-1/3],
+        [-sqrt(2/9),-sqrt(2/3),-1/3]
+    ]
+    ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
+    gmm = IsotropicGMM(s_gs)
+    @test length(gmm) == 4
+    @test gmm[2] == s_gs[2]
+    @test collect(gmm) == s_gs       # tests iterate
+    @test eltype(gmm) === eltype(typeof(gmm)) === IsotropicGaussian{3,Float64}
+    @test convert(IsotropicGMM{3,Float32}, gmm) isa IsotropicGMM{3,Float32}
+    @test_throws DimensionMismatch convert(IsotropicGMM{2,Float64}, gmm)
+    mgmmx = IsotropicMultiGMM(Dict(
+        :positive => IsotropicGMM([ch_g]),
+        :steric => gmm
+    ))
+    @test keys(mgmmx) == Set([:positive, :steric])
+    @test keytype(mgmmx) === keytype(typeof(mgmmx)) === Symbol
+    @test valtype(mgmmx) === valtype(typeof(mgmmx)) === IsotropicGMM{3,Float64}
+    @test eltype(mgmmx) === eltype(typeof(mgmmx)) === Pair{Symbol, IsotropicGMM{3,Float64}}
+    @test length(mgmmx) == 2
+    @test length(mgmmx[:steric]) == 4
+    @test mgmmx[:steric][2] == s_gs[2]
+    @test collect(mgmmx) == collect(mgmmx.gmms) # tests iterate
+    @test get!(valtype(mgmmx), mgmmx, :positive) == mgmmx[:positive]
+    gmm = get!(valtype(mgmmx), mgmmx, :acceptor)
+    @test isempty(gmm) && gmm isa IsotropicGMM{3,Float64}
+    push!(gmm, ch_g)
+    @test length(gmm) == 1
+    pop!(gmm)
+    @test isempty(gmm)
+    push!(gmm, ch_g)
+    empty!(gmm)
+    @test isempty(gmm)
+    delete!(mgmmx, :acceptor)
+    @test !haskey(mgmmx, :acceptor)
+    empty!(mgmmx)
+    @test isempty(mgmmx)
+end
+
 @testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
