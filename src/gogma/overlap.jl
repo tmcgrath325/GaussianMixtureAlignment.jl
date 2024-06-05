@@ -4,37 +4,21 @@
 Calculates the unnormalized overlap between two Gaussian distributions with width `s`,
 weight `w', and squared distance `distsq`.
 """
-function overlap(distsq::Real, s::Real, w::Real)
+function gaussian_overlap(distsq::Real, s::Real, w::Real)
     return w * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
     # Note, the normalization term for the Gaussians is left out, since it is not required that the total "volume" of each Gaussian
     # is equal to 1 (e.g. satisfying the requirements for a probability distribution)
 end
 
-"""
-    ovlp = overlap(dist, σx, σy, ϕx, ϕy)
-
-Calculates the unnormalized overlap between two Gaussian distributions with variances
-`σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`.
-"""
-function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real)
-    return overlap(dist^2, σx^2 + σy^2, ϕx*ϕy)
+function generic_overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real; objective=gaussian_overlap, kwargs...)
+    return objective(dist^2, σx^2 + σy^2, ϕx*ϕy; kwargs...)
 end
 
-"""
-    ovlp = overlap(x::IsotropicGaussian, y::IsotropicGaussian)
-
-Calculates the unnormalized overlap between two `IsotropicGaussian` objects.
-"""
-function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ)
-    return overlap(sum(abs2, x.μ.-y.μ), s, w)
+function generic_overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ; objective=gaussian_overlap, kwargs...)
+    return objective(sum(abs2, x.μ.-y.μ), s, w; kwargs...)
 end
 
-"""
-    ovlp = overlap(x::AbstractSingleGMM, y::AbstractSingleGMM)
-
-Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
-"""
-function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
+function generic_overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing; kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) && isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
@@ -44,32 +28,38 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for (i,gx) in enumerate(x.gaussians)
         for (j,gy) in enumerate(y.gaussians)
-            ovlp += overlap(gx, gy, pσ[i,j], pϕ[i,j])
+            ovlp += generic_overlap(gx, gy, pσ[i,j], pϕ[i,j]; kwargs...)
         end
     end
     return ovlp
 end
 
-"""
-    ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM)
-
-Calculates the unnormalized overlap between two `AbstractMultiGMM` objects.
-"""
-function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing, interactions=nothing)
+function generic_overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing, interactions=nothing; objective=gaussian_overlap, kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) && isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(x, y, interactions)
     end
+    
+    isdict = isa(objective, Dict)
 
     # sum overlaps from each keyed pairs of GMM
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for k1 in keys(mpσ)
         for k2 in keys(mpσ[k1])
-            ovlp += overlap(x.gmms[k1], y.gmms[k2], mpσ[k1][k2], mpϕ[k1][k2])
+            obj = !isdict ? objective : (haskey(objective, (k1,k2)) ? objective[(k1,k2)] : objective[(k2,k1)])
+            ovlp += generic_overlap(x.gmms[k1], y.gmms[k2], mpσ[k1][k2], mpϕ[k1][k2]; objective = obj, kwargs...)
         end
     end
     return ovlp
 end
+
+"""
+    ovlp = overlap(x::G, y::G) where G<:Union{AbstractGaussian, AbstractGMM}
+
+Calculates the unnormalized overlap between two Gaussians or GMMs.
+"""
+overlap(args...; kwargs...) = generic_overlap(args...; objective=gaussian_overlap, kwargs...)
+
 
 """
     l2dist = distance(x, y)
@@ -94,7 +84,7 @@ end
 
 function force!(f::AbstractVector, x::AbstractVector, y::AbstractVector, s::Real, w::Real)
     Δ = y - x
-    f .+= Δ / s * overlap(sum(abs2, Δ), s, w)
+    f .+= Δ / s * gaussian_overlap(sum(abs2, Δ), s, w)
 end
 
 function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian,

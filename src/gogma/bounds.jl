@@ -63,10 +63,10 @@ end
 
 
 """
-    lowerbound, upperbound = gauss_l2_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ)
-    lowerbound, upperbound = gauss_l2_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ)
+    lowerbound, upperbound = generic_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ; objective = overlap)
+    lowerbound, upperbound = generic_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ; objective = gaussian_overlap)
 
-Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of 
+Finds the bounds for the specified `objective` function between two isotropic Gaussian distributions, two isotropic GMMs, or two sets of 
 labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `R`, `T`, `σᵣ` and `σₜ`.
 
 `R` and `T` represent the rotation and translation, respectively, that are at the center of the uncertainty region. If they are not provided, 
@@ -74,27 +74,29 @@ the uncertainty region is assumed to be centered at the origin (i.e. x has alrea
 
 `σᵣ` and `σₜ` represent the sizes of the rotation and translation uncertainty regions.
 
+The `objective` should be a function that takes the squared distance between the means of two `IsotropicGaussian`s, the sum of their variances, and the product of their amplitudes.
+
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
+function generic_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds, objective = gauss_l2_bounds, kwargs...)
     (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ, w < 0)
 
     # evaluate objective function at each distance to get upper and lower bounds
-    return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
+    return -objective(lbdist^2, s, w; kwargs...), -objective(ubdist^2, s, w; kwargs...)
 end
 
 # gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
 #     ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
 
-gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
-    ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
+generic_bounds(x::AbstractGaussian, y::AbstractGaussian, block::UncertaintyRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
+    ) = generic_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, s, w; kwargs...)
 
-gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
-    ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), s, w; kwargs...)
+generic_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
+    ) = generic_bounds(x, y, UncertaintyRegion(block), s, w; kwargs...)
 
 
 
-function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; kwargs...)
+function generic_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
@@ -105,24 +107,28 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::Ro
     ub = 0.
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            lb, ub = (lb, ub) .+ generic_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
         end
     end
     return lb, ub
 end
 
-function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing)
+function generic_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing; objective=gaussian_overlap, kwargs...)
     # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy, interactions)
     end
+
+    # allow for different objective functions for each pair of keys
+    isdict = isa(objective, Dict)
 
     # sum bounds for each pair of points
     lb = 0.
     ub = 0.
     for (key1, intrs) in mpσ
         for (key2, pσ) in intrs
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], R, T, σᵣ, σₜ, pσ, mpϕ[key1][key2])
+            obj = !isdict ? objective : (haskey(objective, (key1,key2)) ? objective[(key1,key2)] : objective[(key2,key1)])
+            lb, ub = (lb, ub) .+ generic_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], R, T, σᵣ, σₜ, pσ, mpϕ[key1][key2]; objective = obj, kwargs...)
         end
     end
     return lb, ub
@@ -131,8 +137,25 @@ end
 # gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
 #     ) = gauss_l2_bounds(R*x, y-T, args...; kwargs...)
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args...; kwargs...
-    ) = gauss_l2_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, args...; kwargs...)
+generic_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args...; kwargs...
+    ) = generic_bounds(x, y, block.R, block.T, block.σᵣ, block.σₜ, args...; kwargs...)
 
-gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, args...; kwargs...
-    ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), args...; kwargs...)
+generic_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, args...; kwargs...
+    ) = generic_bounds(x, y, UncertaintyRegion(block), args...; kwargs...)
+
+
+"""
+    lowerbound, upperbound = gauss_l2_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ)
+    lowerbound, upperbound = gauss_l2_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ)
+
+Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or two sets of 
+labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `R`, `T`, `σᵣ` and `σₜ`.
+
+`R` and `T` represent the rotation and translation, respectively, that are at the center of the uncertainty region. If they are not provided, 
+the uncertainty region is assumed to be centered at the origin (i.e. x has already been transformed).
+
+`σᵣ` and `σₜ` represent the sizes of the rotation and translation uncertainty regions.
+
+See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
+"""
+gauss_l2_bounds(args...; kwargs...) = generic_bounds(args...; objective = gaussian_overlap, kwargs...)

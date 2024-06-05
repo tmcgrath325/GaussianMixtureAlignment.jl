@@ -43,29 +43,29 @@ const GMA = GaussianMixtureAlignment
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(0.))
-    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ) atol=1e-16
-    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap(7^2,2*σ^2,ϕ*ϕ) atol=1e-16
+    @test ub ≈ -gaussian_overlap(7^2,2*σ^2,ϕ*ϕ)
     lb, ub = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
-    @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ)
+    @test lb ≈ ub ≈ -gaussian_overlap(1,2*σ^2,ϕ*ϕ)
     # region with closest alignment at 90 degree rotation
     lb = gauss_l2_bounds(x,y,RotationRegion(π/2/sqrt3))[1]
-    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap(5^2,2*σ^2,ϕ*ϕ)
     lb = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
-    @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap(5^2,2*σ^2,ϕ*ϕ)
 
     # translation distance, no rotation
     # translation region centered at origin
     lb, ub = gauss_l2_bounds(x,y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ)
-    @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap(6^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -gaussian_overlap(7^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 1 in +x
     lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
-    @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap(7^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -gaussian_overlap(8^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 3 in +y
     lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
-    @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ)
-    @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ)
+    @test lb ≈ -gaussian_overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ)
+    @test ub ≈ -gaussian_overlap(58,2*σ^2,ϕ*ϕ)
 
 end
 
@@ -230,6 +230,49 @@ end
     )
     randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
     res = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
+end
+
+@testset "User-supplied objective" begin
+    tetrahedral = [
+        [0.,0.,1.],
+        [sqrt(8/9), 0., -1/3],
+        [-sqrt(2/9),sqrt(2/3),-1/3],
+        [-sqrt(2/9),-sqrt(2/3),-1/3]
+    ]
+    ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
+    mgmmx = IsotropicMultiGMM(Dict(
+        :positive => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    mgmmy = IsotropicMultiGMM(Dict(
+        :negative => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    interactions = Dict(
+        (:positive, :negative) =>  1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
+    )
+    randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
+
+    # allowing some fuzziness in the distance
+    relaxed_overlap(distsq, s, w) = gaussian_overlap(max(0, distsq - sign(w) * 0.5), s, w)
+    res1 = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
+    res2 = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock, objective=relaxed_overlap)
+    @test res1.upperbound > res2.upperbound
+    @test res1.upperbound > -generic_overlap(res1.tform(randtform(mgmmx)), mgmmy, nothing, nothing, interactions; objective=relaxed_overlap)
+
+    # using different objective functions for different interactions
+    objective = Dict(
+        (:positive, :negative) =>  gaussian_overlap,
+        (:positive, :positive) => gaussian_overlap,
+        (:negative, :negative) => gaussian_overlap,
+        (:steric, :steric) => relaxed_overlap,
+    )
+    res3 = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock, objective=objective)
+    @test res1.upperbound > res3.upperbound > res2.upperbound
 end
 
 @testset "Forces" begin
