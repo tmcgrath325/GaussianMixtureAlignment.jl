@@ -1,4 +1,5 @@
-import Base: eltype, length, size, getindex, iterate, convert, promote_rule, keys
+import Base: eltype, keytype, valtype, length, size, getindex, iterate, convert, promote_rule,
+             keys, values, push!, pop!, empty!, haskey, get, get!, delete!
 
 # Type structure: leaving things open for adding anisotropic Gaussians and GMMs
 
@@ -41,7 +42,10 @@ iterate(gmm::AbstractSingleGMM) = iterate(gmm.gaussians)
 iterate(gmm::AbstractSingleGMM, i) = iterate(gmm.gaussians, i)
 size(gmm::AbstractSingleGMM{N,T}) where {N,T} = (length(gmm.gaussians), N)
 size(gmm::AbstractSingleGMM{N,T}, idx::Int) where {N,T} = (length(gmm.gaussians), N)[idx]
-eltype(gmm::AbstractSingleGMM) = eltype(gmm.gaussians);
+eltype(gmm::AbstractSingleGMM) = eltype(gmm.gaussians)
+push!(gmm::AbstractSingleGMM, g::AbstractGaussian) = push!(gmm.gaussians, g)
+pop!(gmm::AbstractSingleGMM) = pop!(gmm.gaussians)
+empty!(gmm::AbstractSingleGMM) = empty!(gmm.gaussians)
 
 coords(gmm::AbstractSingleGMM) = hcat([g.μ for g in gmm.gaussians]...)
 weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
@@ -54,7 +58,16 @@ iterate(mgmm::AbstractMultiGMM) = iterate(mgmm.gmms)
 iterate(mgmm::AbstractMultiGMM, i) = iterate(mgmm.gmms, i)
 size(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = (length(mgmm.gmms), N)
 size(mgmm::AbstractMultiGMM{N,T,K}, idx::Int) where {N,T,K} = (length(mgmm.gmms), N)[idx]
-eltype(mgmm::AbstractMultiGMM) = eltype(mgmm.gmms);
+eltype(mgmm::AbstractMultiGMM) = eltype(mgmm.gmms)
+eltype(::Type{MGMM}) where MGMM<:AbstractMultiGMM = Pair{keytype(MGMM),valtype(MGMM)}
+keytype(mgmm::AbstractMultiGMM) = keytype(typeof(mgmm))
+keytype(::Type{<:AbstractMultiGMM{N,T,K}}) where {N,T,K} = K
+valtype(mgmm::AbstractMultiGMM) = valtype(mgmm.gmms)
+haskey(mgmm::AbstractMultiGMM, k) = haskey(mgmm.gmms, k)
+get(mgmm::AbstractMultiGMM, k, default) = get(mgmm.gmms, k, default)
+get!(::Type{V}, mgmm::AbstractMultiGMM, k) where V = get!(V, mgmm.gmms, k)
+delete!(mgmm::AbstractMultiGMM, k) = delete!(mgmm.gmms, k)
+empty!(mgmm::AbstractMultiGMM) = empty!(mgmm.gmms)
 
 coords(mgmm::AbstractMultiGMM) = hcat([coords(gmm) for (k,gmm) in mgmm.gmms]...)
 weights(mgmm::AbstractMultiGMM) = vcat([weights(gmm) for (k,gmm) in mgmm.gmms]...)
@@ -79,7 +92,7 @@ end
 
 IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, g.ϕ)
 
-convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian(SVector{N,T}(g.μ), T(g.σ), T(g.ϕ))
+convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian{N,T}(g.μ, g.σ, g.ϕ)
 promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)}
 
 (g::IsotropicGaussian)(pos::AbstractVector) = exp(-sum(abs2, pos-g.μ)/(2*g.σ^2))*g.ϕ
@@ -92,11 +105,13 @@ struct IsotropicGMM{N,T} <: AbstractIsotropicGMM{N,T}
 end
 
 IsotropicGMM(gmm::AbstractIsotropicGMM) = IsotropicGMM(gmm.gaussians)
+IsotropicGMM{N,T}() where {N,T} = IsotropicGMM{N,T}(IsotropicGaussian{N,T}[])
 
-convert(t::Type{IsotropicGMM}, gmm::AbstractIsotropicGMM) = t(gmm.gaussians)
+convert(::Type{GMM}, gmm::AbstractIsotropicGMM) where GMM<:IsotropicGMM = GMM(gmm.gaussians)
 promote_rule(::Type{IsotropicGMM{N,T}}, ::Type{IsotropicGMM{N,S}}) where {T,S,N} = IsotropicGMM{N,promote_type(T,S)}
+eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 
-(gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm.gaussians)
+(gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
 
 """
 A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is,
@@ -110,6 +125,7 @@ IsotropicMultiGMM(gmm::AbstractIsotropicMultiGMM) = IsotropicMultiGMM(gmm.gmms)
 
 convert(t::Type{IsotropicMultiGMM}, mgmm::AbstractIsotropicMultiGMM) = t(mgmm.gmms)
 promote_rule(::Type{IsotropicMultiGMM{N,T,K}}, ::Type{IsotropicMultiGMM{N,S,K}}) where {N,T,S,K} = IsotropicMultiGMM{N,promote_type(T,S),K}
+valtype(::Type{IsotropicMultiGMM{N,T,K}}) where {N,T,K} = IsotropicGMM{N,T}
 
 # descriptive display
 # TODO update to display type parameters, make use of supertypes, etc

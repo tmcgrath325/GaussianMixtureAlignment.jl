@@ -91,7 +91,7 @@ function plot!(gd::GMMDisplay{<:NTuple{<:Any,<:AbstractIsotropicGMM}})
     label = gd[:label][]
     for (i,gmm) in enumerate(gmms)
         col = isnothing(color) ? palette[(i-1) % len + 1] : color
-        gaussiandisplay!(gd, gmm.gaussians...; display=disp, color=col, label)
+        gaussiandisplay!(gd, gmm...; display=disp, color=col, label)
     end
     return gd
 end
@@ -103,13 +103,13 @@ function plot!(gd::GMMDisplay{<:NTuple{<:Any,<:AbstractIsotropicMultiGMM{N,T,K}}
     palette = gd[:palette][]
     allkeys = Set{K}()
     for mgmm in mgmms
-        allkeys = allkeys ∪ keys(mgmm.gmms)
+        allkeys = allkeys ∪ keys(mgmm)
     end
     len = length(allkeys)
     for (i,k) in enumerate(allkeys)
         col = isnothing(color) ? palette[(i-1) % len + 1] : color
         for mgmm in mgmms
-            haskey(mgmm.gmms, k) && gmmdisplay!(gd, mgmm.gmms[k]; display=disp, color=col, palette=palette, label=string(k))
+            haskey(mgmm, k) && gmmdisplay!(gd, mgmm[k]; display=disp, color=col, palette=palette, label=string(k))
         end
     end
     return gd
