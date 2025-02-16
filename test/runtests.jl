@@ -284,9 +284,9 @@ end
     yset = PointSet(ypts);
 
     goicp_res = goicp_align(xset, yset)
-    @test goicp_res.tform(xset.coords) ≈ yset.coords
+    @test GaussianMixtureAlignment.transform_columns(goicp_res.tform, xset.coords) ≈ yset.coords
     goih_res = goih_align(xset, yset)
-    @test goih_res.tform(xset.coords) ≈ yset.coords
+    @test GaussianMixtureAlignment.transform_columns(goih_res.tform, xset.coords) ≈ yset.coords
 
 end
 
@@ -305,7 +305,7 @@ end
 @testset "GO-ICP" begin
     ycoords = rand(3,50) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
-    xcoords = randtform(ycoords)
+    xcoords = GaussianMixtureAlignment.transform_columns(randtform, ycoords)
 
     xset = PointSet(xcoords, ones(size(xcoords,2)))
     yset = PointSet(xcoords, ones(size(ycoords,2)))
@@ -318,7 +318,7 @@ end
 @testset "globally optimal iterative hungarian" begin
     ycoords = rand(3,5) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
-    xcoords = randtform(ycoords)
+    xcoords = GaussianMixtureAlignment.transform_columns(randtform, ycoords)
 
     xset = PointSet(xcoords, ones(size(xcoords,2)))
     yset = PointSet(xcoords, ones(size(ycoords,2)))

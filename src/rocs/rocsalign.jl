@@ -5,14 +5,14 @@ struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:Abs
     tform::F
 end
 
-""" 
+"""
     m = second_moment(gmm, center, dim1, dim2)
 
 Returns the second order moment of `gmm`
 """
-function mass_matrix(positions::AbstractMatrix{<:Real}, 
-                     weights=ones(eltype(positions),size(positions,2)), 
-                     widths=zeros(eltype(positions),size(positions,2)), 
+function mass_matrix(positions::AbstractMatrix{<:Real},
+                     weights=ones(eltype(positions),size(positions,2)),
+                     widths=zeros(eltype(positions),size(positions,2)),
                      center=centroid(positions,weights))
     t = eltype(positions)
     npts = size(positions,2)
@@ -46,7 +46,7 @@ is made diagonal, and the GMM center of mass is made the origin.
 """
 function inertial_transforms(positions::AbstractMatrix{<:Real},
                              weights=ones(eltype(positions),size(positions,2)),
-                             widths=zeros(eltype(positions),size(positions,2)); 
+                             widths=zeros(eltype(positions),size(positions,2));
                              invert = false)
     com = centroid(positions, weights / sum(weights))
     massmat = mass_matrix(positions, weights, widths, com)
@@ -60,7 +60,7 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
 
     # first, align the the eigenvectors to the coordinate system axes
     # make sure that a reflection is not performed
-    if det(evecs) < 0 
+    if det(evecs) < 0
         evecs[:,end] = -evecs[:,end]
     end
 
@@ -100,11 +100,11 @@ function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
 
     # combine the inertial transform with the subsequent alignment transform for the best result
     minoverlap, mindex = findmin([r[1] for r in results])
-    tformmoving = AffineMap(results[mindex][2]) ∘ tformsmoving[mindex]
+    tformmoving = build_tform(AffineMap, results[mindex][2]) ∘ tformsmoving[mindex]
 
-    # Apply the inverse of `tformfixed` to the optimized transformation 
+    # Apply the inverse of `tformfixed` to the optimized transformation
     alignment_tform = inv(tformfixed) ∘ tformmoving
-    
+
     # return the result
     return ROCSAlignmentResult(gmmmoving, gmmfixed, minoverlap, alignment_tform)
 end

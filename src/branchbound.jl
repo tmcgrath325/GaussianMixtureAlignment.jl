@@ -73,7 +73,7 @@ end
 #     maxevals      - the maximum number of objective function evaluations allowed before search termination
 #     maxstagnant   - the maximum number of `Block` splits allowed without improvement before search termination
 """
-    result = branchbound(x, y; nsplits=2, searchspace=nothing, 
+    result = branchbound(x, y; nsplits=2, searchspace=nothing,
                          rot=nothing, trl=nothing, blockfun=fullBlock, objfun=alignment_objective,
                          rtol=0.01, maxblocks=5e8, maxeva ls=Inf, maxstagnant=Inf, threads=false)
 
@@ -82,12 +82,12 @@ and `y`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
 
 Returns a `GlobalAlignmentResult` that contains the maximized overlap of the two GMMs (the upperbound on the objective function),
 a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
-number of evaluations during the alignment procedure. 
-""" 
+number of evaluations during the alignment procedure.
+"""
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
-                     nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun=AffineMap,
-                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, separatesplit=false)
+                     nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun::TF=AffineMap,
+                     atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, separatesplit=false) where TF
     x = xinput
     y = yinput
     if isodd(nsplits)
@@ -127,12 +127,12 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     ub, bestloc = localfun(x, y, searchspace)
 
     progress = [(0, ub, bestloc)]
-    
+
     # split cubes until convergence
     ndivisions = 0
     sinceimprove = 0
     evalsperdiv = rot_trl_split ? length(x)*length(y)*2*nsplits^3 : length(x)*length(y)*nsplits^ndims
-    
+
     while !isempty(hull)
         if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
             break
@@ -150,9 +150,9 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
 
         # if the best solution so far is close enough to the best possible solution, end
         if abs((ub - lb)/lb) < rtol || abs(ub-lb) < atol
-            tform = tformfun(bestloc)
+            tform = build_tform(tformfun, bestloc)
             if centerinputs
-                tform = centerx_tform ∘ tform ∘  inv(centery_tform) 
+                tform = centerx_tform ∘ tform ∘  inv(centery_tform)
             end
             return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "optimum within tolerance")
         end
@@ -222,17 +222,17 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         end
     end
     if isempty(hull)
-        tform = tformfun(bestloc)
+        tform = build_tform(tformfun, bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lb, tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
+        return GlobalAlignmentResult(x, y, ub, lb, build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
     else
-        tform = tformfun(bestloc)
+        tform = build_tform(tformfun, bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], tformfun(bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
     end
 end
 
@@ -296,14 +296,14 @@ function planefit(mgmm::AbstractIsotropicMultiGMM, R)
     return planefit(R * ptsmat)
 end
 
-function tiv_branchbound(   x::AbstractModel, 
-                            y::AbstractModel, 
-                            tivx::AbstractModel, 
-                            tivy::AbstractModel; 
-                            boundsfun=tight_distance_bounds, 
-                            rot_boundsfun=boundsfun, 
-                            trl_boundsfun=boundsfun, 
-                            localfun=local_align, 
+function tiv_branchbound(   x::AbstractModel,
+                            y::AbstractModel,
+                            tivx::AbstractModel,
+                            tivy::AbstractModel;
+                            boundsfun=tight_distance_bounds,
+                            rot_boundsfun=boundsfun,
+                            trl_boundsfun=boundsfun,
+                            localfun=local_align,
                             rot_localfun=localfun,
                             trl_localfun=localfun,
                             kwargs...)
@@ -311,7 +311,7 @@ function tiv_branchbound(   x::AbstractModel,
     p = t(π)
     z = zero(t)
     zeroTranslation = SVector{3}(z,z,z)
-    
+
     rot_res = rot_branchbound(tivx, tivy; localfun=rot_localfun, boundsfun=rot_boundsfun, kwargs...)
     rotblock = RotationRegion(RotationVec(rot_res.tform_params...), zeroTranslation, p)
     rotscore, rotpos = rot_localfun(tivx, tivy, rotblock)
@@ -339,8 +339,8 @@ function tiv_branchbound(   x::AbstractModel,
         min = trl_res.upperbound
         bestpos = (rot_res.tform_params...,  trl_res.tform_params...)
     end
- 
-    return TIVAlignmentResult(x, y, min, trl_res.lowerbound, AffineMap(bestpos), bestpos, 
+
+    return TIVAlignmentResult(x, y, min, trl_res.lowerbound, build_tform(AffineMap, bestpos), bestpos,
                               rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
                               rot_res.num_blocks+trl_res.num_blocks,
                               rot_res, trl_res)
