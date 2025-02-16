@@ -6,10 +6,16 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 using ForwardDiff
+using Aqua
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
+
+@testset "Aqua" begin
+    # Only run Aqua tests on CI (to avoid slowing down local development)
+    get(ENV, "CI", "false") == "true" && Aqua.test_all(GaussianMixtureAlignment)
+end
 
 @testset "search space bounds" begin
     μx = SVector(3,0,0)
