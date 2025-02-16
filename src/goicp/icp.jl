@@ -14,7 +14,7 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
         # TO DO: make sure that, for hungarian assignment, the proper weights are selected
 
         prevscore = score
-        tform = kabsch(P, Q, matches, wp, wq)
+        tform = kabsch_matches(P, Q, matches, wp, wq)
         score = squared_deviation(tform(P),Q,matches)
         if prevscore < score
             matches = prevmatches
@@ -38,12 +38,12 @@ function icp(P::AbstractMatrix, Q::AbstractMatrix, wp=ones(size(P,2)), wq=ones(s
 end
 icp(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = icp(P.coords, Q.coords, P.weights, Q.weights; kwargs...)
 
-iterative_hungarian(args...; kwargs...) = iterate_kabsch(args...; correspondence = hungarian_assignment, kwargs...) 
+iterative_hungarian(args...; kwargs...) = iterate_kabsch(args...; correspondence = hungarian_assignment, kwargs...)
 
 function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, block::SearchRegion; matching_fun = iterative_hungarian, kwargs...)
     tformedx = block.R*x + block.T
     matches = matching_fun(tformedx, y; kwargs...)
-    tform = kabsch(x, y, matches)
+    tform = kabsch_matches(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
     R = RotationVec(tform.linear)
     params = (R.sx, R.sy, R.sz, tform.translation...)
@@ -53,7 +53,7 @@ end
 function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, block::RotationRegion; matching_fun = iterative_hungarian, kwargs...)
     tformedx = block.R*x + block.T
     matches = matching_fun(tformedx, y; kwargs...)
-    tform = kabsch(x, y, matches)
+    tform = kabsch_matches(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
     R = RotationVec(tform.linear)
     params = (R.sx, R.sy, R.sz)
