@@ -15,14 +15,15 @@ function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations
 
         prevscore = score
         tform = kabsch_matches(P, Q, matches, wp, wq)
-        score = squared_deviation(tform(P),Q,matches)
+        Pt = transform_columns(tform, P)
+        score = squared_deviation(Pt,Q,matches)
         if prevscore < score
             matches = prevmatches
             break
         end
 
         prevmatches = matches
-        matches = correspondence(tform(P),Q)
+        matches = correspondence(Pt,Q)
         if matches == prevmatches
             break
         end
@@ -63,7 +64,7 @@ end
 function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, block::TranslationRegion; matching_fun = iterative_hungarian, kwargs...)
     tformedx = block.R*x + block.T
     matches = matching_fun(tformedx, y; kwargs...)
-    tform = kabsch(x, y, matches)
+    tform = kabsch_matches(x, y, matches)
     score = squared_deviation(tform(x), y, matches)
     params = (tform.translation...,)
     return (score, params)
