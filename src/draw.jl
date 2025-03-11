@@ -96,7 +96,16 @@ function plot!(gd::GMMDisplay{<:NTuple{<:Any,<:AbstractIsotropicGMM}})
     return gd
 end
 
-function plot!(gd::GMMDisplay{<:NTuple{<:Any,<:AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
+@recipe(MultiGMMDisplay, g) do scene
+    Theme(
+        display = :wire,
+        palette = DEFAULT_COLORS, 
+        color = nothing,
+        label = "",
+    )
+end
+
+function plot!(gd::MultiGMMDisplay{<:NTuple{<:Any,<:AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
     mgmms = [gd[i][] for i=1:length(gd)]
     disp = gd[:display][]
     color = gd[:color][]

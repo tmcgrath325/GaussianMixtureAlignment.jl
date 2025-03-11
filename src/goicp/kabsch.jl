@@ -33,7 +33,7 @@ end
 
 kabsch_matches(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = kabsch_matches(P.coords, Q.coords, matches, P.weights, Q.weights);
 
-function kabsch_matches(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict, wp = weights(P), wq = weights(Q)) where {N,T,K}
+function kabsch_matches(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict::Dict, wp = weights(P), wq = weights(Q)) where {N,T,K}
     matchedP, matchedQ = matched_points(P,Q,matchesdict)
     w = Vector{T}()
 

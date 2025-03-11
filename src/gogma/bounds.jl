@@ -25,8 +25,17 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
-function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Union{Nothing,Dict{Tuple{K,K},V}}=nothing) where {N,T,S,K,V <: Number}
-    t = promote_type(numbertype(mgmmx),numbertype(mgmmy), isnothing(interactions) ? numbertype(mgmmx) : V)
+function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Nothing=nothing) where {N,T,S,K}
+    t = promote_type(T, S)
+    self_interactions = Dict{Tuple{K,K},t}()
+    for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
+        self_interactions[(key,key)] = one(t)
+    end 
+    pairwise_consts(mgmmx, mgmmy, self_interactions)
+end
+
+function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V <: Number}
+    t = promote_type(T, S, isnothing(interactions) ? T : V)
     xkeys = keys(mgmmx.gmms)
     ykeys = keys(mgmmy.gmms)
     if isnothing(interactions)

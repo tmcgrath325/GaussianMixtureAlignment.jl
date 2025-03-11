@@ -3,7 +3,7 @@ squared_deviation(P::AbstractMatrix, Q::AbstractMatrix, matches::AbstractVector{
 squared_deviation(P::AbstractPointSet, Q::AbstractPointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = squared_deviation(P.coords, Q.coords, matches, P.weights, Q.weights)
 squared_deviation(P::AbstractPointSet, Q::AbstractPointSet) = squared_deviation(P.coords, Q.coords, hungarian_assignment(P.coords,Q.coords), P.weights, Q.weights)
 
-function squared_deviation(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict) where {N,T,K}
+function squared_deviation(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict::Dict) where {N,T,K}
     sqdev = zero(T)
     for (key, matches) in matchesdict
         sqdev += squared_deviation(P.pointsets[key], Q.pointsets[key], matches)
