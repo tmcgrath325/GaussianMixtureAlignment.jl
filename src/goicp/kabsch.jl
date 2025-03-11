@@ -14,9 +14,15 @@ end
 kabsch_centered_matches(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = kabsch_centered_matches(P.coords, Q.coords, matches, P.weights, Q.weights);
 
 # transform DxN matrices
-function (tform::Translation)(A::AbstractMatrix)
-    return hcat([tform(A[:,i]) for i=1:size(A,2)]...)
+function transform_columns(tform::Translation, A::AbstractMatrix)
+    return reduce(hcat, [tform(A[:,i]) for i=1:size(A,2)])
 end
+function transform_columns(tform::AffineMap, A::AbstractMatrix)
+    l = LinearMap(tform.linear)
+    t = Translation(tform.translation)
+    transform_columns(t, l(A))
+end
+transform_columns(tform::Union{Translation,AffineMap}, P::PointSet) = PointSet(transform_columns(tform, P.coords), P.weights)
 
 
 function kabsch_matches(P,Q,matches::AbstractVector{<:Tuple{Int,Int}},wp=ones(size(P,2)),wq=ones(size(Q,2)))
@@ -27,7 +33,7 @@ end
 
 kabsch_matches(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tuple{Int,Int}}) = kabsch_matches(P.coords, Q.coords, matches, P.weights, Q.weights);
 
-function kabsch_matches(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict, wp = weights(P), wq = weights(Q)) where {N,T,K}
+function kabsch_matches(P::AbstractMultiPointSet{N,T,K}, Q::AbstractMultiPointSet{N,T,K}, matchesdict::Dict, wp = weights(P), wq = weights(Q)) where {N,T,K}
     matchedP, matchedQ = matched_points(P,Q,matchesdict)
     w = Vector{T}()
 

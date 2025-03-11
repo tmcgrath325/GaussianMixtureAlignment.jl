@@ -1,7 +1,9 @@
 ## splitting up searchcubes 
 
-function cuberanges(center::NTuple{N,T}, widths) where {N,T}
-    return  NTuple{N,Tuple{T,T}}([(center[i]-widths[i], center[i]+widths[i]) for i=1:length(center)])
+function cuberanges(center, widths)
+    map(zip(center, widths)) do (c,w)
+        (c-w, c+w)
+    end
 end
 
 cuberanges(R::RotationVec, T::SVector{3}, σᵣ, σₜ) = cuberanges((R.sx,R.sy,R.sz,T[1],T[2],T[3]), (σᵣ,σᵣ,σᵣ,σₜ,σₜ,σₜ))
@@ -31,8 +33,10 @@ function subranges(ranges, nsplits::Int=2)
     return children
 end
 
-function center(ranges::NTuple{N,Tuple{T,T}}) where {N,T}
-    return NTuple{N,T}([sum(dim)/2 for dim in ranges])
+function center(ranges)
+    map(ranges) do r
+        (r[1]+r[2])/2
+    end
 end
 
 ## supertype for search regions

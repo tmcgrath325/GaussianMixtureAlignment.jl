@@ -6,10 +6,16 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 using ForwardDiff
+using Aqua
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
+
+@testset "Aqua" begin
+    # Only run Aqua tests on CI (to avoid slowing down local development)
+    get(ENV, "CI", "false") == "true" && Aqua.test_all(GaussianMixtureAlignment)
+end
 
 @testset "search space bounds" begin
     μx = SVector(3,0,0)
@@ -284,9 +290,9 @@ end
     yset = PointSet(ypts);
 
     goicp_res = goicp_align(xset, yset)
-    @test goicp_res.tform(xset.coords) ≈ yset.coords
+    @test GaussianMixtureAlignment.transform_columns(goicp_res.tform, xset.coords) ≈ yset.coords
     goih_res = goih_align(xset, yset)
-    @test goih_res.tform(xset.coords) ≈ yset.coords
+    @test GaussianMixtureAlignment.transform_columns(goih_res.tform, xset.coords) ≈ yset.coords
 
 end
 
@@ -305,7 +311,7 @@ end
 @testset "GO-ICP" begin
     ycoords = rand(3,50) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
-    xcoords = randtform(ycoords)
+    xcoords = GaussianMixtureAlignment.transform_columns(randtform, ycoords)
 
     xset = PointSet(xcoords, ones(size(xcoords,2)))
     yset = PointSet(xcoords, ones(size(ycoords,2)))
@@ -318,7 +324,7 @@ end
 @testset "globally optimal iterative hungarian" begin
     ycoords = rand(3,5) * 5 .- 10;
     randtform = AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))
-    xcoords = randtform(ycoords)
+    xcoords = GaussianMixtureAlignment.transform_columns(randtform, ycoords)
 
     xset = PointSet(xcoords, ones(size(xcoords,2)))
     yset = PointSet(xcoords, ones(size(ycoords,2)))
