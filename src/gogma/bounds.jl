@@ -25,6 +25,21 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
+function pairwise_consts(gmmx::LabeledIsotropicGMM{N,T,K}, gmmy::LabeledIsotropicGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V<:Number}
+    @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
+    t = promote_type(T, S, V)
+    pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
+    for (i,gaussx) in enumerate(gmmx.gaussians)
+        for (j,gaussy) in enumerate(gmmy.gaussians)
+            keypair = (gmmx.labels[i], gmmy.labels[j])
+            keypair = haskey(interactions, keypair) ? keypair : (keypair[2], keypair[1])
+            pσ[i,j] = gaussx.σ^2 + gaussy.σ^2
+            pϕ[i,j] = ( haskey(interactions, keypair) ? interactions[keypair] : zero(t) ) * gaussx.ϕ * gaussy.ϕ
+        end
+    end
+    return pσ, pϕ
+end
+
 function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Nothing=nothing) where {N,T,S,K}
     t = promote_type(T, S)
     self_interactions = Dict{Tuple{K,K},t}()
@@ -35,17 +50,11 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
 end
 
 function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V <: Number}
-    t = promote_type(T, S, isnothing(interactions) ? T : V)
+    t = promote_type(T, S, V)
     xkeys = keys(mgmmx.gmms)
     ykeys = keys(mgmmy.gmms)
-    if isnothing(interactions)
-        interactions = Dict{Tuple{K,K},t}()
-        for key in xkeys ∩ ykeys
-            interactions[(key,key)] = one(t)
-        end
-    else
-        @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
-    end
+    @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
+
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
     ukeys = unique(Iterators.flatten(keys(interactions)))
     for key1 in ukeys

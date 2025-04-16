@@ -34,7 +34,7 @@ end
 
 Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
 """
-function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
+function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing, interactions::Nothing = nothing)
     # prepare pairwise widths and weights, if not provided
     if isnothing(pσ) && isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
@@ -49,6 +49,12 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
     end
     return ovlp
 end
+
+function overlap(x::LabeledIsotropicGMM, y::LabeledIsotropicGMM, pσ=nothing, pϕ=nothing, interactions::Dict = Dict())
+    pσ, pϕ = pairwise_consts(x, y, interactions)
+    return overlap(x, y, pσ, pϕ, nothing)
+end
+
 
 """
     ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM)
@@ -113,9 +119,9 @@ function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsot
     end
 end
 
-function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
+function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; interactions=nothing, kwargs...)
     if isnothing(pσ) && isnothing(pϕ)
-        pσ, pϕ = pairwise_consts(x, y)
+        pσ, pϕ = pairwise_consts(x, y, interactions)
     end
     for (i,gx) in enumerate(x.gaussians)
         force!(f, gx, y, pσ[i,:], pϕ[i,:]; kwargs...)

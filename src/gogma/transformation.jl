@@ -22,6 +22,18 @@ end
 
 Base.:-(x::IsotropicGMM, T::AbstractVector,) = x + (-T)
 
+function Base.:*(R::AbstractMatrix{W}, x::LabeledIsotropicGMM{N,V,K}) where {N,V,W,K}
+    numtype = promote_type(V, W)
+    return LabeledIsotropicGMM{N,numtype,K}([R*g for g in x.gaussians], x.labels)
+end
+
+function Base.:+(x::LabeledIsotropicGMM{N,V,K}, T::AbstractVector{W}) where {N,V,W,K}
+    numtype = promote_type(V, W)
+    return LabeledIsotropicGMM{N,numtype,K}([g+T for g in x.gaussians], x.labels)
+end
+
+Base.:-(x::LabeledIsotropicGMM, T::AbstractVector,) = x + (-T)
+
 function  Base.:*(R::AbstractMatrix{W}, x::IsotropicMultiGMM{N,V,K}) where {N,V,K,W}
     numtype = promote_type(V, W)
     gmmdict = Dict{K, IsotropicGMM{N,numtype}}()
