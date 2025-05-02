@@ -98,7 +98,29 @@ IsotropicGaussian(g::AbstractIsotropicGaussian) = IsotropicGaussian(g.μ, g.σ, 
 convert(::Type{IsotropicGaussian{N,T}}, g::AbstractIsotropicGaussian) where {N,T} = IsotropicGaussian{N,T}(g.μ, g.σ, g.ϕ)
 promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) where {N,T<:Real,S<:Real} = IsotropicGaussian{N,promote_type(T,S)}
 
-(g::IsotropicGaussian)(pos::AbstractVector) = exp(-sum(abs2, pos-g.μ)/(2*g.σ^2))*g.ϕ
+(g::AbstractIsotropicGaussian)(pos::AbstractVector) = exp(-sum(abs2, pos-g.μ)/(2*g.σ^2))*g.ϕ
+
+"""
+A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`,
+and scaling factor `ϕ`.
+
+"""
+struct LabeledIsotropicGaussian{N,T,K} <: AbstractIsotropicGaussian{N,T}
+    μ::SVector{N,T}
+    σ::T
+    ϕ::T
+    label::K
+end
+LabeledIsotropicGaussian(μ::SVector{N,T},σ::T,ϕ::T,label::K) where {N,T<:Real,K} = LabeledIsotropicGaussian{N,T,K}(μ,σ,ϕ,label)
+
+function LabeledIsotropicGaussian(μ::AbstractArray, σ::Real, ϕ::Real, label::K) where K
+    t = promote_type(eltype(μ), typeof(σ), typeof(ϕ))
+    return LabeledIsotropicGaussian{length(μ),t,K}(SVector{length(μ),t}(μ), t(σ), t(ϕ), label)
+end
+
+LabeledIsotropicGaussian(g::AbstractIsotropicGaussian, label) = LabeledIsotropicGaussian(g.μ, g.σ, g.ϕ, label)
+
+promote_rule(::Type{LabeledIsotropicGaussian{N,T,K}}, ::Type{LabeledIsotropicGaussian{N,S,K}}) where {N,T<:Real,S<:Real,K} = LabeledIsotropicGaussian{N,promote_type(T,S)}
 
 """
 A collection of `IsotropicGaussian`s, making up a Gaussian Mixture Model (GMM).
@@ -114,24 +136,20 @@ convert(::Type{GMM}, gmm::AbstractIsotropicGMM) where GMM<:IsotropicGMM = GMM(gm
 promote_rule(::Type{IsotropicGMM{N,T}}, ::Type{IsotropicGMM{N,S}}) where {T,S,N} = IsotropicGMM{N,promote_type(T,S)}
 eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 
-(gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
+(gmm::AbstractIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
 
 """
-A collection of `IsotropicGaussian`s, as well as a collection of their associated labels, making up a Gaussian Mixture Model (GMM).
+A collection of `LabeledIsotropicGaussian`s, making up a Gaussian Mixture Model (GMM).
 """
 struct LabeledIsotropicGMM{N,T,K} <: AbstractLabeledIsotropicGMM{N,T,K}
-    gaussians::Vector{IsotropicGaussian{N,T}}
-    labels::Vector{K}
+    gaussians::Vector{LabeledIsotropicGaussian{N,T,K}}
 end
 
-LabeledIsotropicGMM{N,T,K}() where {N,T,K} = IsotropicGMM{N,T}(IsotropicGaussian{N,T}[], K[])
+LabeledIsotropicGMM{N,T,K}() where {N,T,K} = LabeledIsotropicGMM{N,T,K}(LabeledIsotropicGaussian{N,T,K}[])
 
-convert(::Type{GMM}, gmm::LabeledIsotropicGMM) where GMM<:LabeledIsotropicGMM = GMM(gmm.gaussians, gmm.labels)
+convert(::Type{GMM}, gmm::LabeledIsotropicGMM) where GMM<:LabeledIsotropicGMM = GMM(gmm.gaussians)
 promote_rule(::Type{LabeledIsotropicGMM{N,T,K}}, ::Type{LabeledIsotropicGMM{N,S,K}}) where {T,S,N,K} = LabeledIsotropicGMM{N,promote_type(T,S),K}
-eltype(::Type{LabeledIsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
-
-(gmm::LabeledIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
-
+eltype(::Type{LabeledIsotropicGMM{N,T}}) where {N,T} = LabeledIsotropicGaussian{N,T,K}
 
 """
 A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is,

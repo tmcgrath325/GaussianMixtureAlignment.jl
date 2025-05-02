@@ -10,6 +10,18 @@ end
 
 Base.:-(x::IsotropicGaussian, T::AbstractVector,) = x + (-T)
 
+function Base.:*(R::AbstractMatrix{W}, x::LabeledIsotropicGaussian{N,V,K}) where {N,V,K,W}
+    numtype = promote_type(V, W)
+    return LabeledIsotropicGaussian{N,numtype,K}(R*x.μ, x.σ, x.ϕ, x.label)
+end
+
+function Base.:+(x::LabeledIsotropicGaussian{N,V,K}, T::AbstractVector{W}) where {N,V,K,W}
+    numtype = promote_type(V, W)
+    return LabeledIsotropicGaussian{N,numtype,K}(x.μ.+T, x.σ, x.ϕ, x.label)
+end
+
+Base.:-(x::LabeledIsotropicGaussian, T::AbstractVector,) = x + (-T)
+
 function Base.:*(R::AbstractMatrix{W}, x::IsotropicGMM{N,V}) where {N,V,W}
     numtype = promote_type(V, W)
     return IsotropicGMM{N,numtype}([R*g for g in x.gaussians])
@@ -24,12 +36,12 @@ Base.:-(x::IsotropicGMM, T::AbstractVector,) = x + (-T)
 
 function Base.:*(R::AbstractMatrix{W}, x::LabeledIsotropicGMM{N,V,K}) where {N,V,W,K}
     numtype = promote_type(V, W)
-    return LabeledIsotropicGMM{N,numtype,K}([R*g for g in x.gaussians], x.labels)
+    return LabeledIsotropicGMM{N,numtype,K}([R*g for g in x.gaussians])
 end
 
 function Base.:+(x::LabeledIsotropicGMM{N,V,K}, T::AbstractVector{W}) where {N,V,W,K}
     numtype = promote_type(V, W)
-    return LabeledIsotropicGMM{N,numtype,K}([g+T for g in x.gaussians], x.labels)
+    return LabeledIsotropicGMM{N,numtype,K}([g+T for g in x.gaussians])
 end
 
 Base.:-(x::LabeledIsotropicGMM, T::AbstractVector,) = x + (-T)

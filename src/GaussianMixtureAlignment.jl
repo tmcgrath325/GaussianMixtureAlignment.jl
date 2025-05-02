@@ -43,7 +43,7 @@ using IntervalFastMath
 using ThickNumbers 
 
 export AbstractGaussian, AbstractGMM
-export IsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
+export IsotropicGaussian, LabeledIsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
 export overlap, force!, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
 export PointSet, MultiPointSet

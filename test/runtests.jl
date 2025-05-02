@@ -249,13 +249,13 @@ end
     s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
     
     x_gs = [ch_g, s_gs...]
-    x_labels = [:positive, fill(:steric, length(s_gs))...]
+    x_gs_labeled = [LabeledIsotropicGaussian(ch_g, :positive), [LabeledIsotropicGaussian(s_g, :steric) for s_g in s_gs]...]
 
     y_gs = [ch_g, s_gs...]
-    y_labels = [:negative, fill(:steric, length(s_gs))...]
+    y_gs_labeled = [LabeledIsotropicGaussian(ch_g, :negative), [LabeledIsotropicGaussian(s_g, :steric) for s_g in s_gs]...]
 
-    lgmmx = LabeledIsotropicGMM(x_gs, x_labels)
-    lgmmy = LabeledIsotropicGMM(y_gs, y_labels)
+    lgmmx = LabeledIsotropicGMM(x_gs_labeled)
+    lgmmy = LabeledIsotropicGMM(y_gs_labeled)
 
     mgmmx = IsotropicMultiGMM(Dict(
         :positive => IsotropicGMM([ch_g]),

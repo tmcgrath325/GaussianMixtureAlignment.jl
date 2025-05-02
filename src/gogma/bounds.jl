@@ -31,7 +31,7 @@ function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N,T,K}, gmmy::Abstrac
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
         for (j,gaussy) in enumerate(gmmy.gaussians)
-            keypair = (gmmx.labels[i], gmmy.labels[j])
+            keypair = (gaussx.label, gaussy.label)
             keypair = haskey(interactions, keypair) ? keypair : (keypair[2], keypair[1])
             pσ[i,j] = gaussx.σ^2 + gaussy.σ^2
             pϕ[i,j] = ( haskey(interactions, keypair) ? interactions[keypair] : zero(t) ) * gaussx.ϕ * gaussy.ϕ
