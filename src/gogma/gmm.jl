@@ -16,7 +16,7 @@ abstract type AbstractSingleGMM{N,T} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicGMM{N,T} <: AbstractSingleGMM{N,T} end
     # concrete subtypes:
     #   IsotropicGMM
-abstract type AbstractedLabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T} end
+abstract type AbstractLabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T} end
     # concrete subtypes:
     #   IsotropicLabeledGMM
     #   PharmacophoreGMM (MolecularGaussians.jl)
