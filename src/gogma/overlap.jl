@@ -50,7 +50,7 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
     return ovlp
 end
 
-function overlap(x::LabeledIsotropicGMM, y::LabeledIsotropicGMM, pσ=nothing, pϕ=nothing, interactions::Dict = Dict())
+function overlap(x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM, pσ=nothing, pϕ=nothing, interactions::Dict = Dict())
     pσ, pϕ = pairwise_consts(x, y, interactions)
     return overlap(x, y, pσ, pϕ, nothing)
 end

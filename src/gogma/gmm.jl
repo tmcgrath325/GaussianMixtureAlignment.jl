@@ -16,7 +16,10 @@ abstract type AbstractSingleGMM{N,T} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicGMM{N,T} <: AbstractSingleGMM{N,T} end
     # concrete subtypes:
     #   IsotropicGMM
-    #   MolGMM (MolecularGaussians.jl)
+abstract type AbstractedLabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T} end
+    # concrete subtypes:
+    #   IsotropicLabeledGMM
+    #   PharmacophoreGMM (MolecularGaussians.jl)
 
 abstract type AbstractMultiGMM{N,T,K} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicMultiGMM{N,T,K} <: AbstractMultiGMM{N,T,K} end
@@ -116,7 +119,7 @@ eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 """
 A collection of `IsotropicGaussian`s, as well as a collection of their associated labels, making up a Gaussian Mixture Model (GMM).
 """
-struct LabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T}
+struct LabeledIsotropicGMM{N,T,K} <: AbstractLabeledIsotropicGMM{N,T,K}
     gaussians::Vector{IsotropicGaussian{N,T}}
     labels::Vector{K}
 end

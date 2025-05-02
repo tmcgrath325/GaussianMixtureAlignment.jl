@@ -25,7 +25,7 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
-function pairwise_consts(gmmx::LabeledIsotropicGMM{N,T,K}, gmmy::LabeledIsotropicGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V<:Number}
+function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N,T,K}, gmmy::AbstractLabeledIsotropicGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V<:Number}
     @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
     t = promote_type(T, S, V)
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
