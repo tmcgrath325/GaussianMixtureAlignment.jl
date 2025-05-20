@@ -120,6 +120,7 @@ end
 
 LabeledIsotropicGaussian(g::AbstractIsotropicGaussian, label) = LabeledIsotropicGaussian(g.μ, g.σ, g.ϕ, label)
 
+convert(::Type{LabeledIsotropicGaussian{N,T,K}}, g::LabeledIsotropicGaussian) where {N,T,K} = LabeledIsotropicGaussian{N,T,K}(g.μ, g.σ, g.ϕ, g.label)
 promote_rule(::Type{LabeledIsotropicGaussian{N,T,K}}, ::Type{LabeledIsotropicGaussian{N,S,K}}) where {N,T<:Real,S<:Real,K} = LabeledIsotropicGaussian{N,promote_type(T,S)}
 
 """
@@ -145,11 +146,11 @@ struct LabeledIsotropicGMM{N,T,K} <: AbstractLabeledIsotropicGMM{N,T,K}
     gaussians::Vector{LabeledIsotropicGaussian{N,T,K}}
 end
 
-LabeledIsotropicGMM{N,T,K}() where {N,T,K} = LabeledIsotropicGMM{N,T,K}(LabeledIsotropicGaussian{N,T,K}[])
+LabeledIsotropicGMM{N,T,K}() where {N,T,K} = LabeledIsotropicGMM{N,T,K}(LabeledIsotropicGMM{N,T,K}[])
 
 convert(::Type{GMM}, gmm::LabeledIsotropicGMM) where GMM<:LabeledIsotropicGMM = GMM(gmm.gaussians)
 promote_rule(::Type{LabeledIsotropicGMM{N,T,K}}, ::Type{LabeledIsotropicGMM{N,S,K}}) where {T,S,N,K} = LabeledIsotropicGMM{N,promote_type(T,S),K}
-eltype(::Type{LabeledIsotropicGMM{N,T}}) where {N,T} = LabeledIsotropicGaussian{N,T,K}
+eltype(::Type{LabeledIsotropicGMM{N,T}}) where {N,T} = LabeledIsotropicGMM{N,T,K}
 
 """
 A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is,
