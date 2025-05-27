@@ -8,27 +8,46 @@ searchbox(sr::UncertaintyRegion{T}) where {T} = SearchBox{6,T,Interval{T}}([map(
 searchbox(sr::RotationRegion{T}) where {T} = SearchBox{3,T,Interval{T}}(map(r -> lohi(Interval, r - sr.σᵣ, r + sr.σᵣ), (sr.R.sx, sr.R.sy, sr.R.sz))...)
 searchbox(sr::TranslationRegion{T}) where {T} = SearchBox{3,T,Interval{T}}(map(r -> lohi(Interval, r - sr.σₜ, r + sr.σₜ), sr.T)...)
 
+searchbox(srs::AbstractVector{<:UncertaintyRegion{T}}) where {T} = SearchBox{6*length(srs), T, Interval{T}}(vcat([[map(r -> lohi(Interval, r - sr.σᵣ, r + sr.σᵣ), (sr.R.sx, sr.R.sy, sr.R.sz))..., map(r -> lohi(Interval, r - sr.σₜ, r + sr.σₜ), sr.T)...] for sr in srs]...))
+
 # function getbounds(blockfun, boundsfun, box::SearchBox, pσ, pϕ, interactions = nothing)
 #     return boundsfun(blockfun(box), pσ, pϕ, interactions)
 # end
 
-function globalalign(xinput::AbstractModel, yinput::AbstractModel;
-    searchspace=nothing, R = RotationVec(0.0,0.0,0.0), T = SVector{3}(0.0,0.0,0.0),
+# results in 2^n sub boxes
+function bisect_random_chunk(box::SearchBox{N,T,TN}, n::Int) where {N,T,TN}
+    idx = Int(floor(rand() * length(box) / n)) * n + 1
+    r = idx:(idx+n-1)
+    return bisect(box, r)
+end
+
+function bisect_largest_rigid(box::SearchBox{N,T,TN}) where {N,T,TN}
+    tformidxs = 1:Int(length(box)/6)
+    maxtformidx = findmax(i -> wid(box[(i-1)*6+1]) * wid(box[(i-1)*6+4]), tformidxs)[2]
+    idx = 6*(maxtformidx - 1) + 1
+    r = idx:(idx+5)
+    return bisect(box, r)
+end
+
+function globalalign(fixedinput::AbstractModel, mobileinputs::AbstractVector{<:AbstractModel};
+    searchspace=nothing,
     blockfun = UncertaintyRegion,
     boxsplitter = bisectall,
     objfun=overlapobj,
     boundsfun=gauss_l2_bounds, 
     kwargs...
 ) 
-    x = xinput
-    y = yinput
-    if dims(x) != dims(y)
+    y = fixedinput
+    xs = mobileinputs
+    ntforms = length(xs)
+    if !all(x->dims(x) == dims(y), xs)
         throw(ArgumentError("Dimensionality of the GMMs must be equal"))
     end
-    t = promote_type(numbertype(x), numbertype(y))
+    t = promote_type(numbertype.(xs)..., numbertype(y))
 
     if isnothing(searchspace)
-        searchspace = blockfun(x, y, R, T)
+        tlimit = translation_limit(y, xs...)
+        searchspace = [blockfun(tlimit) for x in xs]
     end
 
     box = searchbox(searchspace)
@@ -36,12 +55,26 @@ function globalalign(xinput::AbstractModel, yinput::AbstractModel;
     return thickres
 end
 
-function thick_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; interactions=nothing, kwargs...)
-    pσ, pϕ = pairwise_consts(gmmx,gmmy,interactions)
+
+# globalalign(models::Vararg{<:AbstractModel}; kwargs...) = gloablalign(models[1], models[2:end]; kwargs...);
+
+function thick_gogma_align(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}; interactions=nothing, lohifun=lohi_interval, kwargs...)
+    t = promote_type(numbertype(y), numbertype.(xs)...)
+    pσ, pϕ = pairwise_consts(y, xs, interactions)
+    blocks = [UncertaintyRegion(RotationVec(zeros(t,3)...), SVector{3,t}(0.,0.,0.), 0., 0.) for i in 1:length(xs)]
     boundsfun = box -> begin
-        lb, ub = gauss_l2_bounds(gmmx, gmmy, UncertaintyRegion(box), pσ, pϕ)
-        return lb, ub
+        for i in 0:length(blocks)-1
+           blocks[i+1] = UncertaintyRegion(SearchBox{6, t, eltype(first(box))}(box[(6*i+1):(6*i+6)]))
+        end
+        return gauss_l2_bounds(y, xs, blocks, pσ, pϕ; lohifun=lohifun)
     end
-    objfun = X -> overlapobj(X, gmmx, gmmy, pσ, pϕ)
-    return globalalign(gmmx, gmmy; boxsplitter=bisectall, boundsfun=boundsfun, objfun=objfun, kwargs...)
+    objfun = X -> begin
+        Rs = [RotationVec(X[(6*i+1):(6*i+3)]...) for i in 0:length(xs)-1]
+        Ts = [SVector{3}(X[(6*i+4):(6*i+6)]) for i in 0:length(xs)-1]
+        tformedxs = [R*x+T for (x,R,T) in zip(xs,Rs,Ts)]
+        return -overlap(y, tformedxs, pσ, pϕ, interactions)
+    end
+    return globalalign(y, xs; boxsplitter=bisect_largest_rigid, boundsfun=boundsfun, objfun=objfun, kwargs...)
 end
+
+thick_gogma_align(models::Vararg{M}; kwargs...) where M<:AbstractModel = thick_gogma_align(models[1], [models[2:end]...]; kwargs...);

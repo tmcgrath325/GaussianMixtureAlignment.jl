@@ -118,12 +118,13 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sblks = fill(searchspace, nsblks)
     sblks2 = fill(searchspace, rot_trl_split ? nsblks : 0)
 
-    lb, centerub = boundsfun(x, y, searchspace)
+    bnds = boundsfun(x, y, searchspace)
+    lb, centerub = loval(bnds), hival(bnds)
     hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
     addpoint!(hull, (lb, centerub, searchspace))
 
-    sbnds = fill((lb, centerub), nsblks)
-    sbnds2 = fill((lb, centerub), rot_trl_split ? nsblks : 0)
+    sbnds = fill(bnds, nsblks)
+    sbnds2 = fill(bnds, rot_trl_split ? nsblks : 0)
     ub, bestloc = localfun(x, y, searchspace)
 
     progress = [(0, ub, bestloc)]
@@ -131,10 +132,9 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     # split cubes until convergence
     ndivisions = 0
     sinceimprove = 0
-    evalsperdiv = rot_trl_split ? length(x)*length(y)*2*nsplits^3 : length(x)*length(y)*nsplits^ndims
-
+    evalsperdiv::Int = rot_trl_split ? length(x)*length(y)*2*nsplits^3 : length(x)*length(y)*nsplits^ndims
     while !isempty(hull)
-        if (length(hull) > maxblocks) || (ndivisions*evalsperdiv > maxevals) || (sinceimprove > maxstagnant) || (ndivisions > maxsplits)
+        if (sum(x -> length(x.points), hull.subhulls) >= maxblocks) || (ndivisions*evalsperdiv >= maxevals) || (sinceimprove >= maxstagnant) || (ndivisions >= maxsplits)
             break
         end
         ndivisions += 1
@@ -154,7 +154,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             if centerinputs
                 tform = centerx_tform ∘ tform ∘  inv(centery_tform)
             end
-            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "optimum within tolerance")
+            return GlobalAlignmentResult(x, y, ub, lb, tform, bestloc, ndivisions*evalsperdiv, ndivisions, sum(x -> length(x.points), hull.subhulls), sinceimprove, progress, "optimum within tolerance")
         end
 
         # split up the block into `nsplits` smaller blocks across each dimension
@@ -167,7 +167,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
             for i=1:nsblks
                 sbnds2[i] = boundsfun(x,y,sblks2[i])
             end
-            if sum(x -> x[1], sbnds) < sum(x -> x[1], sbnds2) # pick whichever maximizes summed lower bounds
+            if sum(loval, sbnds) < sum(loval, sbnds2) # pick whichever maximizes summed lower bounds
                 for i=1:nsblks
                     sblks[i] = sblks2[i]
                     sbnds[i] = sbnds2[i]
@@ -181,7 +181,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         end
 
         # reset the upper bound if appropriate
-        minub, ubidx = findmin([sbnd[2] for sbnd in sbnds])
+        minub, ubidx = findmin([hival(sbnd) for sbnd in sbnds])
         if minub < centerub
             centerub = minub
             nextub, nextbestloc = localfun(x, y, sblks[ubidx])
@@ -201,15 +201,15 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         addblks = eltype(hull)[]
         addbnds = eltype(sbnds)[]
         for i=1:length(sblks)
-            diff = abs(sbnds[i][2] - sbnds[i][1])
-            if sbnds[i][1] < ub && diff >= atol && abs(diff/sbnds[i][1]) >= rtol
-                push!(addblks, (sbnds[i][1], sbnds[i][2], sblks[i]))
+            diff = abs(wid(sbnds[i]))
+            if loval(sbnds[i]) < ub && diff >= atol && abs(diff/loval(sbnds[i])) >= rtol
+                push!(addblks, (loval(sbnds[i]), hival(sbnds[i]), sblks[i]))
                 push!(addbnds, sbnds[i])
             end
         end
         if isempty(hull)
             if !isempty(addbnds)
-                lb = minimum(addbnds)[1]
+                lb = minimum(loval, addbnds)
             end
         end
         try mergepoints!(hull, addblks)
@@ -226,13 +226,13 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lb, build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "priority queue empty")
+        return GlobalAlignmentResult(x, y, ub, lb, build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, sum(x -> length(x.points), hull.subhulls), sinceimprove, progress, "priority queue empty")
     else
         tform = build_tform(tformfun, bestloc)
         if centerinputs
             tform = centerx_tform ∘ tform ∘  inv(centery_tform)
         end
-        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, length(hull), sinceimprove, progress, "terminated early")
+        return GlobalAlignmentResult(x, y, ub, lowestlbnode(hull).data[1], build_tform(tformfun, bestloc), bestloc, ndivisions*evalsperdiv, ndivisions, sum(x -> length(x.points), hull.subhulls), sinceimprove, progress, "terminated early")
     end
 end
 

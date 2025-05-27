@@ -79,10 +79,23 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
     return mpσ, mpϕ
 end
 
+function pairwise_consts(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}, interactions=nothing)
+    t = promote_type(numbertype(y), numbertype.(xs)...)
+    ms = [y, xs...]
+    pσ = Matrix{Matrix{t}}(undef, length(ms), length(ms))
+    pϕ = Matrix{Matrix{t}}(undef, length(ms), length(ms))
+    for (i,mi) in enumerate(ms)
+        for (j,mj) in enumerate(ms)
+            pσ[i,j], pϕ[i,j] = pairwise_consts(mi,mj,interactions)
+        end
+    end
+    return pσ, pϕ
+end
+
 
 """
-    lowerbound, upperbound = gauss_l2_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ)
-    lowerbound, upperbound = gauss_l2_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ)
+    interval = gauss_l2_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ)
+    interval = gauss_l2_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ)
 
 Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of 
 labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `R`, `T`, `σᵣ` and `σₜ`.
@@ -94,12 +107,13 @@ the uncertainty region is assumed to be centered at the origin (i.e. x has alrea
 
 See [Campbell & Peterson, 2016](https://arxiv.org/abs/1603.00150)
 """
-function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds)
-    (lbdist, ubdist) = distance_bound_fun(R*x.μ, y.μ-T, σᵣ, σₜ, w < 0)
+function gauss_l2_bounds(μx::SVector{3}, μy::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds, lohifun = lohi_interval)
+    (lbdist, ubdist) = distance_bound_fun(μx, μy, σᵣ, σₜ, w < 0)
 
-    # evaluate objective function at each distance to get upper and lower bounds
-    return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
+    return lohifun(-overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w))
 end
+
+gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; distance_bound_fun = tight_distance_bounds, lohifun = lohi_interval) = gauss_l2_bounds(R*x.μ, y.μ-T, σᵣ, σₜ, s, w; distance_bound_fun = distance_bound_fun, lohifun = lohifun)
 
 # gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
 #     ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
@@ -112,39 +126,102 @@ gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, block::SearchRegion, s
 
 
 
-function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; kwargs...)
-    # prepare pairwise widths and weights, if not provided
+function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; lohifun = lohi_interval, kwargs...)
     if isnothing(pσ) || isnothing(pϕ)
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
     end
+    trackub = lohifun !== lohi_interval # replace?
 
-    # sum bounds for each pair of points
-    lb = 0.
-    ub = 0.
+    bnds = lohifun(0.0, 0.0)
+    ub = 0.0
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            pbnds = gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; lohifun=lohifun, kwargs...)  
+            bnds = bnds + pbnds
+            if trackub
+                ub = ub + hival(pbnds)
+            end
         end
     end
-    return lb, ub
+    if trackub
+        return lohifun(loval(bnds), ub)
+    else
+        return bnds
+    end
 end
 
-function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing)
-    # prepare pairwise widths and weights, if not provided
+function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ::Number, σₜ::Number, pσ=nothing, pϕ=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
+    if isnothing(pσ) || isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(gmmx, gmmy)
+    end
+    trackub = lohifun !== lohi_interval
+
+    bnds = lohifun(0.0, 0.0)
+    ub = 0.0
+    for (i,x) in enumerate(gmmx.gaussians) 
+        for (j,y) in enumerate(gmmy.gaussians)
+            pbnds = gauss_l2_bounds(x.μ, y.μ, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            bnds = bnds + pbnds 
+            if trackub
+                ub = ub + hival(pbnds)
+            end
+        end
+    end
+    if trackub
+        return lohifun(loval(bnds), ub)
+    else
+        return bnds
+    end
+end
+
+function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, R::RotationVec, T::SVector{3}, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
     if isnothing(mpσ) || isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy, interactions)
     end
+    trackub = lohifun !== lohi_interval
 
-    # sum bounds for each pair of points
-    lb = 0.
-    ub = 0.
+    bnds = lohifun(0.0, 0.0)
+    ub = 0.0
     for (key1, intrs) in mpσ
         for (key2, pσ) in intrs
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], R, T, σᵣ, σₜ, pσ, mpϕ[key1][key2])
+            pbnds = gauss_l2_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], R, T, σᵣ, σₜ, pσ, mpϕ[key1][key2]; lohifun=lohifun, kwargs...)
+            bnds = bnds + pbnds
+            if trackub
+                ub = ub + hival(pbnds)
+            end
         end
     end
-    return lb, ub
+    if trackub
+        return lohifun(loval(bnds), ub)
+    else
+        return bnds
+    end
 end
+
+function gauss_l2_bounds(mgmmx::AbstractMultiGMM, mgmmy::AbstractMultiGMM, σᵣ::Number, σₜ::Number, mpσ=nothing, mpϕ=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
+    if isnothing(mpσ) || isnothing(mpϕ)
+        mpσ, mpϕ = pairwise_consts(mgmmx, mgmmy, interactions)
+    end
+    trackub = lohifun !== lohi_interval
+
+    bnds = lohifun(0.0, 0.0)
+    ub = 0.0
+    for (key1, intrs) in mpσ
+        for (key2, pσ) in intrs
+            pbnds = gauss_l2_bounds(mgmmx.gmms[key1], mgmmy.gmms[key2], σᵣ, σₜ, pσ, mpϕ[key1][key2]; lohifun=lohifun, kwargs...)
+            bnds = bnds + pbnds
+            if trackub
+                ub = ub + hival(pbnds)
+            end
+        end
+    end
+    if trackub
+        return lohifun(loval(bnds), ub)
+    else
+        return bnds
+    end
+end
+
 
 # gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, R::RotationVec, T::SVector{3}, args...; kwargs...
 #     ) = gauss_l2_bounds(R*x, y-T, args...; kwargs...)
@@ -154,3 +231,36 @@ gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args..
 
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, args...; kwargs...
     ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), args...; kwargs...)
+
+function gauss_l2_bounds(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}, blocks::AbstractVector{<:SearchRegion}, pσs=nothing, pϕs=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
+    if isnothing(pσs) || isnothing(pϕs)
+        pσs, pϕs = pairwise_consts(y, xs, interactions)
+    end
+    trackub = lohifun !== lohi_interval
+
+    tformedxs = [b.R*x+b.T for (x,b) in zip(xs,blocks)]
+
+    bnds = lohifun(0.0, 0.0)
+    ub = 0.0
+    for (i,x) in enumerate(tformedxs) # all of the pairwise overlaps with y
+        pbnds = gauss_l2_bounds(x, y, blocks[i].σᵣ, blocks[i].σₜ, pσs[i+1,1], pϕs[i+1,1]; lohifun=lohifun, kwargs...)
+        bnds = bnds + pbnds
+        if trackub
+            ub = ub + hival(pbnds)
+        end
+    end
+    for (i,(xi,bi)) in enumerate(zip(tformedxs, blocks)) # all other pairwise overlaps
+        for j in i+1:length(xs)
+            pbnds = gauss_l2_bounds(xi, tformedxs[j], bi.σᵣ + blocks[j].σᵣ, bi.σₜ + blocks[j].σₜ, pσs[i+1,j+1], pϕs[i+1,j+1]; lohifun=lohifun, kwargs...)
+            bnds = bnds + pbnds
+            if trackub
+                ub = ub + hival(pbnds)
+            end
+        end
+    end
+    if trackub
+        return lohifun(loval(bnds), ub)
+    else
+        return bnds
+    end
+end

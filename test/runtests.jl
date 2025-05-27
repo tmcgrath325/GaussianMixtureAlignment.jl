@@ -6,11 +6,17 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 using ForwardDiff
+using ThickNumbers
 using Aqua
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
+
+function gauss_l2_bounds_tuple(args...)
+    bnds = gauss_l2_bounds(args...)
+    return loval(bnds), hival(bnds)
+end
 
 @testset "Aqua" begin
     # Only run Aqua tests on CI (to avoid slowing down local development)
@@ -48,28 +54,28 @@ end
     ### Gaussian L2 bounds
     # rotation distances, no translation
     # anti-aligned (no rotation) and aligned (180 degree rotation)
-    lb, ub = gauss_l2_bounds(x,y,RotationRegion(0.))
+    lb, ub = gauss_l2_bounds_tuple(x,y,RotationRegion(0.))
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ) atol=1e-16
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
-    lb, ub = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
+    lb, ub = gauss_l2_bounds_tuple(x,y,RotationRegion(RotationVec(0.,0.,π),SVector{3}(0.,0.,0.),0.))
     @test lb ≈ ub ≈ -GMA.overlap(1,2*σ^2,ϕ*ϕ)
     # region with closest alignment at 90 degree rotation
-    lb = gauss_l2_bounds(x,y,RotationRegion(π/2/sqrt3))[1]
+    lb = gauss_l2_bounds_tuple(x,y,RotationRegion(π/2/sqrt3))[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
-    lb = gauss_l2_bounds(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
+    lb = gauss_l2_bounds_tuple(x,y,RotationRegion(RotationVec(0,0,π/4),SVector{3}(0.,0.,0.),π/4/(sqrt3)))[1]
     @test lb ≈ -GMA.overlap(5^2,2*σ^2,ϕ*ϕ)
 
     # translation distance, no rotation
     # translation region centered at origin
-    lb, ub = gauss_l2_bounds(x,y,TranslationRegion(1/sqrt3))
+    lb, ub = gauss_l2_bounds_tuple(x,y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap(6^2,2*σ^2,ϕ*ϕ)
     @test ub ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 1 in +x
-    lb, ub = gauss_l2_bounds(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
+    lb, ub = gauss_l2_bounds_tuple(x+SVector(1,0,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap(7^2,2*σ^2,ϕ*ϕ)
     @test ub ≈ -GMA.overlap(8^2,2*σ^2,ϕ*ϕ)
     # centered with translation of 3 in +y
-    lb, ub = gauss_l2_bounds(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
+    lb, ub = gauss_l2_bounds_tuple(x+SVector(0,3,0),y,TranslationRegion(1/sqrt3))
     @test lb ≈ -GMA.overlap((√(58)-1)^2,2*σ^2,ϕ*ϕ)
     @test ub ≈ -GMA.overlap(58,2*σ^2,ϕ*ϕ)
 
@@ -156,14 +162,14 @@ end
 
     # aligning a GMM to itself
     bigblock = UncertaintyRegion(gmmx, gmmx)
-    (lb,ub) = gauss_l2_bounds(gmmx, gmmx, bigblock)
+    (lb,ub) = gauss_l2_bounds_tuple(gmmx, gmmx, bigblock)
     @test lb ≈ -length(gmmx.gaussians)^2 # / √(4π)^3
 
     blk = UncertaintyRegion(RotationVec{Float64}(π/2, π/2, π/2), SVector{3,Float64}(1.0, 1.0, 1.0), π/2, 1.0)
-    (lb,ub) = gauss_l2_bounds(gmmx, gmmx, blk)
+    (lb,ub) = gauss_l2_bounds_tuple(gmmx, gmmx, blk)
     for i = 1:20
         blk = subregions(blk)[1]
-        (newlb,newub) = gauss_l2_bounds(gmmx, gmmx, blk)
+        (newlb,newub) = gauss_l2_bounds_tuple(gmmx, gmmx, blk)
         @test newlb >= lb
         @test newub <= ub
         (lb,ub) = (newlb, newub)
@@ -279,6 +285,20 @@ end
     @test overlap(lgmmx, lgmmy, nothing, nothing, interactions) ≈ overlap(mgmmx, mgmmy, nothing, nothing, interactions)
     @test overlap(randtform(lgmmx), lgmmy, nothing, nothing, interactions) ≈ overlap(randtform(mgmmx), mgmmy, nothing, nothing, interactions)
     @test overlap(res.tform(randtform(lgmmx)), lgmmy, nothing, nothing, interactions) ≈ overlap(res.tform(randtform(mgmmx)), mgmmy, nothing, nothing, interactions)
+end
+
+@testset "Multiple alignment" begin
+    waterbondlen = 0.9584
+    waterbondangle = deg2rad(104.45)
+    watershape = [[0.,0.,0.], [waterbondlen, 0., 0.], [waterbondlen * cos(waterbondangle), waterbondlen * sin(waterbondangle), 0.0]]
+    y = LabeledIsotropicGMM([LabeledIsotropicGaussian(x, i===1 ? 1.52 : 1.09, 1.0, i===1 ? :acceptor : :donor) for (i,x) in enumerate(watershape)])
+    xs = [AffineMap(RotationVec(π*rand(3)...), SVector{3}(5*rand(3)...))(y) for i=1:10]
+    interactions = Dict(
+        (:donor, :acceptor) =>  1.0,
+        (:donor, :donor) => -1.0,
+        (:acceptor, :acceptor) => -1.0
+    )
+    res = GMA.thick_gogma_align(y, xs; interactions=interactions, maxsplits = 5000, batchsize = 1000)
 end
 
 @testset "Forces" begin

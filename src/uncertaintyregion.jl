@@ -206,4 +206,3 @@ end
 UncertaintyRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = UncertaintyRegion(translation_limit(x, y))
 TranslationRegion(x::Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM}, R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = TranslationRegion(R, zero(SVector{3}), translation_limit(x, y))
 RotationRegion(x:: Union{AbstractPointSet, AbstractGMM}, y::Union{AbstractPointSet, AbstractGMM},   R::RotationVec = RotationVec(0.0,0.0,0.0), T::SVector{3} = SVector{3}(0.0,0.0,0.0)) = RotationRegion(RotationVec(0.0,0.0,0.0), T, π)
-    

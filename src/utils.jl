@@ -27,5 +27,7 @@ MultiPointSet(mgmm::AbstractMultiGMM{N,T,K}) where {N,T,K} = MultiPointSet{N,T,K
 
 Computes the largest translation needed to ensure that the searchspace contains the best alignment transformation.
 """
-translation_limit(x::AbstractMatrix, y::AbstractMatrix) = max(maximum(abs.(x)), maximum(abs.(y)))
-translation_limit(x::AbstractModel, y::AbstractModel) = translation_limit(coords(x), coords(y))
+translation_limit(xs::Vararg{M}) where M<:AbstractMatrix = maximum(map(x -> maximum(abs.(x)), xs))
+translation_limit(xs::Vararg{M}) where M<:AbstractModel = translation_limit(coords.(xs)...)
+
+lohi_interval(lo, hi) = lohi(Interval, lo, hi)
