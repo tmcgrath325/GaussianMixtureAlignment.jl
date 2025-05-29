@@ -62,17 +62,18 @@ function thick_gogma_align(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}; in
     t = promote_type(numbertype(y), numbertype.(xs)...)
     pσ, pϕ = pairwise_consts(y, xs, interactions)
     blocks = [UncertaintyRegion(RotationVec(zeros(t,3)...), SVector{3,t}(0.,0.,0.), 0., 0.) for i in 1:length(xs)]
+    tformedxs = [xs...]
     boundsfun = box -> begin
         for i in 0:length(blocks)-1
            blocks[i+1] = UncertaintyRegion(SearchBox{6, t, eltype(first(box))}(box[(6*i+1):(6*i+6)]))
         end
-        return gauss_l2_bounds(y, xs, blocks, pσ, pϕ; lohifun=lohifun)
+        return gauss_l2_bounds!(tformedxs, y, xs, blocks, pσ, pϕ; lohifun=lohifun)
     end
     objfun = X -> begin
         Rs = [RotationVec(X[(6*i+1):(6*i+3)]...) for i in 0:length(xs)-1]
         Ts = [SVector{3}(X[(6*i+4):(6*i+6)]) for i in 0:length(xs)-1]
-        tformedxs = [R*x+T for (x,R,T) in zip(xs,Rs,Ts)]
-        return -overlap(y, tformedxs, pσ, pϕ, interactions)
+        local_tformedxs = [R*x+T for (x,R,T) in zip(xs,Rs,Ts)]
+        return -overlap(y, local_tformedxs, pσ, pϕ, interactions)
     end
     return globalalign(y, xs; boxsplitter=bisect_largest_rigid, boundsfun=boundsfun, objfun=objfun, kwargs...)
 end

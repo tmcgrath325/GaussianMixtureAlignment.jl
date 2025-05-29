@@ -25,6 +25,16 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
+function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N,T,K}, gmmy::AbstractLabeledIsotropicGMM{N,S,K}, interactions::Nothing=nothing) where {N,T,S,K}
+    t = promote_type(T, S)
+    self_interactions = Dict{Tuple{K,K},t}()
+    labels = unique(vcat(collect(g.label for g in x.gaussians), collect(g.label for g in y.gaussians)))
+    for l in labels
+        self_interactions[(l,l)] = one(t)
+    end 
+    return pairwise_consts(gmmx, gmmy, self_interactions)
+end
+
 function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N,T,K}, gmmy::AbstractLabeledIsotropicGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V<:Number}
     @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
     t = promote_type(T, S, V)
@@ -232,13 +242,17 @@ gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::UncertaintyRegion, args..
 gauss_l2_bounds(x::AbstractGMM, y::AbstractGMM, block::SearchRegion, args...; kwargs...
     ) = gauss_l2_bounds(x, y, UncertaintyRegion(block), args...; kwargs...)
 
-function gauss_l2_bounds(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}, blocks::AbstractVector{<:SearchRegion}, pσs=nothing, pϕs=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
+
+function gauss_l2_bounds!(tformedxs, y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}, blocks::AbstractVector{<:SearchRegion}, pσs=nothing, pϕs=nothing, interactions=nothing; lohifun=lohi_interval, kwargs...)
     if isnothing(pσs) || isnothing(pϕs)
         pσs, pϕs = pairwise_consts(y, xs, interactions)
     end
     trackub = lohifun !== lohi_interval
 
-    tformedxs = [b.R*x+b.T for (x,b) in zip(xs,blocks)]
+    # tformedxs = [b.R*x+b.T for (x,b) in zip(xs,blocks)]
+    for (i,(x,b)) in enumerate(zip(xs,blocks))
+        tformedxs[i] = b.R*x + b.T
+    end
 
     bnds = lohifun(0.0, 0.0)
     ub = 0.0
