@@ -170,7 +170,7 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, σᵣ
     ub = 0.0
     for (i,x) in enumerate(gmmx.gaussians) 
         for (j,y) in enumerate(gmmy.gaussians)
-            pbnds = gauss_l2_bounds(x.μ, y.μ, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            pbnds = gauss_l2_bounds(x.μ, y.μ, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; lohifun=lohifun, kwargs...)  
             bnds = bnds + pbnds 
             if trackub
                 ub = ub + hival(pbnds)
