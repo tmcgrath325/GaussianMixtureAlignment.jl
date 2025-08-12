@@ -13,7 +13,7 @@ function validate_interactions(interactions::Dict{Tuple{K,K},V}) where {K,V<:Num
 end
 
 # prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
-function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions=nothing)
+function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions::Nothing=nothing)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
     for (i,gaussx) in enumerate(gmmx.gaussians)
@@ -30,7 +30,7 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
     self_interactions = Dict{Tuple{K,K},t}()
     for key in keys(mgmmx.gmms) ∩ keys(mgmmy.gmms)
         self_interactions[(key,key)] = one(t)
-    end 
+    end
     pairwise_consts(mgmmx, mgmmy, self_interactions)
 end
 
@@ -49,7 +49,7 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
     ukeys = unique(Iterators.flatten(keys(interactions)))
     for key1 in ukeys
-        if key1 ∈ xkeys 
+        if key1 ∈ xkeys
             push!(mpσ, key1 => Dict{K, Matrix{t}}())
             push!(mpϕ, key1 => Dict{K, Matrix{t}}())
             for key2 in ukeys
@@ -75,10 +75,10 @@ end
     lowerbound, upperbound = gauss_l2_bounds(x::Union{IsotropicGaussian, AbstractGMM}, y::Union{IsotropicGaussian, AbstractGMM}, σᵣ, σₜ)
     lowerbound, upperbound = gauss_l2_bounds(x, y, R::RotationVec, T::SVector{3}, σᵣ, σₜ)
 
-Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of 
+Finds the bounds for overlap between two isotropic Gaussian distributions, two isotropic GMMs, or `two sets of
 labeled isotropic GMMs for a particular region in 6-dimensional rigid rotation space, defined by `R`, `T`, `σᵣ` and `σₜ`.
 
-`R` and `T` represent the rotation and translation, respectively, that are at the center of the uncertainty region. If they are not provided, 
+`R` and `T` represent the rotation and translation, respectively, that are at the center of the uncertainty region. If they are not provided,
 the uncertainty region is assumed to be centered at the origin (i.e. x has already been transformed).
 
 `σᵣ` and `σₜ` represent the sizes of the rotation and translation uncertainty regions.
@@ -112,9 +112,9 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::Ro
     # sum bounds for each pair of points
     lb = 0.
     ub = 0.
-    for (i,x) in enumerate(gmmx.gaussians) 
+    for (i,x) in enumerate(gmmx.gaussians)
         for (j,y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)  
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i,j], pϕ[i,j]; kwargs...)
         end
     end
     return lb, ub
