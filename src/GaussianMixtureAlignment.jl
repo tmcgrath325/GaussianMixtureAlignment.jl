@@ -38,8 +38,12 @@ using Colors
 
 using CoordinateTransformations: kabsch_centered
 
+using ThickGlobalOptimization
+using IntervalFastMath
+using ThickNumbers 
+
 export AbstractGaussian, AbstractGMM
-export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
+export IsotropicGaussian, LabeledIsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
 export overlap, force!, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
 export PointSet, MultiPointSet
@@ -76,6 +80,8 @@ include("gogma/align.jl")
 include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")
+
+include("globalsearch.jl")
 
 include("draw.jl")
 

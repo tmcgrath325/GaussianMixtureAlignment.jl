@@ -11,9 +11,9 @@ function loose_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     ubdist = norm(x - y)
     γₜ = sqrt3 * σₜ 
     γᵣ = 2 * sin(min(sqrt3 * σᵣ, π) / 2) * norm(x)
-    lb, ub = maximize ? (max(ubdist - γₜ - γᵣ, 0), ubdist) : (ubddist + γₜ + γᵣ, ubdist)
-    numtype = promote_type(typeof(lb), typeof(ub))
-    return numtype(lb), numtype(ub)
+    lbdist = maximize ? ubdist + γₜ + γᵣ : max(ubdist - γₜ - γᵣ, 0)
+    numtype = promote_type(typeof(lbdist), typeof(ubdist))
+    return numtype(lbdist), numtype(ubdist)
 end
 loose_distance_bounds(x::SVector{3}, y::SVector{3}, R::RotationVec, T::SVector{3}, σᵣ, σₜ, maximize::Bool = false,
     ) = (R.sx^2 + R.sy^2 + R.sz^2) > pisq ? infbounds(x,y) : loose_distance_bounds(R*x, y-T, σᵣ, σₜ, maximize) # loose_distance_bounds(R*x, y-T, σᵣ, σₜ)

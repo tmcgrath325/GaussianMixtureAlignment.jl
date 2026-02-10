@@ -34,13 +34,11 @@ end
 
 Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
 """
-function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
-    # prepare pairwise widths and weights, if not provided
+function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing, interactions::Nothing = nothing)
     if isnothing(pσ) && isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
     end
 
-    # sum overlaps for all pairwise combinations of Gaussians between x and y
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for (i,gx) in enumerate(x.gaussians)
         for (j,gy) in enumerate(y.gaussians)
@@ -50,22 +48,43 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=no
     return ovlp
 end
 
+function overlap(x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM, pσ=nothing, pϕ=nothing, interactions::Dict = Dict())
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(x, y, interactions)
+    end
+    return overlap(x, y, pσ, pϕ, nothing)
+end
+
+
 """
     ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM)
 
 Calculates the unnormalized overlap between two `AbstractMultiGMM` objects.
 """
 function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing, interactions=nothing)
-    # prepare pairwise widths and weights, if not provided
     if isnothing(mpσ) && isnothing(mpϕ)
         mpσ, mpϕ = pairwise_consts(x, y, interactions)
     end
 
-    # sum overlaps from each keyed pairs of GMM
     ovlp = zero(promote_type(numbertype(x),numbertype(y)))
     for k1 in keys(mpσ)
         for k2 in keys(mpσ[k1])
             ovlp += overlap(x.gmms[k1], y.gmms[k2], mpσ[k1][k2], mpϕ[k1][k2])
+        end
+    end
+    return ovlp
+end
+
+function overlap(y::AbstractGMM, xs::AbstractVector{<:AbstractGMM}, pσ=nothing, pϕ=nothing, interactions=nothing)
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(y, xs, interactions)
+    end
+
+    ovlp =  zero(promote_type(numbertype(y),numbertype.(xs)...))
+    for (i,xi) in enumerate(xs)
+        ovlp += overlap(y, xi, pσ[1,i+1], pϕ[1,i+1])
+        for j in i+1:length(xs)
+            ovlp += overlap(xi,xs[j],pσ[i+1,j+1],pϕ[i+1,j+1])
         end
     end
     return ovlp
@@ -113,9 +132,9 @@ function force!(f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsot
     end
 end
 
-function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; kwargs...)
+function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ=nothing, pϕ=nothing; interactions=nothing, kwargs...)
     if isnothing(pσ) && isnothing(pϕ)
-        pσ, pϕ = pairwise_consts(x, y)
+        pσ, pϕ = pairwise_consts(x, y, interactions)
     end
     for (i,gx) in enumerate(x.gaussians)
         force!(f, gx, y, pσ[i,:], pϕ[i,:]; kwargs...)
