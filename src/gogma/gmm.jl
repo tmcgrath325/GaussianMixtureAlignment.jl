@@ -5,25 +5,12 @@ import Base: eltype, keytype, valtype, length, size, getindex, iterate, convert,
 
 abstract type AbstractGaussian{N,T} end
 abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
-    # concrete subtypes:
-    #   IsotropicGaussian
-    #   AtomGaussian (MolecularGaussians.jl)
-    #   FeatureGaussian (MolecularGaussians.jl)
-
 abstract type AbstractGMM{N,T} <: AbstractModel{N,T} end
-
 abstract type AbstractSingleGMM{N,T} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicGMM{N,T} <: AbstractSingleGMM{N,T} end
-    # concrete subtypes:
-    #   IsotropicGMM
-    #   MolGMM (MolecularGaussians.jl)
-
+abstract type AbstractLabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T} end
 abstract type AbstractMultiGMM{N,T,K} <: AbstractGMM{N,T} end
 abstract type AbstractIsotropicMultiGMM{N,T,K} <: AbstractMultiGMM{N,T,K} end
-    # concrete subtypes:
-    #   IsotropicMultiGMM
-    #   FeatureMolGMM (MolecularGaussians.jl)
-
 
 # # Base methods for Gaussians
 # numbertype(::AbstractGaussian{N,T}) where {N,T} = T
@@ -116,7 +103,7 @@ eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 """
 A collection of `IsotropicGaussian`s, as well as a collection of their associated labels, making up a Gaussian Mixture Model (GMM).
 """
-struct LabeledIsotropicGMM{N,T,K} <: AbstractIsotropicGMM{N,T}
+struct LabeledIsotropicGMM{N,T,K} <: AbstractLabeledIsotropicGMM{N,T,K}
     gaussians::Vector{IsotropicGaussian{N,T}}
     labels::Vector{K}
 end
