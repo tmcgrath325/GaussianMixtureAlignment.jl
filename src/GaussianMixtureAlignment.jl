@@ -39,7 +39,7 @@ using Colors
 using CoordinateTransformations: kabsch_centered
 
 export AbstractGaussian, AbstractGMM
-export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM
+export IsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
 export overlap, force!, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
 export PointSet, MultiPointSet

@@ -238,6 +238,49 @@ end
     res = gogma_align(randtform(mgmmx), mgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
 end
 
+@testset "LabeledGMMs with interactions" begin
+    tetrahedral = [
+        [0.,0.,1.],
+        [sqrt(8/9), 0., -1/3],
+        [-sqrt(2/9),sqrt(2/3),-1/3],
+        [-sqrt(2/9),-sqrt(2/3),-1/3]
+    ]
+    ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
+    
+    x_gs = [ch_g, s_gs...]
+    x_labels = [:positive, fill(:steric, length(s_gs))...]
+
+    y_gs = [ch_g, s_gs...]
+    y_labels = [:negative, fill(:steric, length(s_gs))...]
+
+    lgmmx = LabeledIsotropicGMM(x_gs, x_labels)
+    lgmmy = LabeledIsotropicGMM(y_gs, y_labels)
+
+    mgmmx = IsotropicMultiGMM(Dict(
+        :positive => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+    mgmmy = IsotropicMultiGMM(Dict(
+        :negative => IsotropicGMM([ch_g]),
+        :steric => IsotropicGMM(s_gs)
+    ))
+
+    interactions = Dict(
+        (:positive, :negative) =>  1.0,
+        (:positive, :positive) => -1.0,
+        (:negative, :negative) => -1.0,
+        (:steric, :steric) => -1.0,
+    )
+
+    randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1*rand(3)...))
+    res = gogma_align(randtform(lgmmx), lgmmy; interactions=interactions, maxsplits=5e3, nextblockfun=GMA.randomblock)
+
+    @test overlap(lgmmx, lgmmy, nothing, nothing, interactions) ≈ overlap(mgmmx, mgmmy, nothing, nothing, interactions)
+    @test overlap(randtform(lgmmx), lgmmy, nothing, nothing, interactions) ≈ overlap(randtform(mgmmx), mgmmy, nothing, nothing, interactions)
+    @test overlap(res.tform(randtform(lgmmx)), lgmmy, nothing, nothing, interactions) ≈ overlap(res.tform(randtform(mgmmx)), mgmmy, nothing, nothing, interactions)
+end
+
 @testset "Forces" begin
     μx = randn(SVector{3,Float64})
     μy = randn(SVector{3,Float64})
