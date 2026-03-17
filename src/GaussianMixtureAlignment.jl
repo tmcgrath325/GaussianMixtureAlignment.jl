@@ -32,9 +32,6 @@ using Distances
 using NearestNeighbors
 using Hungarian
 using Optim
-using MakieCore
-using GeometryBasics
-using Colors
 
 using CoordinateTransformations: kabsch_centered
 
@@ -45,7 +42,10 @@ export rocs_align
 export PointSet, MultiPointSet
 export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
-export gmmdisplay
+function gaussiandisplay end; function gaussiandisplay! end
+function gmmdisplay end; function gmmdisplay! end
+function multigmmdisplay end; function multigmmdisplay! end
+export gmmdisplay, gmmdisplay!, multigmmdisplay, multigmmdisplay!, gaussiandisplay, gaussiandisplay!
 
 include("tforms.jl")
 
@@ -76,7 +76,5 @@ include("gogma/align.jl")
 include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")
-
-include("draw.jl")
 
 end
