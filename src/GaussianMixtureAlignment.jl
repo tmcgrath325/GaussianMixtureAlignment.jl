@@ -32,6 +32,7 @@ using Distances
 using NearestNeighbors
 using Hungarian
 using Optim
+using ADTypes
 
 using CoordinateTransformations: kabsch_centered
 
