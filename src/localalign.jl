@@ -1,5 +1,5 @@
-tformwithparams(X,x) = RotationVec(X[1:3]...)*x + SVector{3}(X[4:6]...)
-# function tformwithparams(X,x) 
+tformwithparams(X,x) = RotationVec(X[1], X[2], X[3])*x + SVector{3}(X[4], X[5], X[6])
+# function tformwithparams(X,x)
 #     if sum(abs2, X[1:3]) == 0 # handled for autodiff around 0
 #         T = eltype(X)
 #         θ = norm(X[1:3])
