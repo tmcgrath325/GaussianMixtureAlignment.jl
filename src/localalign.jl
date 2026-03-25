@@ -46,8 +46,8 @@ end
 
 Performs local alignment within the specified `block` using L-BFGS to minimize objective function `objfun` for the provided GMMs, `x` and `y`.
 """
-function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, args...; 
-                     maxevals=100, kwargs...)
+function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, args...;
+                     autodiff=AutoForwardDiff(), maxevals=100, kwargs...)
 
     # set initial guess at the center of the block
     initial_X = center(block)
@@ -59,7 +59,7 @@ function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, ar
     # local optimization within the block
     f(X) = alignment_objective(X, x, y, block, args...; kwargs...)
     # res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
-    res = optimize(f, [initial_X...], LBFGS(), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
+    res = optimize(f, [initial_X...], LBFGS(), Optim.Options(f_calls_limit=maxevals); autodiff)
     return Optim.minimum(res), tuple(Optim.minimizer(res)...)
 end
 

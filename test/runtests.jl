@@ -6,6 +6,8 @@ using StaticArrays
 using Rotations
 using CoordinateTransformations
 using ForwardDiff
+using FiniteDifferences
+using ADTypes
 using Aqua
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
@@ -189,6 +191,32 @@ end
 
     # ROCS alignment should work perfectly for these GMMs
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
+end
+
+@testset "autodiff kwarg" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
+    block = UncertaintyRegion(gmmx, gmmy)
+    fdm = central_fdm(5, 1)
+    ad = AutoFiniteDifferences(; fdm)
+
+    # local_align directly: should return a finite score
+    score_fd, _ = GMA.local_align(gmmx, gmmy, block; autodiff=ad)
+    @test isfinite(score_fd)
+
+    # gogma_align with autodiff kwarg: should run without error
+    res_fd = gogma_align(gmmx, gmmy; autodiff=ad, maxsplits=10)
+    @test isfinite(res_fd.upperbound)
+
+    # branchbound with a custom localfun closure
+    pσ, pϕ = GMA.pairwise_consts(gmmx, gmmy, nothing)
+    bndsfun = (x, y, bl) -> gauss_l2_bounds(x, y, bl, pσ, pϕ)
+    localfun_fd = (x, y, bl) -> GMA.local_align(x, y, bl, pσ, pϕ; autodiff=ad)
+    res_bb = branchbound(gmmx, gmmy; boundsfun=bndsfun, localfun=localfun_fd, maxsplits=10)
+    @test isfinite(res_bb.upperbound)
 end
 
 @testset "Evaluation at a point" begin

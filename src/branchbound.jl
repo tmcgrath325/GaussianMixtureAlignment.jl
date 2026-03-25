@@ -55,34 +55,40 @@ function lowestlbnode(hull::ChanLowerConvexHull)
     return node
 end
 
-# Keyword arguments:\n
-#     nsplits       - an integer representing the number of splits that should be made along each dimension during branching
-#     searchspace   - an `UncertaintyRegion` that defines the searchspace, which defaults to the smallest space gauranteed to contain the global minimum
-#     R             - a `Rotationvec` containing a rotation position, which is passed to the `blockfun`
-#     T             - an `SVector{3}` containing a translation position, which is passed to the `blockfun`
-#     centerinputs  - a `Bool` indicating whether to center the input models (at their respective centroids) prior to starting the search
-#     blockfun      - the function used for generating `SearchRegion`s that define search subspaces (i.e. UncertaintyRegion, TranslationRegion, RotationRegion)
-#     nextblockfun  - the function used for selecting the next "block" to be investigated (i.e. randomblock, lowestlbblock)
-#     localfun      - the function used for local alignment
-#     boundsfun     - the function used to calculate the bounds on each `SearchRegion`
-#     tformfun      - the function used to convert the center of a `SearchRegion` to a rigid transformation (i.e. AffinMap, LinearMap, Translation)
-#     atol          - absolute tolerance. Search terminates when the upper bound is within `atol` of the lower bound
-#     rtol          - relative tolerance. Search terminates when the upper bound is within `rtol*lb` of the lower bound `lb`
-#     maxblocks     - the maximum number of `Block`s that can be held in the priority queue before search termination
-#     maxsplits     - the maximum number of `Block` splits that are allowed before search termination
-#     maxevals      - the maximum number of objective function evaluations allowed before search termination
-#     maxstagnant   - the maximum number of `Block` splits allowed without improvement before search termination
 """
-    result = branchbound(x, y; nsplits=2, searchspace=nothing,
-                         rot=nothing, trl=nothing, blockfun=fullBlock, objfun=alignment_objective,
-                         rtol=0.01, maxblocks=5e8, maxeva ls=Inf, maxstagnant=Inf, threads=false)
+    result = branchbound(x, y; kwargs...)
 
-Finds the globally optimal rigid transform for alignment between two isotropic Gaussian mixtures, `x`
-and `y`, using the [GOGMA algorithm](https://arxiv.org/abs/1603.00150).
+Finds the globally optimal rigid transform for alignment between two models, `x` and `y`, using
+branch-and-bound search.
 
-Returns a `GlobalAlignmentResult` that contains the maximized overlap of the two GMMs (the upperbound on the objective function),
-a lower bound on the alignment objective function, an `AffineMap` which aligns `x` with `y`, and information about the
-number of evaluations during the alignment procedure.
+Returns a `GlobalAlignmentResult` containing the best transformation found, upper and lower bounds
+on the objective, and convergence statistics.
+
+# Keyword arguments
+
+- `nsplits=2`: number of subdivisions per dimension at each branching step (must be even)
+- `searchspace=nothing`: initial `UncertaintyRegion`; defaults to the smallest region guaranteed to contain the global optimum
+- `R=RotationVec(0,0,0)`: initial rotation hint passed to `blockfun`
+- `T=SVector(0,0,0)`: initial translation hint passed to `blockfun`
+- `centerinputs=false`: if `true`, center both models at their centroids before searching
+- `blockfun=UncertaintyRegion`: constructs `SearchRegion`s for each subspace
+- `nextblockfun=lowestlbblock`: selects which block to subdivide next (alternative: `randomblock`)
+- `boundsfun=tight_distance_bounds`: computes `(lowerbound, upperbound)` for a `SearchRegion`
+- `localfun=local_align`: called as `localfun(x, y, block)` to locally refine the upper bound within
+  each candidate block. Supply a custom closure to control local-alignment behaviour, for example to
+  use an alternative autodiff backend:
+  ```julia
+  using ADTypes, FiniteDifferences
+  mylocal = (x, y, bl) -> local_align(x, y, bl; autodiff = AutoFiniteDifferences(fdm = central_fdm(5, 1)))
+  branchbound(x, y; localfun = mylocal, boundsfun = ...)
+  ```
+- `tformfun=AffineMap`: converts a search-region centre to a rigid transformation
+- `atol=0.1`: terminate when `upperbound - lowerbound < atol`
+- `rtol=0`: terminate when `(upperbound - lowerbound) / lowerbound < rtol`
+- `maxblocks=5e8`: terminate if the priority queue exceeds this many blocks
+- `maxsplits=Inf`: terminate after this many branching steps
+- `maxevals=Inf`: terminate after this many objective evaluations
+- `maxstagnant=Inf`: terminate after this many splits without improvement
 """
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                      nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
