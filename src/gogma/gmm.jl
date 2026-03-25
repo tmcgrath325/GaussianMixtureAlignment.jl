@@ -47,7 +47,7 @@ push!(gmm::AbstractSingleGMM, g::AbstractGaussian) = push!(gmm.gaussians, g)
 pop!(gmm::AbstractSingleGMM) = pop!(gmm.gaussians)
 empty!(gmm::AbstractSingleGMM) = empty!(gmm.gaussians)
 
-coords(gmm::AbstractSingleGMM) = hcat([g.μ for g in gmm.gaussians]...)
+coords(gmm::AbstractSingleGMM) = reduce(hcat, [g.μ for g in gmm.gaussians])
 weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
 widths(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
 
@@ -69,9 +69,9 @@ get!(::Type{V}, mgmm::AbstractMultiGMM, k) where V = get!(V, mgmm.gmms, k)
 delete!(mgmm::AbstractMultiGMM, k) = delete!(mgmm.gmms, k)
 empty!(mgmm::AbstractMultiGMM) = empty!(mgmm.gmms)
 
-coords(mgmm::AbstractMultiGMM) = hcat([coords(gmm) for (k,gmm) in mgmm.gmms]...)
-weights(mgmm::AbstractMultiGMM) = vcat([weights(gmm) for (k,gmm) in mgmm.gmms]...)
-widths(mgmm::AbstractMultiGMM) = vcat([widths(gmm) for (k,gmm) in mgmm.gmms]...)
+coords(mgmm::AbstractMultiGMM) = reduce(hcat, [coords(gmm) for (k,gmm) in mgmm.gmms])
+weights(mgmm::AbstractMultiGMM) = reduce(vcat, [weights(gmm) for (k,gmm) in mgmm.gmms])
+widths(mgmm::AbstractMultiGMM) = reduce(vcat, [widths(gmm) for (k,gmm) in mgmm.gmms])
 
 """
 A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`,
