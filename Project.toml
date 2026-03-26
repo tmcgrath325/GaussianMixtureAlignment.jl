@@ -29,11 +29,13 @@ GaussianMixtureAlignmentMakieExt = ["Colors", "GeometryBasics", "Makie"]
 [compat]
 ADTypes = "1"
 Aqua = "0.8"
+Colors = "0.13"
 CoordinateTransformations = "0.6.4"
 Distances = "0.10"
 FiniteDifferences = "0.12"
 ForwardDiff = "0.10, 1"
 GenericLinearAlgebra = "0.3"
+GeometryBasics = "0.5"
 Hungarian = "0.7"
 IntervalSets = "0.7"
 LinearAlgebra = "1.10"
