@@ -92,6 +92,15 @@ end
 
 ## Forces
 
+"""
+    force!(f, x, y)
+
+Add to `f` the force on model `x` due to its overlap with model `y`, i.e. the gradient of
+`overlap(x, y)` with respect to the mean positions of the Gaussians in `x`. `f` must be a
+mutable vector of length equal to the spatial dimension.
+
+Supports `AbstractIsotropicGaussian`, `AbstractIsotropicGMM`, and `AbstractMultiGMM` inputs.
+"""
 function force!(f::AbstractVector, x::AbstractVector, y::AbstractVector, s::Real, w::Real)
     Δ = y - x
     f .+= Δ / s * overlap(sum(abs2, Δ), s, w)

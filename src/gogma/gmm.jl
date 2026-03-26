@@ -3,6 +3,12 @@ import Base: eltype, keytype, valtype, length, size, getindex, iterate, convert,
 
 # Type structure: leaving things open for adding anisotropic Gaussians and GMMs
 
+"""
+Abstract base type for `N`-dimensional Gaussian distributions with numeric type `T`.
+Subtypes include `AbstractIsotropicGaussian` and its concrete implementations such as
+`IsotropicGaussian`. Extended by external packages (e.g., MolecularGaussians.jl) to add
+anisotropic or feature-labeled Gaussians.
+"""
 abstract type AbstractGaussian{N,T} end
 abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
     # concrete subtypes:
@@ -10,6 +16,11 @@ abstract type AbstractIsotropicGaussian{N,T} <: AbstractGaussian{N,T} end
     #   AtomGaussian (MolecularGaussians.jl)
     #   FeatureGaussian (MolecularGaussians.jl)
 
+"""
+Abstract base type for Gaussian Mixture Models in `N` dimensions with numeric type `T`.
+The hierarchy includes `AbstractSingleGMM` (one component set) and `AbstractMultiGMM`
+(multiple labeled component sets). All subtypes are also `AbstractModel{N,T}`.
+"""
 abstract type AbstractGMM{N,T} <: AbstractModel{N,T} end
 
 abstract type AbstractSingleGMM{N,T} <: AbstractGMM{N,T} end

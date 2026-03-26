@@ -34,11 +34,30 @@ end
 iterate_kabsch(P::AbstractPointSet, Q::AbstractSet; kwargs...) = iterate_kabsch(P.coords, Q.coords, P.weights, Q.weights; kwargs...)
 iterate_kabsch(P::AbstractMultiPointSet,  Q::AbstractMultiPointSet;  kwargs...) = iterate_kabsch(P, Q, weights(P), weights(Q); kwargs...)
 
+"""
+    matches = icp(P, Q; kdtree=KDTree(Q, Euclidean()), kwargs...)
+
+Iterative Closest Point: iteratively assigns each point in `P` to its nearest neighbor in
+`Q` via a KD-tree and refines the alignment with Kabsch until the assignment stabilizes.
+
+Returns the converged correspondence as a vector of `(i, j)` index pairs, where point `i`
+of `P` is matched to point `j` of `Q`. Pass a pre-built `kdtree` to avoid redundant
+construction when calling repeatedly on the same `Q`.
+"""
 function icp(P::AbstractMatrix, Q::AbstractMatrix, wp=ones(size(P,2)), wq=ones(size(P,2)); kdtree = KDTree(Q, Euclidean()), kwargs...)
     return iterate_kabsch(P, Q, wp, wq; correspondence = f(p,q) = closest_points(p, kdtree), kwargs...)
 end
 icp(P::AbstractSinglePointSet, Q::AbstractSinglePointSet; kwargs...) = icp(P.coords, Q.coords, P.weights, Q.weights; kwargs...)
 
+"""
+    matches = iterative_hungarian(P, Q; kwargs...)
+
+Iteratively solves the linear assignment problem between `P` and `Q` using the Hungarian
+algorithm and refines the alignment with Kabsch until the assignment stabilizes.
+
+Returns the converged correspondence as a vector of `(i, j)` index pairs. Accepts the same
+keyword arguments as `icp`.
+"""
 iterative_hungarian(args...; kwargs...) = iterate_kabsch(args...; correspondence = hungarian_assignment, kwargs...)
 
 function local_matching_alignment(x::AbstractPointSet, y::AbstractPointSet, block::SearchRegion; matching_fun = iterative_hungarian, kwargs...)

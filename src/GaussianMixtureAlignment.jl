@@ -43,9 +43,18 @@ export rocs_align
 export PointSet, MultiPointSet
 export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
-function gaussiandisplay end; function gaussiandisplay! end
-function gmmdisplay end; function gmmdisplay! end
-function multigmmdisplay end; function multigmmdisplay! end
+"Visualize an `AbstractIsotropicGaussian` as a sphere. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
+function gaussiandisplay end
+"Mutating form of `gaussiandisplay`. Requires a Makie backend."
+function gaussiandisplay! end
+"Visualize an `AbstractIsotropicGMM` as a collection of spheres. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
+function gmmdisplay end
+"Mutating form of `gmmdisplay`. Requires a Makie backend."
+function gmmdisplay! end
+"Visualize an `AbstractIsotropicMultiGMM`, coloring each labeled sub-GMM differently. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
+function multigmmdisplay end
+"Mutating form of `multigmmdisplay`. Requires a Makie backend."
+function multigmmdisplay! end
 export gmmdisplay, gmmdisplay!, multigmmdisplay, multigmmdisplay!, gaussiandisplay, gaussiandisplay!
 
 include("tforms.jl")
