@@ -60,6 +60,21 @@ function solid_sphere!(f, pos, r; kwargs...)
     mesh!(f, Sphere(GeometryBasics.Point{3}(pos...), r); kwargs...)
 end
 
+"""
+    gaussiandisplay([fig_or_ax,] g; display=:wire, color=DEFAULT_COLORS[1], label="")
+
+Visualize an `AbstractIsotropicGaussian` as a sphere centered at `g.μ` with radius `g.σ`.
+
+# Arguments
+- `g`: the Gaussian to display
+
+# Keyword arguments
+- `display`: `:wire` (wireframe, default) or `:solid` (filled mesh)
+- `color`: color of the sphere
+- `label`: legend label
+
+See also `gaussiandisplay!`.
+"""
 @recipe(GaussianDisplay, g) do scene
     Theme(
         display = :wire,
@@ -67,6 +82,13 @@ end
         label = "",
     )
 end
+
+@doc """
+    gaussiandisplay!([ax,] g; display=:wire, color=DEFAULT_COLORS[1], label="")
+
+Like `gaussiandisplay` but adds to an existing Makie scene or axis. See `gaussiandisplay` for
+a description of keyword arguments.
+""" gaussiandisplay!
 
 function plot!(gd::GaussianDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicGaussian}})
     g = gd[:g][]
@@ -78,6 +100,23 @@ function plot!(gd::GaussianDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIs
     return gd
 end
 
+"""
+    gmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+
+Visualize an `AbstractIsotropicGMM` (or `AbstractIsotropicMultiGMM`) as a collection of spheres,
+one per Gaussian component.
+
+# Arguments
+- `g`: the GMM to display
+
+# Keyword arguments
+- `display`: `:wire` (wireframe, default) or `:solid` (filled mesh)
+- `palette`: color palette cycled across components (ignored when `color` is set)
+- `color`: if set, all components are drawn in this color
+- `label`: legend label
+
+See also `gmmdisplay!`.
+"""
 @recipe(GMMDisplay, g) do scene
     Theme(
         display = :wire,
@@ -86,6 +125,13 @@ end
         label = "",
     )
 end
+
+@doc """
+    gmmdisplay!([ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+
+Like `gmmdisplay` but adds to an existing Makie scene or axis. See `gmmdisplay` for a
+description of keyword arguments.
+""" gmmdisplay!
 
 function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicGMM}})
     gmm = gd[:g][]
@@ -117,6 +163,23 @@ end
 # Needed to get legends working, see https://github.com/MakieOrg/Makie.jl/issues/1148
 Makie.get_plots(p::GMMDisplay) = p.plots
 
+"""
+    multigmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+
+Visualize an `AbstractIsotropicMultiGMM` as a collection of spheres, with each labeled
+sub-GMM drawn in a distinct color from `palette`.
+
+# Arguments
+- `g`: the multi-GMM to display
+
+# Keyword arguments
+- `display`: `:wire` (wireframe, default) or `:solid` (filled mesh)
+- `palette`: color palette cycled across labeled sub-GMMs (ignored when `color` is set)
+- `color`: if set, all sub-GMMs are drawn in this color
+- `label`: legend label
+
+See also `multigmmdisplay!`.
+"""
 @recipe(MultiGMMDisplay, g) do scene
     Theme(
         display = :wire,
@@ -125,6 +188,13 @@ Makie.get_plots(p::GMMDisplay) = p.plots
         label = "",
     )
 end
+
+@doc """
+    multigmmdisplay!([ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+
+Like `multigmmdisplay` but adds to an existing Makie scene or axis. See `multigmmdisplay`
+for a description of keyword arguments.
+""" multigmmdisplay!
 
 function plot!(gd::MultiGMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
     mgmm = gd[:g][]

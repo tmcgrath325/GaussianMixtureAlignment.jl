@@ -1,3 +1,13 @@
+"""
+    result = goicp_align(x, y; kwargs...)
+
+Find the globally optimal rigid transformation mapping point set `x` onto point set `y`
+using globally-optimal ICP (GO-ICP) with branch-and-bound. Correspondences within each
+candidate region are determined by nearest-neighbor search via a KD-tree.
+
+Returns a `GlobalAlignmentResult`. Keyword arguments are forwarded to `branchbound`;
+see `?branchbound` for the full list.
+"""
 function goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet; kwargs...)
     kdtree = KDTree(y.coords, Euclidean())
     correspondence(xx::AbstractMatrix, yy::AbstractMatrix) = closest_points(xx, kdtree)
@@ -11,11 +21,31 @@ function trl_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet; k
     return goicp_align(x, y; blockfun=TranslationRegion, tformfun=Translation, kwargs...)
 end
 
+"""
+    result = goih_align(x, y; kwargs...)
+
+Find the globally optimal rigid transformation mapping point set `x` onto point set `y`
+using globally-optimal Iterative Hungarian (GO-IH) with branch-and-bound. Correspondences
+within each candidate region are determined by solving the linear assignment problem.
+
+Returns a `GlobalAlignmentResult`. Keyword arguments are forwarded to `branchbound`.
+"""
 function goih_align(x::AbstractPointSet, y::AbstractPointSet; kwargs...)
     boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = hungarian_assignment, distance_bound_fun = tight_distance_bounds)
     branchbound(x, y; boundsfun=boundsfun, localfun=local_iterative_hungarian, kwargs...)
 end
 
+"""
+    result = tiv_goicp_align(x, y, cx=Inf, cy=Inf; kwargs...)
+
+TIV (Translation-Invariant Vector) variant of `goicp_align`. Decomposes the 6-DOF search
+into a rotation-only phase on TIV point sets (using nearest-neighbor correspondence),
+followed by a translation-only phase on the original point sets.
+
+`cx` and `cy` are radius cutoffs for TIV construction (default `Inf`). Returns a
+`TIVAlignmentResult` whose `.rotation_result` and `.translation_result` fields hold the
+individual `GlobalAlignmentResult`s.
+"""
 function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, cx=Inf, cy=Inf; kwargs...)
     tivx, tivy = tivpointset(x,cx), tivpointset(y,cy)
     kdtree = KDTree(y.coords, Euclidean())
@@ -33,6 +63,16 @@ function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, c
     return tiv_branchbound(x, y, tivx, tivy; rot_boundsfun=rot_boundsfun, boundsfun=boundsfun, localfun=localfun, kwargs...)
 end
 
+"""
+    result = tiv_goih_align(x, y, cx=Inf, cy=Inf; kwargs...)
+
+TIV (Translation-Invariant Vector) variant of `goih_align`. Decomposes the 6-DOF search
+into a rotation-only phase on TIV point sets (using Hungarian assignment), followed by a
+translation-only phase on the original point sets.
+
+`cx` and `cy` are radius cutoffs for TIV construction (default `Inf`). Returns a
+`TIVAlignmentResult`.
+"""
 function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet, cx=Inf, cy=Inf; kwargs...)
     boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = hungarian_assignment, distance_bound_fun = tight_distance_bounds)
     objfun(X, x, y) = distanceobj(X, x, y; correspondence = hungarian_assignment);

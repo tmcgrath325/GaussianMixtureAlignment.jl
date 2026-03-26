@@ -3,6 +3,17 @@
 # This now extends the upstream implementation.
 
 CoordinateTransformations.kabsch_centered(P::PointSet, Q::PointSet) = kabsch_centered(P.coords, Q.coords, P.weights .* Q.weights);
+
+"""
+    tform = kabsch(P::PointSet, Q::PointSet)
+
+Find the rigid transformation (rotation + translation) that minimizes the weighted sum of
+squared distances between corresponding points, such that `tform` maps `P` onto `Q`.
+Point weights are the element-wise product of `P.weights` and `Q.weights`.
+
+Returns a `CoordinateTransformations.AffineMap`. This method extends the upstream
+implementation in CoordinateTransformations.jl.
+"""
 CoordinateTransformations.kabsch(P::PointSet, Q::PointSet) = kabsch(P.coords => Q.coords, P.weights .* Q.weights);
 
 function kabsch_centered_matches(P,Q,matches::AbstractVector{<:Tuple{Int,Int}},wp=ones(size(P,2)),wq=ones(size(Q,2)))
