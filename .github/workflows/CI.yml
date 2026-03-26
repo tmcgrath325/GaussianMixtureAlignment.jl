@@ -33,6 +33,10 @@ jobs:
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+      - name: drawing
+        run: |
+          julia --project -e 'using Pkg; Pkg.add("Makie"); Pkg.add("TestEnv")'
+          julia --project --code-coverage=@ -e 'using TestEnv; TestEnv.activate(); cd("test"); include("draw.jl")'
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v2
         with:
