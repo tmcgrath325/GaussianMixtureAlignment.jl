@@ -120,6 +120,9 @@ end
     @test eltype(gmm) === eltype(typeof(gmm)) === IsotropicGaussian{3,Float64}
     @test convert(IsotropicGMM{3,Float32}, gmm) isa IsotropicGMM{3,Float32}
     @test_throws DimensionMismatch convert(IsotropicGMM{2,Float64}, gmm)
+    @test !isa(GMA.coords(gmm), StaticArray)
+    @test !isa(GMA.weights(gmm), StaticArray)
+    @test !isa(GMA.widths(gmm), StaticArray)
     mgmmx = IsotropicMultiGMM(Dict(
         :positive => IsotropicGMM([ch_g]),
         :steric => gmm
@@ -144,6 +147,9 @@ end
     @test isempty(gmm)
     delete!(mgmmx, :acceptor)
     @test !haskey(mgmmx, :acceptor)
+    @test !isa(GMA.coords(mgmmx), StaticArray)
+    @test !isa(GMA.weights(mgmmx), StaticArray)
+    @test !isa(GMA.widths(mgmmx), StaticArray)
     empty!(mgmmx)
     @test isempty(mgmmx)
 end
