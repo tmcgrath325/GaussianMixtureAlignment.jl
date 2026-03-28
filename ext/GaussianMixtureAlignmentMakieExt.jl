@@ -3,11 +3,11 @@ module GaussianMixtureAlignmentMakieExt
 using GaussianMixtureAlignment
 import GaussianMixtureAlignment: gaussiandisplay, gaussiandisplay!, gmmdisplay, gmmdisplay!, multigmmdisplay, multigmmdisplay!
 using Makie
-using GeometryBasics: Sphere
+using GeometryBasics: GeometryBasics, Sphere
 using Colors: RGB
 
 import Makie: plot!
-using Makie: @recipe, lines!, mesh!, Theme
+using Makie: @recipe, lines!, mesh!, Attributes
 
 const HALFWAY_RADIUS = sqrt(3) / 2
 const EQUAL_VOL_CONST = 3*√π/4
@@ -29,7 +29,7 @@ const sinθs = [sin(θ) for θ in θs]
 
 equal_volume_radius(σ, ϕ) = (EQUAL_VOL_CONST*abs(ϕ))^(1/3) * σ
 
-function flat_circle!(f, pos, r, dim::Int; kwargs...)
+function flat_circle!(f, pos, r, dim::Int, attrs::Attributes)
     if dim == 3
         xs = [r * cosθ + pos[1] for cosθ in cosθs]
         ys = [r * sinθ + pos[2] for sinθ in sinθs]
@@ -43,25 +43,25 @@ function flat_circle!(f, pos, r, dim::Int; kwargs...)
         ys = [r * cosθ + pos[2] for cosθ in cosθs]
         zs = [r * sinθ + pos[3] for sinθ in sinθs]
     end
-    lines!(f, xs,ys,zs; kwargs...)
+    lines!(f, attrs, xs, ys, zs)
 end
 
-function wire_sphere!(f, pos, r; kwargs...)
+function wire_sphere!(f, pos, r, attrs::Attributes)
     for dim in 1:3
-        flat_circle!(f, pos, r, dim; kwargs...)
+        flat_circle!(f, pos, r, dim, attrs)
         halfwaypos = Float32[0,0,0]
         halfwaypos[dim] = r / 2;
-        flat_circle!(f, pos .- halfwaypos, r * HALFWAY_RADIUS, dim; kwargs...)
-        flat_circle!(f, pos .+ halfwaypos, r * HALFWAY_RADIUS, dim; kwargs...)
+        flat_circle!(f, pos .- halfwaypos, r * HALFWAY_RADIUS, dim, attrs)
+        flat_circle!(f, pos .+ halfwaypos, r * HALFWAY_RADIUS, dim, attrs)
     end
 end
 
-function solid_sphere!(f, pos, r; kwargs...)
-    mesh!(f, Sphere(GeometryBasics.Point{3}(pos...), r); kwargs...)
+function solid_sphere!(f, pos, r, attrs::Attributes)
+    mesh!(f, attrs, Sphere(GeometryBasics.Point{3}(pos...), r))
 end
 
 """
-    gaussiandisplay([fig_or_ax,] g; display=:wire, color=DEFAULT_COLORS[1], label="")
+    gaussiandisplay([fig_or_ax,] g; display=:wire, color=DEFAULT_COLORS[1], label="", alpha=1, transparency=false)
 
 Visualize an `AbstractIsotropicGaussian` as a sphere centered at `g.μ` with radius `g.σ`.
 
@@ -72,36 +72,36 @@ Visualize an `AbstractIsotropicGaussian` as a sphere centered at `g.μ` with rad
 - `display`: `:wire` (wireframe, default) or `:solid` (filled mesh)
 - `color`: color of the sphere
 - `label`: legend label
+- `alpha`: transparency level (0 = fully transparent, 1 = fully opaque)
+- `transparency`: if true, Makie uses Order Independent Transparency (default `false`)
+
+Any additional attributes valid for `Lines` (wire) or `Mesh` (solid) are forwarded to Makie.
 
 See also `gaussiandisplay!`.
 """
-@recipe(GaussianDisplay, g) do scene
-    Theme(
-        display = :wire,
-        color = DEFAULT_COLORS[1],
-        label = "",
-    )
+@recipe GaussianDisplay (g,) begin
+    display = :wire
+    color = @inherit color DEFAULT_COLORS[1]
+    label = ""
+    alpha = 1.0f0
+    transparency = false
 end
-
-@doc """
-    gaussiandisplay!([ax,] g; display=:wire, color=DEFAULT_COLORS[1], label="")
-
-Like `gaussiandisplay` but adds to an existing Makie scene or axis. See `gaussiandisplay` for
-a description of keyword arguments.
-""" gaussiandisplay!
 
 function plot!(gd::GaussianDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicGaussian}})
     g = gd[:g][]
     disp = gd[:display][]
-    color = gd[:color][]
-    label = gd[:label][]
-    plotfun = disp == :wire ? wire_sphere! : ( disp == :solid ? solid_sphere! : throw(ArgumentError("Unrecognized display option: `$disp`")))
-    plotfun(gd, g.μ, g.σ; color=color, label)
+    if disp == :wire
+        wire_sphere!(gd, g.μ, g.σ, Makie.shared_attributes(gd, Lines))
+    elseif disp == :solid
+        solid_sphere!(gd, g.μ, g.σ, Makie.shared_attributes(gd, Mesh))
+    else
+        throw(ArgumentError("Unrecognized display option: `$disp`"))
+    end
     return gd
 end
 
 """
-    gmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+    gmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="", alpha=1, transparency=false)
 
 Visualize an `AbstractIsotropicGMM` (or `AbstractIsotropicMultiGMM`) as a collection of spheres,
 one per Gaussian component.
@@ -114,24 +114,19 @@ one per Gaussian component.
 - `palette`: color palette cycled across components (ignored when `color` is set)
 - `color`: if set, all components are drawn in this color
 - `label`: legend label
+- `alpha`: transparency level (0 = fully transparent, 1 = fully opaque)
+- `transparency`: if true, Makie uses Order Independent Transparency (default `false`)
 
 See also `gmmdisplay!`.
 """
-@recipe(GMMDisplay, g) do scene
-    Theme(
-        display = :wire,
-        palette = DEFAULT_COLORS,
-        color = nothing,
-        label = "",
-    )
+@recipe GMMDisplay (g,) begin
+    display = :wire
+    palette = DEFAULT_COLORS
+    color = nothing
+    label = ""
+    alpha = 1.0f0
+    transparency = false
 end
-
-@doc """
-    gmmdisplay!([ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
-
-Like `gmmdisplay` but adds to an existing Makie scene or axis. See `gmmdisplay` for a
-description of keyword arguments.
-""" gmmdisplay!
 
 function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicGMM}})
     gmm = gd[:g][]
@@ -139,23 +134,24 @@ function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotrop
     color = gd[:color][]
     palette = gd[:palette][]
     label = gd[:label][]
+    base_attrs = Makie.shared_attributes(gd, GaussianDisplay; drop=[:color, :label, :palette])
     for (i, gauss) in enumerate(gmm)
         col = isnothing(color) ? palette[(i-1) % length(palette) + 1] : color
-        gaussiandisplay!(gd, gauss; display=disp, color=col, label)
+        gaussiandisplay!(gd, base_attrs, gauss; color=col, label)
     end
     return gd
 end
 
 function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
     mgmm = gd[:g][]
-    disp = gd[:display][]
     color = gd[:color][]
     palette = gd[:palette][]
+    base_attrs = Makie.shared_attributes(gd, GMMDisplay; drop=[:color, :label])
     allkeys = collect(keys(mgmm))
     len = length(allkeys)
     for (i, k) in enumerate(allkeys)
         col = isnothing(color) ? palette[(i-1) % len + 1] : color
-        haskey(mgmm, k) && gmmdisplay!(gd, mgmm[k]; display=disp, color=col, palette=palette, label=string(k))
+        haskey(mgmm, k) && gmmdisplay!(gd, base_attrs, mgmm[k]; color=col, label=string(k))
     end
     return gd
 end
@@ -164,7 +160,7 @@ end
 Makie.get_plots(p::GMMDisplay) = p.plots
 
 """
-    multigmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
+    multigmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="", alpha=1, transparency=false)
 
 Visualize an `AbstractIsotropicMultiGMM` as a collection of spheres, with each labeled
 sub-GMM drawn in a distinct color from `palette`.
@@ -177,35 +173,30 @@ sub-GMM drawn in a distinct color from `palette`.
 - `palette`: color palette cycled across labeled sub-GMMs (ignored when `color` is set)
 - `color`: if set, all sub-GMMs are drawn in this color
 - `label`: legend label
+- `alpha`: transparency level (0 = fully transparent, 1 = fully opaque)
+- `transparency`: if true, Makie uses Order Independent Transparency (default `false`)
 
 See also `multigmmdisplay!`.
 """
-@recipe(MultiGMMDisplay, g) do scene
-    Theme(
-        display = :wire,
-        palette = DEFAULT_COLORS,
-        color = nothing,
-        label = "",
-    )
+@recipe MultiGMMDisplay (g,) begin
+    display = :wire
+    palette = DEFAULT_COLORS
+    color = nothing
+    label = ""
+    alpha = 1.0f0
+    transparency = false
 end
-
-@doc """
-    multigmmdisplay!([ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="")
-
-Like `multigmmdisplay` but adds to an existing Makie scene or axis. See `multigmmdisplay`
-for a description of keyword arguments.
-""" multigmmdisplay!
 
 function plot!(gd::MultiGMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
     mgmm = gd[:g][]
-    disp = gd[:display][]
     color = gd[:color][]
     palette = gd[:palette][]
+    base_attrs = Makie.shared_attributes(gd, GMMDisplay; drop=[:color, :label])
     allkeys = collect(keys(mgmm))
     len = length(allkeys)
     for (i, k) in enumerate(allkeys)
         col = isnothing(color) ? palette[(i-1) % len + 1] : color
-        haskey(mgmm, k) && gmmdisplay!(gd, mgmm[k]; display=disp, color=col, palette=palette, label=string(k))
+        haskey(mgmm, k) && gmmdisplay!(gd, base_attrs, mgmm[k]; color=col, label=string(k))
     end
     return gd
 end
