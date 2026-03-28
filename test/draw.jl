@@ -13,6 +13,7 @@ using Test
     ]
     gmm = IsotropicGMM([IsotropicGaussian(x, 1.2, 1) for x in tetrahedral])
     gmmdisplay(gmm)
+    gmmdisplay(gmm; display=:solid, color=:red, alpha=0.5, transparency=true)
 
     ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
     s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
