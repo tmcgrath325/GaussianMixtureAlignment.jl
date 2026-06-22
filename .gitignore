@@ -1,2 +1,9 @@
 /Manifest.toml
+/Manifest-v*.toml
 /draw.jl
+docs/Manifest.toml
+docs/Manifest-v*.toml
+docs/build/
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
