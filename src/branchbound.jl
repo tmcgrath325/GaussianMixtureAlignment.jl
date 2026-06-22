@@ -125,7 +125,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sblks2 = fill(searchspace, rot_trl_split ? nsblks : 0)
 
     lb, centerub = boundsfun(x, y, searchspace)
-    hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
+    hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(; orientation = CCW, collinear = true, sortedby = x -> (x[1], -x[2]))
     addpoint!(hull, (lb, centerub, searchspace))
 
     sbnds = fill((lb, centerub), nsblks)
