@@ -1,5 +1,7 @@
 # GaussianMixtureAlignment.jl
 
+[![Aqua QA](https://juliatesting.github.io/Aqua.jl/dev/assets/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+
 A Julia implementation of the Globally-Optimal Gaussian Mixture Alignment (GOGMA) algorithm [(Campbell, 2016)](https://arxiv.org/abs/1603.00150), with modifications inspired by
 [Li et. al. (2018)](https://arxiv.org/abs/1812.11307). 
 
