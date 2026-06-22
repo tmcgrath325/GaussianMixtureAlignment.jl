@@ -207,6 +207,56 @@ end
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx,gmmx); atol=1E-12)
 end
 
+@testset "AlignmentResults interface" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
+
+    gres = gogma_align(gmmx, gmmy)              # generous budget: certifies the optimum
+    tres = tiv_gogma_align(gmmx, gmmy)
+    rres = rocs_align(gmmx, gmmy)
+    early = gogma_align(gmmx, gmmy; maxsplits=1) # halted by the split limit
+
+    # accessors mirror the underlying fields
+    @test GMA.tform(gres) === gres.tform
+    @test GMA.tform(tres) === tres.tform
+    @test GMA.tform(rres) === rres.tform
+    @test GMA.upperbound(gres) === gres.upperbound
+    @test GMA.lowerbound(gres) === gres.lowerbound
+    @test GMA.obj_calls(gres) === gres.obj_calls
+    @test GMA.num_splits(gres) === gres.num_splits
+    @test GMA.num_blocks(gres) === gres.num_blocks
+    @test GMA.stagnant_splits(gres) === gres.stagnant_splits
+    @test GMA.progress(gres) === gres.progress
+
+    # converged reflects the termination cause
+    @test GMA.converged(gres)
+    @test GMA.converged(tres)
+    @test !GMA.converged(early)
+    @test early.terminated_by == "terminated early"
+    @test !GMA.converged(rres)                  # ROCS carries no global guarantee
+
+    # TIV aggregates the two sub-searches
+    @test GMA.converged(tres) ==
+          (GMA.converged(tres.rotation_result) && GMA.converged(tres.translation_result))
+    @test GMA.stagnant_splits(tres) ==
+          tres.rotation_result.stagnant_splits + tres.translation_result.stagnant_splits
+    @test eltype(GMA.progress(tres)) == Tuple{Int, Float64, NTuple{6, Float64}}
+    @test !isempty(GMA.progress(tres))
+    # the trace ends at the reported optimum
+    @test last(GMA.progress(tres))[2] == GMA.upperbound(tres)
+    @test last(GMA.progress(tres))[3] == tres.tform_params
+
+    # show produces a readable summary for each result type
+    for r in (gres, tres, rres)
+        str = sprint(show, MIME"text/plain"(), r)
+        @test occursin(string(nameof(typeof(r))), str)
+        @test occursin("converged", str)
+    end
+end
+
 @testset "autodiff kwarg" begin
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
     ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]

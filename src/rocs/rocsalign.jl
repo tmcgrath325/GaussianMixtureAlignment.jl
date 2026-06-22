@@ -1,8 +1,25 @@
+"""
+    ROCSAlignmentResult
+
+Result of a `rocs_align` local alignment. `tform` aligns the moving GMM `x` onto the fixed
+GMM `y`, and `minimum` is the objective at that alignment. ROCS is a local method, so the
+result carries no global-optimality guarantee. See `AlignmentResults` for the shared accessor
+interface.
+"""
 struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     minimum::T
     tform::F
+end
+
+converged(::ROCSAlignmentResult) = false
+
+function Base.show(io::IO, ::MIME"text/plain", r::ROCSAlignmentResult)
+    println(io, "ROCSAlignmentResult:")
+    println(io, "  objective (overlap): ", r.minimum)
+    println(io, "  converged:           false (local alignment; no global-optimality guarantee)")
+    print(io,   "  transform:           ", r.tform)
 end
 
 """
