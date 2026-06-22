@@ -175,6 +175,47 @@ end
     @test isempty(mgmmx)
 end
 
+@testset "apply transformations via tform(model)" begin
+    # An affine map from CoordinateTransformations applies directly to any model as
+    # `tform(model)`, composing the model `*`/`+` methods. The README aligns models with
+    # `res.tform(model)`; this contract breaks silently if a `*` or `+` method is removed.
+    R = RotationVec(0.3, -0.2, 0.5)
+    T = SVector(1.0, -2.0, 3.0)
+    affine = AffineMap(R, T)
+    linear = LinearMap(R)
+    trl    = Translation(T)
+
+    gauss = IsotropicGaussian([1.0, 0.0, 0.0], 0.5, 1.0)
+    gmm   = IsotropicGMM([gauss, IsotropicGaussian([0.0, 1.0, 0.0], 0.5, 2.0)])
+    mgmm  = IsotropicMultiGMM(Dict(:a => gmm, :b => IsotropicGMM([gauss])))
+    ps    = PointSet([1.0 0.0 -1.0; 0.0 1.0 0.0; 0.0 0.0 2.0], [1.0, 2.0, 3.0])
+    mps   = MultiPointSet(Dict(:a => ps))
+
+    # Applying a map as a functor equals decompose-and-apply, for each map flavor.
+    @test affine(gauss).μ ≈ R * gauss.μ + T
+    @test linear(gauss).μ ≈ R * gauss.μ
+    @test trl(gauss).μ    ≈ gauss.μ + T
+    for model in (gmm, ps)
+        @test GMA.coords(affine(model)) ≈ GMA.coords(R * model + T)
+        @test GMA.coords(linear(model)) ≈ GMA.coords(R * model)
+        @test GMA.coords(trl(model))    ≈ GMA.coords(model + T)
+    end
+    for model in (mgmm, mps)
+        for k in keys(model)
+            @test GMA.coords(affine(model)[k]) ≈ GMA.coords(R * model[k] + T)
+            @test GMA.coords(linear(model)[k]) ≈ GMA.coords(R * model[k])
+            @test GMA.coords(trl(model)[k])    ≈ GMA.coords(model[k] + T)
+        end
+    end
+
+    # For the Gaussian-mixture types the functor is fully type-inferred.
+    for model in (gauss, gmm, mgmm)
+        @test (@inferred affine(model)) isa typeof(model)
+        @test (@inferred linear(model)) isa typeof(model)
+        @test (@inferred trl(model))    isa typeof(model)
+    end
+end
+
 @testset "bounds for shrinking searchspace around an optimum" begin
     # two sets of points, each forming a 3-4-5 triangle
     xpts = [[0.,0.,0.], [3.,0.,0.,], [0.,4.,0.]]
