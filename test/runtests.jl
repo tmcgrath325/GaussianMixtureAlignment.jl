@@ -27,6 +27,19 @@ end
                           ignore = (:kabsch_centered, :Options))
 end
 
+@testset "public API surface" begin
+    # `public` (and `Base.ispublic`) exist only on 1.11+; on the LTS the names are still
+    # reachable, just unmarked.
+    if VERSION >= v"1.11"
+        for name in (:branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+                     :converged, :tform, :upperbound, :lowerbound, :obj_calls,
+                     :num_splits, :num_blocks, :stagnant_splits, :progress)
+            @test Base.ispublic(GaussianMixtureAlignment, name)
+            @test !Base.isexported(GaussianMixtureAlignment, name)  # public, not exported
+        end
+    end
+end
+
 @testset "search space bounds" begin
     μx = SVector(3,0,0)
     μy = SVector(-4,0,0)

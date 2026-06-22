@@ -12,7 +12,21 @@ function validate_interactions(interactions::Dict{Tuple{K,K},V}) where {K,V<:Num
     return true
 end
 
-# prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
+"""
+    pσ, pϕ = pairwise_consts(gmmx, gmmy, interactions=nothing)
+
+Precompute, for every pair of Gaussians drawn from `gmmx` and `gmmy`, the combined variance
+`σx^2 + σy^2` (`pσ`) and the amplitude product `ϕx * ϕy` (`pϕ`). For `AbstractIsotropicGMM`
+inputs the results are dense matrices indexed by Gaussian; for `AbstractMultiGMM` inputs they
+are nested dictionaries keyed by component label, with `interactions` weighting the
+cross-label terms.
+
+These constants depend only on the Gaussians' widths and amplitudes, not on the relative
+transformation, so they are invariant under the rigid search. They are the per-pair inputs to
+`gauss_l2_bounds` and `local_align`. The `*_align` entry points call `pairwise_consts` once and
+capture the result in the bounds and local-refinement closures passed to `branchbound`; computing
+them once amortizes the `O(length(gmmx) * length(gmmy))` work across every node of the search.
+"""
 function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions::Nothing=nothing)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))

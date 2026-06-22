@@ -44,6 +44,20 @@ export rocs_align
 export PointSet, MultiPointSet
 export kabsch, icp, iterative_hungarian, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
+# Semi-public interface: callable and supported, but not brought into the caller's namespace by
+# `using`. `branchbound` and the search-region types are the low-level entry points beneath the
+# `*_align` functions; the rest are the `AlignmentResults` read interface. `tform` and `converged`
+# are deliberately not exported to avoid colliding with `Optim.converged` and with the
+# CoordinateTransformations idiom of applying an affine map as `tform(x)`.
+# `public` is a parse error before Julia 1.11, so build the expression directly rather than
+# writing the keyword.
+@static if VERSION >= v"1.11"
+    eval(Expr(:public,
+        :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+        :converged, :tform, :upperbound, :lowerbound, :obj_calls,
+        :num_splits, :num_blocks, :stagnant_splits, :progress))
+end
+
 "Visualize an `AbstractIsotropicGaussian` as a sphere. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
 function gaussiandisplay end
 "Mutating form of `gaussiandisplay`. Requires a Makie backend."
