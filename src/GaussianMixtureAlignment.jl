@@ -21,20 +21,21 @@ module GaussianMixtureAlignment
 
 abstract type AbstractModel{N,T} end
 
-using StaticArrays
-using LinearAlgebra
-using GenericLinearAlgebra
-using PairedLinkedLists
-using MutableConvexHulls
-using Rotations
-using CoordinateTransformations
-using Distances
-using NearestNeighbors
-using Hungarian
-using Optim
-using ADTypes
-
+using ADTypes: ADTypes, AutoForwardDiff
+using CoordinateTransformations: CoordinateTransformations, AbstractAffineMap, AffineMap,
+                                 LinearMap, Translation, kabsch
 using CoordinateTransformations: kabsch_centered
+using Distances: Distances, SqEuclidean, colwise
+using GenericLinearAlgebra: GenericLinearAlgebra
+using Hungarian: Hungarian, hungarian
+using LinearAlgebra: LinearAlgebra, det, dot, eigvecs, norm, svd, tr
+using MutableConvexHulls: MutableConvexHulls, CCW, ChanLowerConvexHull,
+                          addpoint!, mergepoints!, removepoint!
+using NearestNeighbors: NearestNeighbors, Euclidean, KDTree, nn
+using Optim: Optim, Fminbox, LBFGS, optimize
+using PairedLinkedLists: PairedLinkedLists, ListNodeIterator, deletenode!, getnode
+using Rotations: Rotations, AngleAxis, RotationVec
+using StaticArrays: StaticArrays, SMatrix, SVector
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, IsotropicMultiGMM

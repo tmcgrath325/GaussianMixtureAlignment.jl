@@ -150,7 +150,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         lbnode, bl, lb = nextblockfun(hull, lb)
 
         # delete the chosen search region from the convex hull
-        subhull = getfirst(x -> x.points===lbnode.target.list, hull.subhulls)
+        subhull = first(x for x in hull.subhulls if x.points===lbnode.target.list)
         removepoint!(subhull, lbnode.target)
         deletenode!(lbnode)
 
@@ -273,7 +273,7 @@ end
 
 # fit a plane to a set of points, returning the normal vector
 function planefit(pts)
-    decomp = GenericLinearAlgebra.svd(pts .- sum(pts, dims=2))
+    decomp = svd(pts .- sum(pts, dims=2))
     dist, nvecidx = findmin(decomp.S)
     return decomp.U[:, nvecidx], dist
 end

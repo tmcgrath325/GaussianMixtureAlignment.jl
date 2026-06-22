@@ -9,6 +9,7 @@ using ForwardDiff
 using FiniteDifferences
 using ADTypes
 using Aqua
+using ExplicitImports
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
@@ -17,6 +18,13 @@ const GMA = GaussianMixtureAlignment
 @testset "Aqua" begin
     # Only run Aqua tests on CI (to avoid slowing down local development)
     get(ENV, "CI", "false") == "true" && Aqua.test_all(GaussianMixtureAlignment)
+end
+
+@testset "ExplicitImports" begin
+    test_explicit_imports(GaussianMixtureAlignment;
+                          all_explicit_imports_are_public   = VERSION >= v"1.11",
+                          all_qualified_accesses_are_public = VERSION >= v"1.11",
+                          ignore = (:kabsch_centered, :Options))
 end
 
 @testset "search space bounds" begin

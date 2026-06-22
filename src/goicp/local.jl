@@ -18,7 +18,7 @@ function align_local_points(P, Q; maxevals=1000, tformfun=AffineMap)
     # res = optimize(f, initial_X, LBFGS(), Optim.Options(f_calls_limit=maxevals)) # ; autodiff = :forward)
     res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals)) #; autodiff = :forward)
     # @show res.iterations
-    return Optim.minimum(res), tuple(Optim.minimizer(res)...)
+    return res.minimum, tuple(res.minimizer...)
 end
 
 function iterate_local_alignment(P, Q; correspondence = hungarian_assignment, iterations=100, tformfun=AffineMap, kwargs...)
