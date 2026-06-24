@@ -69,11 +69,12 @@ function gaussiandisplay! end
 function gmmdisplay end
 "Mutating form of `gmmdisplay`. Requires a Makie backend."
 function gmmdisplay! end
-"Visualize an `AbstractIsotropicMultiGMM`, coloring each labeled sub-GMM differently. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
-function multigmmdisplay end
-"Mutating form of `multigmmdisplay`. Requires a Makie backend."
-function multigmmdisplay! end
-export gmmdisplay, gmmdisplay!, multigmmdisplay, multigmmdisplay!, gaussiandisplay, gaussiandisplay!
+export gmmdisplay, gmmdisplay!, gaussiandisplay, gaussiandisplay!
+
+# `gmmdisplay` already renders an `AbstractIsotropicMultiGMM`, coloring each labeled sub-GMM
+# distinctly, and (unlike the former `multigmmdisplay`) supports legends. These forward to it.
+@deprecate multigmmdisplay gmmdisplay
+@deprecate multigmmdisplay! gmmdisplay!
 
 include("tforms.jl")
 

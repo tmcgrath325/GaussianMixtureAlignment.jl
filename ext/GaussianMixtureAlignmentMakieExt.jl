@@ -1,7 +1,7 @@
 module GaussianMixtureAlignmentMakieExt
 
 using GaussianMixtureAlignment
-import GaussianMixtureAlignment: gaussiandisplay, gaussiandisplay!, gmmdisplay, gmmdisplay!, multigmmdisplay, multigmmdisplay!
+import GaussianMixtureAlignment: gaussiandisplay, gaussiandisplay!, gmmdisplay, gmmdisplay!
 using Makie
 using GeometryBasics: GeometryBasics, Sphere
 using Colors: RGB
@@ -158,47 +158,5 @@ end
 
 # Needed to get legends working, see https://github.com/MakieOrg/Makie.jl/issues/1148
 Makie.get_plots(p::GMMDisplay) = p.plots
-
-"""
-    multigmmdisplay([fig_or_ax,] g; display=:wire, palette=DEFAULT_COLORS, color=nothing, label="", alpha=1, transparency=false)
-
-Visualize an `AbstractIsotropicMultiGMM` as a collection of spheres, with each labeled
-sub-GMM drawn in a distinct color from `palette`.
-
-# Arguments
-- `g`: the multi-GMM to display
-
-# Keyword arguments
-- `display`: `:wire` (wireframe, default) or `:solid` (filled mesh)
-- `palette`: color palette cycled across labeled sub-GMMs (ignored when `color` is set)
-- `color`: if set, all sub-GMMs are drawn in this color
-- `label`: legend label
-- `alpha`: transparency level (0 = fully transparent, 1 = fully opaque)
-- `transparency`: if true, Makie uses Order Independent Transparency (default `false`)
-
-See also `multigmmdisplay!`.
-"""
-@recipe MultiGMMDisplay (g,) begin
-    display = :wire
-    palette = DEFAULT_COLORS
-    color = nothing
-    label = ""
-    alpha = 1.0f0
-    transparency = false
-end
-
-function plot!(gd::MultiGMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
-    mgmm = gd[:g][]
-    color = gd[:color][]
-    palette = gd[:palette][]
-    base_attrs = Makie.shared_attributes(gd, GMMDisplay; drop=[:color, :label])
-    allkeys = collect(keys(mgmm))
-    len = length(allkeys)
-    for (i, k) in enumerate(allkeys)
-        col = isnothing(color) ? palette[(i-1) % len + 1] : color
-        haskey(mgmm, k) && gmmdisplay!(gd, base_attrs, mgmm[k]; color=col, label=string(k))
-    end
-    return gd
-end
 
 end
