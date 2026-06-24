@@ -32,6 +32,7 @@ end
     # reachable, just unmarked.
     if VERSION >= v"1.11"
         for name in (:branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+                     :icp, :iterative_hungarian,
                      :converged, :tform, :upperbound, :lowerbound, :obj_calls,
                      :num_splits, :num_blocks, :stagnant_splits, :progress)
             @test Base.ispublic(GaussianMixtureAlignment, name)
