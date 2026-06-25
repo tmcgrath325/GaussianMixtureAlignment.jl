@@ -398,6 +398,7 @@ end
     force!(f, x, y)
     ovlp(μ) = overlap(IsotropicGaussian(μ, σx, ϕx), y)
     @test f ≈ ForwardDiff.gradient(ovlp, μx)
+    @test force(x, y) ≈ f
 
     tetrahedral = [
         [0.,0.,1.],
@@ -425,8 +426,10 @@ end
     )
     f = zeros(3)
     force!(f, mgmmx, mgmmy; interactions=interactions)
-    movlp(μ) = overlap(IsotropicMultiGMM(Dict(:positive => IsotropicGMM([ch_g + μ]),:steric => IsotropicGMM([g + μ for g in s_gs]))), mgmmy, nothing, nothing, interactions)
+    movlp(μ) = overlap(IsotropicMultiGMM(Dict(:positive => IsotropicGMM([ch_g + μ]),:steric => IsotropicGMM([g + μ for g in s_gs]))), mgmmy; interactions)
     @test f ≈ ForwardDiff.gradient(movlp, zeros(3))
+    @test force(mgmmx, mgmmy; interactions) ≈ f
+    @test_deprecated overlap(mgmmx, mgmmy, nothing, nothing, interactions)
 end
 
 @testset "GO-ICP and GO-IH run without errors" begin
