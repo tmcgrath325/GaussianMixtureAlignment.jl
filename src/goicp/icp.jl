@@ -1,5 +1,6 @@
 # perform point-to-point ICP with provided correspondence and distance score functions
 function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations=1000, correspondence = hungarian_assignment)
+    Base.require_one_based_indexing(P, Q)
     # initial correspondences
     matches = correspondence(P,Q)
     prevmatches = matches

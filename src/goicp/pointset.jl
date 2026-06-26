@@ -90,7 +90,7 @@ end
 function PointSet(coords::AbstractMatrix{S}, weights::AbstractVector{T} = ones(S, size(coords,2))) where {S,T}
     dim = size(coords,1)
     numtype = promote_type(S,T)
-    return PointSet{dim,numtype}(Matrix{numtype}(coords), Vector{numtype}(weights))
+    return PointSet{dim,numtype}(Matrix{numtype}(collect(coords)), Vector{numtype}(collect(weights)))
 end
 
 PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet(hcat(coords...), weights)

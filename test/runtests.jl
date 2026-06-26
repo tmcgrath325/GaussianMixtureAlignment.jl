@@ -10,6 +10,7 @@ using FiniteDifferences
 using ADTypes
 using Aqua
 using ExplicitImports
+using OffsetArrays
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, squared_dist_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
@@ -605,4 +606,29 @@ end
     res = goih_align(yset, xset)
     @test res.lowerbound == 0
     @test res.upperbound < 1e-15
+end
+
+@testset "generic axes" begin
+    coords_plain = [0.0 3.0 0.0; 0.0 0.0 4.0; 0.0 0.0 0.0]
+
+    # PointSet is a 1-based conversion boundary: offset coords are accepted and stripped.
+    ps_ref = PointSet(coords_plain)
+    ps_off = PointSet(OffsetArray(coords_plain, 0:2, 0:2))
+    @test axes(ps_off.coords) == axes(ps_ref.coords)
+    @test ps_off.coords == ps_ref.coords
+
+    # transform_columns(Translation, ...) declares require_one_based_indexing.
+    trl = Translation(SVector(1.0, 0.0, 0.0))
+    @test GMA.transform_columns(trl, coords_plain) isa Matrix
+    @test_throws "offset arrays are not supported" GMA.transform_columns(trl, OffsetArray(coords_plain, 0:2, 0:2))
+
+    # icp and iterative_hungarian with raw AbstractMatrix inputs declare require_one_based_indexing;
+    # the PointSet overloads (which always hold 1-based coords) continue to work.
+    P = [0.0 3.0 0.0; 0.0 0.0 4.0; 0.0 0.0 0.0]
+    Q = [1.0 1.0 1.0; 1.0 -2.0 1.0; 1.0 1.0 -3.0]
+    @test_throws "offset arrays are not supported" GMA.icp(OffsetArray(P, 0:2, 0:2), OffsetArray(Q, 0:2, 0:2))
+    @test_throws "offset arrays are not supported" GMA.iterative_hungarian(OffsetArray(P, 0:2, 0:2), OffsetArray(Q, 0:2, 0:2))
+    xset = PointSet(P); yset = PointSet(Q)
+    @test GMA.icp(xset, yset) isa Vector{<:Tuple{Int,Int}}
+    @test GMA.iterative_hungarian(xset, yset) isa Vector{<:Tuple{Int,Int}}
 end

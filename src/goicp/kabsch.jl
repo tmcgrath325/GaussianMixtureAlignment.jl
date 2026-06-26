@@ -26,6 +26,7 @@ kabsch_centered_matches(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tupl
 
 # transform DxN matrices
 function transform_columns(tform::Translation, A::AbstractMatrix)
+    Base.require_one_based_indexing(A)
     return reduce(hcat, [tform(A[:,i]) for i=1:size(A,2)])
 end
 transform_columns(tform::LinearMap, A::AbstractMatrix) = tform.linear * A
