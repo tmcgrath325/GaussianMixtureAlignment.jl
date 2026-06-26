@@ -28,7 +28,6 @@ function combine(mgmmx::IsotropicMultiGMM, mgmmy::IsotropicMultiGMM)
         elseif key ∈ xkeys
             push!(gmms, Pair(key, convert(t, mgmmx.gmms[key])))
         else
-            @show convert(t,mgmmy.gmms[key])
             push!(gmms, Pair(key, convert(t, mgmmy.gmms[key])))
         end
     end

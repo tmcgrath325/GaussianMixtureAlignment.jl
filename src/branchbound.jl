@@ -348,14 +348,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                 lb = minimum(addbnds)[1]
             end
         end
-        try mergepoints!(hull, addblks)
-        catch e
-            @show lbnode.data[1], lbnode.data[2]
-            @show ndivisions
-            @show sbnds
-            @show sbnds == sbnds2
-            throw(e)
-        end
+        mergepoints!(hull, addblks)
     end
     if isempty(hull)
         tform = build_tform(tformfun, bestloc)

@@ -208,6 +208,26 @@ end
     @test isempty(mgmmx)
 end
 
+@testset "combine MultiGMMs with differing keys" begin
+    g1 = IsotropicGMM([IsotropicGaussian([0.,0.,0.], 1.0, 1.0)])
+    g2 = IsotropicGMM([IsotropicGaussian([1.,0.,0.], 1.0, 1.0)])
+    mgmmx = IsotropicMultiGMM(Dict(:a => g1))
+    mgmmy = IsotropicMultiGMM(Dict(:b => g2))
+    combined_ref = Ref{Any}()
+    captured = mktemp() do path, io
+        redirect_stdout(io) do
+            combined_ref[] = GMA.combine(mgmmx, mgmmy)
+        end
+        flush(io)
+        read(path, String)
+    end
+    combined = combined_ref[]
+    @test isempty(captured)                    # keys present in only one input must not print
+    @test keys(combined) == Set([:a, :b])
+    @test combined[:a] == g1
+    @test combined[:b] == g2
+end
+
 @testset "apply transformations via tform(model)" begin
     # An affine map from CoordinateTransformations applies directly to any model as
     # `tform(model)`, composing the model `*`/`+` methods. The README aligns models with
