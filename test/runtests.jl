@@ -608,6 +608,408 @@ end
     @test res.upperbound < 1e-15
 end
 
+@testset "rotation-only and translation-only alignment" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
+
+    rot_res = rot_gogma_align(gmmx, gmmy; maxsplits=200)
+    @test isfinite(rot_res.upperbound)
+    @test rot_res.tform isa LinearMap
+
+    trl_res = trl_gogma_align(gmmx, gmmy; maxsplits=200)
+    @test isfinite(trl_res.upperbound)
+    @test trl_res.tform isa Translation
+
+    xset = PointSet(xpts)
+    yset = PointSet(ypts)
+    trl_icp = GMA.trl_goicp_align(xset, yset; maxsplits=1000)
+    @test isfinite(trl_icp.upperbound)
+    @test trl_icp.tform isa Translation
+end
+
+@testset "branchbound options and error paths" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    σ = ϕ = 1.
+    gmmx = IsotropicGMM([IsotropicGaussian(x, σ, ϕ) for x in xpts])
+    gmmy = IsotropicGMM([IsotropicGaussian(y, σ, ϕ) for y in ypts])
+
+    # centerinputs=true centers each model before searching
+    res_center = gogma_align(gmmx, gmmy; centerinputs=true, maxsplits=200)
+    @test isfinite(res_center.upperbound)
+
+    # separatesplit=true splits rotation and translation axes independently
+    res_sep = gogma_align(gmmx, gmmy; separatesplit=true, maxsplits=200)
+    @test isfinite(res_sep.upperbound)
+
+    # nsplits must be even
+    @test_throws ArgumentError branchbound(gmmx, gmmx; nsplits=3)
+    @test_throws "`nsplits` must be even" branchbound(gmmx, gmmx; nsplits=3)
+
+    # dimensionality mismatch
+    gmm2d = IsotropicGMM([IsotropicGaussian(SVector(0.,0.), σ, ϕ)])
+    @test_throws ArgumentError branchbound(gmmx, gmm2d)
+    @test_throws "Dimensionality" branchbound(gmmx, gmm2d)
+end
+
+@testset "GMM similarity metrics" begin
+    g = IsotropicGaussian([0.,0.,0.], 1., 1.)
+    gmmx = IsotropicGMM([g])
+
+    @test GMA.distance(gmmx, gmmx) ≈ 0 atol=1e-15
+    @test GMA.tanimoto(gmmx, gmmx) ≈ 1 atol=1e-15
+
+    far = IsotropicGMM([IsotropicGaussian([100.,0.,0.], 1., 1.)])
+    @test GMA.distance(gmmx, far) > 0
+    @test GMA.tanimoto(gmmx, far) < 1
+end
+
+@testset "combine vector and varargs forms" begin
+    g1 = IsotropicGMM([IsotropicGaussian([0.,0.,0.], 1., 1.)])
+    g2 = IsotropicGMM([IsotropicGaussian([1.,0.,0.], 1., 1.)])
+    g3 = IsotropicGMM([IsotropicGaussian([2.,0.,0.], 1., 1.)])
+
+    @test length(GMA.combine([g1, g2])) == 2
+    @test GMA.combine([g1]) === g1
+    @test length(GMA.combine(g1, g2, g3)) == 3
+
+    @test_throws ArgumentError GMA.combine(IsotropicGMM{3,Float64}[])
+    @test_throws "no GMMs to combine" GMA.combine(IsotropicGMM{3,Float64}[])
+
+    g2d = IsotropicGMM([IsotropicGaussian(SVector(0.,0.), 1., 1.)])
+    @test_throws ArgumentError GMA.combine(g1, g2d)
+    @test_throws "same dimensionality" GMA.combine(g1, g2d)
+
+    # MultiGMM combine error
+    mg1 = IsotropicMultiGMM(Dict(:a => g1))
+    mg2 = IsotropicMultiGMM(Dict(:a => IsotropicGMM([IsotropicGaussian(SVector(0.,0.), 1., 1.)])))
+    @test_throws ArgumentError GMA.combine(mg1, mg2)
+    @test_throws "same dimensionality" GMA.combine(mg1, mg2)
+end
+
+@testset "overlap 5-arg form and force non-mutating for GMMs" begin
+    x = IsotropicGaussian([0.,0.,0.], 1., 1.)
+    y = IsotropicGaussian([1.,0.,0.], 2., 0.5)
+    @test overlap(1., x.σ, y.σ, x.ϕ, y.ϕ) ≈ overlap(x, y) atol=1e-15
+
+    # force on a GMM vs itself at zero displacement is zero (forces cancel by symmetry)
+    g0 = IsotropicGaussian([0.,0.,0.], 1., 1.)
+    gmm = IsotropicGMM([g0])
+    @test force(gmm, gmm) ≈ zeros(3) atol=1e-15
+
+    # force!(f, SingleGaussian, SingleGMM) must agree with the per-pair sum
+    gmmx = IsotropicGMM([x, y])
+    gmmy = IsotropicGMM([y])
+    f1 = zeros(3); force!(f1, x, gmmy)
+    f2 = zeros(3); force!(f2, x, y)
+    @test f1 ≈ f2 atol=1e-15
+
+    # force non-mutating for GMM vs GMM
+    tetrahedral = [[0.,0.,1.], [sqrt(8/9),0.,-1/3], [-sqrt(2/9),sqrt(2/3),-1/3], [-sqrt(2/9),-sqrt(2/3),-1/3]]
+    sym = IsotropicGMM([IsotropicGaussian(p, 0.5, 1.) for p in tetrahedral])
+    @test force(sym, sym) ≈ zeros(3) atol=1e-10
+end
+
+@testset "SearchRegion constructors and conversions" begin
+    # UncertaintyRegion convenience constructors
+    ur0 = UncertaintyRegion()
+    @test ur0.σᵣ ≈ π && ur0.σₜ ≈ 1.0
+
+    ur1 = UncertaintyRegion(2.0)       # σₜ only; σᵣ defaults to π
+    @test ur1.σₜ ≈ 2.0 && ur1.σᵣ ≈ π
+
+    ur2 = UncertaintyRegion(π/4, 3.0)  # (σᵣ, σₜ)
+    @test ur2.σᵣ ≈ π/4 && ur2.σₜ ≈ 3.0
+
+    @test UncertaintyRegion(ur2) === ur2  # identity when already UncertaintyRegion
+
+    # RotationRegion
+    rr = RotationRegion()
+    @test rr.σᵣ ≈ Float64(π)
+
+    rr2 = RotationRegion(ur2)
+    @test rr2.σᵣ ≈ ur2.σᵣ
+
+    # RotationRegion ↔ UncertaintyRegion round-trip
+    ur3 = UncertaintyRegion(rr2)
+    @test ur3.σᵣ ≈ rr2.σᵣ && iszero(ur3.σₜ)
+    @test RotationRegion(ur3).σᵣ ≈ ur3.σᵣ
+
+    # TranslationRegion
+    tr = TranslationRegion()
+    @test tr.σₜ ≈ 1.0
+
+    tr2 = TranslationRegion(ur2)
+    @test tr2.σₜ ≈ ur2.σₜ
+
+    ur4 = UncertaintyRegion(tr2)
+    @test ur4.σₜ ≈ tr2.σₜ && iszero(ur4.σᵣ)
+    @test TranslationRegion(ur4).σₜ ≈ ur4.σₜ
+
+    # AffineMap from SearchRegion
+    af = AffineMap(ur2)
+    @test af isa AffineMap
+
+    # rot_subregions halves σᵣ, leaves σₜ unchanged
+    rsubs = GMA.rot_subregions(ur2)
+    @test length(rsubs) == 8
+    @test all(s.σᵣ ≈ ur2.σᵣ/2 for s in rsubs)
+    @test all(s.σₜ ≈ ur2.σₜ for s in rsubs)
+
+    # trl_subregions halves σₜ, leaves σᵣ unchanged
+    tsubs = GMA.trl_subregions(ur2)
+    @test length(tsubs) == 8
+    @test all(s.σₜ ≈ ur2.σₜ/2 for s in tsubs)
+    @test all(s.σᵣ ≈ ur2.σᵣ for s in tsubs)
+end
+
+@testset "distance bounds: explicit R and block-dispatch forms" begin
+    x = SVector(3.,0.,0.)
+    y = SVector(-4.,0.,0.)
+    R = RotationVec(0.,0.,0.)
+    T = SVector(0.,0.,0.)
+
+    # R-form equals the σ-form when R is the identity and T is zero
+    lb_r, ub_r = GMA.tight_distance_bounds(x, y, R, T, Float64(π), 0.)
+    lb_s, ub_s = GMA.tight_distance_bounds(x, y, Float64(π), 0.)
+    @test lb_r ≈ lb_s && ub_r ≈ ub_s
+
+    lb_lr, ub_lr = GMA.loose_distance_bounds(x, y, R, T, Float64(π), 0.)
+    lb_ls, ub_ls = GMA.loose_distance_bounds(x, y, Float64(π), 0.)
+    @test lb_lr ≈ lb_ls && ub_lr ≈ ub_ls
+
+    # UncertaintyRegion block dispatch
+    ur = UncertaintyRegion(R, T, Float64(π), 0.)
+    lb_ur, ub_ur = GMA.tight_distance_bounds(x, y, ur)
+    @test lb_ur ≈ lb_s && ub_ur ≈ ub_s
+
+    # Union{RotationRegion,TranslationRegion} dispatch (line 75 in distancebounds.jl)
+    rr = RotationRegion(R, T, Float64(π))
+    lb_rr, ub_rr = GMA.tight_distance_bounds(x, y, rr)
+    @test lb_rr ≈ lb_s
+
+    # gauss_l2_bounds with a non-UncertaintyRegion SearchRegion block
+    xg = IsotropicGaussian(x, 1., 1.)
+    yg = IsotropicGaussian(y, 1., 1.)
+    lb_gur, ub_gur = gauss_l2_bounds(xg, yg, ur)
+    lb_grr, ub_grr = gauss_l2_bounds(xg, yg, rr)
+    @test lb_gur ≈ lb_grr
+end
+
+@testset "model utility functions" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    ps = PointSet(xpts)
+
+    # centroid and center_translation via AbstractModel dispatch
+    c = GMA.centroid(ps)
+    @test c ≈ [1.,4/3,0.] atol=1e-10   # equal weights → arithmetic mean
+
+    ct = GMA.center_translation(ps)
+    @test ct isa Translation
+    @test ct.translation ≈ -c atol=1e-10
+
+    # IsotropicGMM(ps) and PointSet(gmm) round-trip
+    gmm = IsotropicGMM(ps)
+    @test gmm isa IsotropicGMM{3,Float64}
+    @test length(gmm) == length(ps)
+    @test GMA.coords(gmm) ≈ GMA.coords(ps) atol=1e-15
+
+    ps2 = PointSet(gmm)
+    @test ps2 isa PointSet{3,Float64}
+    @test ps2.coords ≈ ps.coords atol=1e-15
+
+    # MultiPointSet(mgmm) preserves keys and coordinates
+    mgmm = IsotropicMultiGMM(Dict(:a => gmm))
+    mps = MultiPointSet(mgmm)
+    @test mps isa MultiPointSet{3,Float64,Symbol}
+    @test GMA.coords(mps[:a]) ≈ GMA.coords(ps) atol=1e-15
+
+    # translation_limit
+    lim = GMA.translation_limit(ps, ps2)
+    @test lim ≈ maximum(abs.(GMA.coords(ps))) atol=1e-15
+
+    # affinemap_to_params round-trip with build_tform
+    R = RotationVec(0.3, -0.2, 0.5)
+    T = SVector(1.0, -2.0, 3.0)
+    tform = AffineMap(R, T)
+    params = GMA.affinemap_to_params(tform)
+    @test length(params) == 6
+    rebuilt = GMA.build_tform(AffineMap, params)
+    @test rebuilt.translation ≈ T atol=1e-10
+    @test Matrix(RotationVec(rebuilt.linear)) ≈ Matrix(R) atol=1e-10
+end
+
+@testset "Point and PointSet interface" begin
+    # PointSet from a vector of vectors
+    vs = [[1.,0.,0.], [0.,1.,0.], [0.,0.,1.]]
+    ps = PointSet(vs)
+    @test ps isa PointSet{3,Float64}
+    @test size(ps.coords, 2) == 3
+
+    # iterate(AbstractSinglePointSet)
+    pts = collect(ps)
+    @test length(pts) == 3
+    @test all(p isa GMA.Point{3,Float64} for p in pts)
+
+    # indexed size(model, idx)
+    gmm = IsotropicGMM([IsotropicGaussian([0.,0.,0.], 1., 1.), IsotropicGaussian([1.,0.,0.], 1., 1.)])
+    @test size(gmm, 1) == length(gmm)
+    @test size(gmm, 2) == 3
+
+    mgmm = IsotropicMultiGMM(Dict(:a => gmm))
+    @test size(mgmm, 1) == length(mgmm)
+    @test size(mgmm, 2) == 3
+    @test eltype(mgmm) === Pair{Symbol, IsotropicGMM{3,Float64}}
+
+    @test size(ps, 1) == 3
+    @test size(ps, 2) == length(ps)
+
+    # get(mgmm, k, default) with a missing key
+    @test get(mgmm, :missing, gmm) === gmm
+
+    # Point arithmetic
+    p = GMA.Point(SVector(1.,0.,0.), 2.0)
+    R = RotationVec(0.,0.,π/2)
+    Rp = R * p
+    @test Rp.coords ≈ SVector(0.,1.,0.) atol=1e-10
+    @test Rp.weight == p.weight
+    mp = p - SVector(1.,0.,0.)
+    @test mp.coords ≈ SVector(0.,0.,0.) atol=1e-10
+
+    # weights(MultiPointSet) returns a Dict
+    mps = MultiPointSet(Dict(:a => ps))
+    w = GMA.weights(mps)
+    @test w isa Dict
+    @test haskey(w, :a)
+end
+
+@testset "MultiPointSet arithmetic and tivpointset" begin
+    ps = PointSet([0.0 3.0; 0.0 0.0; 0.0 0.0])
+    mps = MultiPointSet(Dict(:a => ps))
+    R = RotationVec(0.,0.,π/2)
+    T = SVector(1.,0.,0.)
+
+    rotated = R * mps
+    @test GMA.coords(rotated[:a]) ≈ R * GMA.coords(ps) atol=1e-10
+
+    shifted = mps + T
+    @test GMA.coords(shifted[:a]) ≈ GMA.coords(ps) .+ T atol=1e-10
+
+    subtracted = mps - T
+    @test GMA.coords(subtracted[:a]) ≈ GMA.coords(ps) .- T atol=1e-10
+
+    # GMM subtraction operators
+    g = IsotropicGaussian([1.,0.,0.], 1., 1.)
+    gmm = IsotropicGMM([g])
+    mgmm = IsotropicMultiGMM(Dict(:a => gmm))
+    tv = [1.,0.,0.]
+    @test (g - tv).μ ≈ SVector(0.,0.,0.) atol=1e-10
+    @test GMA.coords(gmm - tv) ≈ GMA.coords(gmm) .- tv atol=1e-10
+    @test GMA.coords((mgmm - tv)[:a]) ≈ GMA.coords(gmm) .- tv atol=1e-10
+
+    # tivpointset for MultiPointSet preserves keys
+    ps3 = PointSet([[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]])
+    mps3 = MultiPointSet(Dict(:a => ps3, :b => ps3))
+    tivmps = GMA.tivpointset(mps3)
+    @test tivmps isa MultiPointSet
+    @test Set(keys(tivmps.pointsets)) == Set(keys(mps3.pointsets))
+end
+
+@testset "Kabsch, kabsch_matches, and translation_align" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    xset = PointSet(xpts)
+    yset = PointSet(ypts)
+
+    # kabsch_centered(PointSet, PointSet) returns a LinearMap wrapping a rotation matrix
+    Rc = GMA.kabsch_centered(xset, yset)
+    @test Rc isa LinearMap
+
+    # kabsch_centered_matches and kabsch_matches
+    matches = [(1,1),(2,2),(3,3)]
+    Rm = GMA.kabsch_centered_matches(xset, yset, matches)
+    @test Rm isa LinearMap
+    tform_m = GMA.kabsch_matches(xset, yset, matches)
+    @test tform_m isa AffineMap
+
+    # translation_align: pure centroid-matching shift
+    offset = [2.,0.,0.]
+    xshift = PointSet([p .+ offset for p in xpts])
+    t = GMA.translation_align(xset, xshift)
+    @test t isa Translation
+    @test t.translation ≈ offset atol=1e-10
+end
+
+@testset "correspondence and squared_deviation for MultiPointSet" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    ypts = [[1.,1.,1.], [1.,-2.,1.], [1.,1.,-3.]]
+    xset = PointSet(xpts)
+    yset = PointSet(ypts)
+
+    # hungarian_assignment(MultiPointSet, MultiPointSet) returns a Dict
+    mpsx = MultiPointSet(Dict(:a => xset))
+    mpsy = MultiPointSet(Dict(:a => yset))
+    mdict = GMA.hungarian_assignment(mpsx, mpsy)
+    @test mdict isa Dict{Symbol, Vector{Tuple{Int,Int}}}
+
+    # squared_deviation for MultiPointSet matches single-key result
+    matches_a = GMA.hungarian_assignment(xset, yset)
+    sq_multi = GMA.squared_deviation(mpsx, mpsy, mdict)
+    sq_single = GMA.squared_deviation(xset, yset, matches_a)
+    @test sq_multi ≈ sq_single atol=1e-10
+
+    # rmsd
+    P = xset.coords
+    Q = yset.coords
+    @test GMA.rmsd(P, Q) ≈ sqrt(GMA.squared_deviation(P, Q) / size(P, 2)) atol=1e-10
+end
+
+@testset "GMM copy constructors and show methods" begin
+    g = IsotropicGaussian([1.,0.,0.], 0.5, 2.0)
+
+    # copy constructors
+    g2 = IsotropicGaussian(g)
+    @test g2.μ == g.μ && g2.σ == g.σ && g2.ϕ == g.ϕ
+
+    gmm = IsotropicGMM([g])
+    gmm2 = IsotropicGMM(gmm)
+    @test length(gmm2) == 1 && gmm2[1] == g
+
+    mgmm = IsotropicMultiGMM(Dict(:a => gmm))
+    mgmm2 = IsotropicMultiGMM(mgmm)
+    @test keys(mgmm2) == keys(mgmm)
+
+    # show methods produce non-empty output containing recognizable substrings
+    @test occursin("μ", sprint(show, g))
+    @test occursin("IsotropicGMM", sprint(show, gmm))
+
+    p = GMA.Point(SVector(1.,0.,0.), 2.0)
+    @test occursin("ϕ", sprint(show, p))
+
+    ps = PointSet([1.0 0.0; 0.0 1.0; 0.0 0.0])
+    @test occursin("2 points", sprint(show, ps))
+end
+
+@testset "inertial_transforms model dispatch and invert" begin
+    xpts = [[0.,0.,0.], [3.,0.,0.], [0.,4.,0.]]
+    gmmx = IsotropicGMM([IsotropicGaussian(x, 1., 1.) for x in xpts])
+
+    # model dispatch (line 93 in rocs/rocsalign.jl)
+    tforms = GMA.inertial_transforms(gmmx)
+    @test length(tforms) == 4
+
+    # invert=true (line 81): each inverted transform undoes the forward one
+    itforms = GMA.inertial_transforms(gmmx; invert=true)
+    @test length(itforms) == 4
+    p = SVector(1.,2.,3.)
+    for (t, it) in zip(tforms, itforms)
+        @test it(t(p)) ≈ p atol=1e-10
+    end
+end
+
 @testset "generic axes" begin
     coords_plain = [0.0 3.0 0.0; 0.0 0.0 4.0; 0.0 0.0 0.0]
 
