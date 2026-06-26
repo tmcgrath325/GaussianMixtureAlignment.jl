@@ -279,9 +279,13 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         # pick the next search region to subdivide
         lbnode, bl, lb = nextblockfun(hull, lb)
 
-        # delete the chosen search region from the convex hull
-        subhull = first(x for x in hull.subhulls if x.points===lbnode.target.list)
-        removepoint!(subhull, lbnode.target)
+        # delete the chosen search region from the convex hull.
+        # `hull.subhulls` and the targeted node's `.list` backreference are internal
+        # layout of MutableConvexHulls / PairedLinkedLists with no public accessor;
+        # this coupling is deliberate and pinned by [compat] (all three packages share
+        # an author). `target(node)` is the public accessor for the targeted node.
+        subhull = first(x for x in hull.subhulls if x.points===target(lbnode).list)
+        removepoint!(subhull, target(lbnode))
         deletenode!(lbnode)
 
         # if the best solution so far is close enough to the best possible solution, end

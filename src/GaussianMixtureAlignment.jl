@@ -33,7 +33,7 @@ using MutableConvexHulls: MutableConvexHulls, CCW, ChanLowerConvexHull,
                           addpoint!, mergepoints!, removepoint!
 using NearestNeighbors: NearestNeighbors, Euclidean, KDTree, nn
 using Optim: Optim, Fminbox, LBFGS, optimize
-using PairedLinkedLists: PairedLinkedLists, ListNodeIterator, deletenode!, getnode
+using PairedLinkedLists: PairedLinkedLists, ListNodeIterator, deletenode!, getnode, target
 using Rotations: Rotations, AngleAxis, RotationVec
 using StaticArrays: StaticArrays, SMatrix, SVector
 
