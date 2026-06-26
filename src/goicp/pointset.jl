@@ -60,7 +60,10 @@ end
 
 
 """
-A point set made consisting of a matrix of coordinate positions with corresponding weights.
+    PointSet(coords, weights=ones(size(coords, 2)))
+
+Point set of `N`-dimensional coordinates, stored as an `N×n` matrix `coords` with a
+corresponding weight vector `weights` of length `n`.
 """
 struct PointSet{N,T} <: AbstractSinglePointSet{N,T}
     coords::Matrix{T}
@@ -96,8 +99,11 @@ end
 PointSet(coords::AbstractVector{<:AbstractVector{T}}, weights::AbstractVector{T} = ones(T, length(coords))) where T = PointSet(hcat(coords...), weights)
 
 """
-A collection of labeled point sets, to each be considered separately during an alignment procedure. That is, 
-only alignment scores between point sets with the same key are considered when aligning two `MultiPointSet`s. 
+    MultiPointSet(pointsets)
+
+A keyed collection of point sets, each considered separately during alignment. Only
+alignment scores between point sets sharing the same key contribute when aligning two
+`MultiPointSet`s. `pointsets` is a `Dict{K, <:AbstractSinglePointSet{N,T}}`.
 """
 struct MultiPointSet{N,T,K} <: AbstractMultiPointSet{N,T,K}
     pointsets::Dict{K, <:AbstractSinglePointSet{N,T}}

@@ -1,8 +1,8 @@
 """
     ovlp = overlap(distsq, s, w)
 
-Calculates the unnormalized overlap between two Gaussian distributions with width `s`,
-weight `w', and squared distance `distsq`.
+Calculate the unnormalized overlap between two Gaussian distributions with width `s`,
+weight `w`, and squared distance `distsq`.
 """
 function overlap(distsq::Real, s::Real, w::Real)
     return w * exp(-distsq / (2*s)) # / (sqrt2pi * sqrt(s))^ndims
@@ -13,7 +13,7 @@ end
 """
     ovlp = overlap(dist, σx, σy, ϕx, ϕy)
 
-Calculates the unnormalized overlap between two Gaussian distributions with variances
+Calculate the unnormalized overlap between two Gaussian distributions with standard deviations
 `σx` and `σy`, weights `ϕx` and `ϕy`, and means separated by distance `dist`.
 """
 function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real)
@@ -21,9 +21,11 @@ function overlap(dist::Real, σx::Real, σy::Real, ϕx::Real, ϕy::Real)
 end
 
 """
-    ovlp = overlap(x::IsotropicGaussian, y::IsotropicGaussian)
+    ovlp = overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ)
 
-Calculates the unnormalized overlap between two `IsotropicGaussian` objects.
+Calculate the unnormalized overlap between two `AbstractIsotropicGaussian` objects.
+`s` and `w` are the combined width and weight; supply precomputed values to avoid
+redundant calculation when calling in a loop.
 """
 function overlap(x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, s=x.σ^2+y.σ^2, w=x.ϕ*y.ϕ)
     return overlap(sum(abs2, x.μ.-y.μ), s, w)
@@ -32,7 +34,7 @@ end
 """
     ovlp = overlap(x::AbstractSingleGMM, y::AbstractSingleGMM)
 
-Calculates the unnormalized overlap between two `AbstractSingleGMM` objects.
+Calculate the unnormalized overlap between two `AbstractSingleGMM` objects.
 """
 function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ=nothing, pϕ=nothing)
     # prepare pairwise widths and weights, if not provided
@@ -53,7 +55,7 @@ end
 """
     ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM; interactions=nothing)
 
-Calculates the unnormalized overlap between two `AbstractMultiGMM` objects. The optional
+Calculate the unnormalized overlap between two `AbstractMultiGMM` objects. The optional
 keyword argument `interactions` is a dictionary mapping `(key1, key2)` pairs to coefficient
 values; see [`pairwise_consts`](@ref) for the expected format.
 """

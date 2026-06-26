@@ -36,9 +36,12 @@ iterate_kabsch(P::AbstractMultiPointSet,  Q::AbstractMultiPointSet;  kwargs...) 
 
 """
     matches = icp(P, Q; kdtree=KDTree(Q, Euclidean()), kwargs...)
+    matches = icp(P, Q, wp; kdtree=KDTree(Q, Euclidean()), kwargs...)
+    matches = icp(P, Q, wp, wq; kdtree=KDTree(Q, Euclidean()), kwargs...)
 
 Iterative Closest Point: iteratively assigns each point in `P` to its nearest neighbor in
 `Q` via a KD-tree and refines the alignment with Kabsch until the assignment stabilizes.
+`wp` and `wq` are optional per-point weight vectors for `P` and `Q` respectively.
 
 Returns the converged correspondence as a vector of `(i, j)` index pairs, where point `i`
 of `P` is matched to point `j` of `Q`. Pass a pre-built `kdtree` to avoid redundant

@@ -61,13 +61,36 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
         :num_splits, :num_blocks, :stagnant_splits, :progress))
 end
 
-"Visualize an `AbstractIsotropicGaussian` as a sphere. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
+"""
+    gaussiandisplay([fig_or_ax,] g; display=:wire, color=..., label="", alpha=1, transparency=false)
+
+Visualize an `AbstractIsotropicGaussian` as a sphere centered at `g.μ` with radius `g.σ`.
+Requires a Makie backend (e.g. `using GLMakie`). `display` selects `:wire` (wireframe,
+default) or `:solid` (filled mesh); other attributes are forwarded to Makie.
+"""
 function gaussiandisplay end
-"Mutating form of `gaussiandisplay`. Requires a Makie backend."
+"""
+    gaussiandisplay!([fig_or_ax,] g; kwargs...)
+
+Add a sphere visualization of an `AbstractIsotropicGaussian` to an existing Makie figure or
+axis. Requires a Makie backend. See [`gaussiandisplay`](@ref) for keyword arguments.
+"""
 function gaussiandisplay! end
-"Visualize an `AbstractIsotropicGMM` as a collection of spheres. Requires a Makie backend; load one (e.g. `using GLMakie`) to see the full docstring."
+"""
+    gmmdisplay([fig_or_ax,] g; display=:wire, palette=..., color=nothing, label="", alpha=1, transparency=false)
+
+Visualize an `AbstractIsotropicGMM` or `AbstractIsotropicMultiGMM` as a collection of
+spheres, one per Gaussian component. Requires a Makie backend (e.g. `using GLMakie`). In a
+multi-GMM, each labeled sub-GMM is drawn in a distinct color from `palette`.
+"""
 function gmmdisplay end
-"Mutating form of `gmmdisplay`. Requires a Makie backend."
+"""
+    gmmdisplay!([fig_or_ax,] g; kwargs...)
+
+Add sphere visualizations of an `AbstractIsotropicGMM` or `AbstractIsotropicMultiGMM` to an
+existing Makie figure or axis. Requires a Makie backend. See [`gmmdisplay`](@ref) for keyword
+arguments.
+"""
 function gmmdisplay! end
 export gmmdisplay, gmmdisplay!, gaussiandisplay, gaussiandisplay!
 

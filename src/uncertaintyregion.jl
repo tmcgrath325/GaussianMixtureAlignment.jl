@@ -46,7 +46,14 @@ abstract type SearchRegion{T} end
 AffineMap(sr::SearchRegion) = AffineMap(sr.R, sr.T)
 
 """
-Describes an transformation uncertainty region centered at rotation R and translation T, with rotation and translation half-widths of σᵣ and σₜ respectively
+    UncertaintyRegion(R, T, σᵣ, σₜ)
+    UncertaintyRegion(σᵣ, σₜ)
+    UncertaintyRegion(σₜ)
+    UncertaintyRegion()
+
+A transformation uncertainty region centered at rotation `R` and translation `T`, with
+rotation half-width `σᵣ` and translation half-width `σₜ`. The one-argument form fixes
+`σᵣ = π` (full rotation space); the zero-argument form also sets `σₜ = 1`.
 """
 struct UncertaintyRegion{N<:Real} <: SearchRegion{N}
     R::RotationVec{N}
@@ -75,6 +82,15 @@ function Base.hash(B::UncertaintyRegion, h::UInt)
 end
 
 ## only rotation
+"""
+    RotationRegion(R, T, σᵣ)
+    RotationRegion(σᵣ)
+    RotationRegion()
+
+A rotation-only search region for branch-and-bound alignment. Covers a hypercube of
+rotation space with half-width `σᵣ` centered at `R`; translation `T` is fixed.
+The zero-argument form initializes at the identity rotation with `σᵣ = π`.
+"""
 struct RotationRegion{N<:Real} <: SearchRegion{N}
     R::RotationVec{N}
     T::SVector{3,N}
@@ -102,6 +118,15 @@ end
 
 
 ## only translation
+"""
+    TranslationRegion(R, T, σₜ)
+    TranslationRegion(σₜ)
+    TranslationRegion()
+
+A translation-only search region for branch-and-bound alignment. Covers a cube of
+translation space with half-width `σₜ` centered at `T`; rotation `R` is fixed.
+The zero-argument form initializes at the zero translation with `σₜ = 1`.
+"""
 struct TranslationRegion{N<:Real} <: SearchRegion{N}
     R::RotationVec{N}
     T::SVector{3,N}

@@ -85,9 +85,10 @@ weights(mgmm::AbstractMultiGMM) = reduce(vcat, [weights(gmm) for (k,gmm) in mgmm
 widths(mgmm::AbstractMultiGMM) = reduce(vcat, [widths(gmm) for (k,gmm) in mgmm.gmms])
 
 """
-A structure that defines an isotropic Gaussian distribution with the location of the mean, `μ`, standard deviation `σ`,
-and scaling factor `ϕ`.
+    IsotropicGaussian(μ, σ, ϕ)
 
+Isotropic Gaussian distribution in `N` dimensions with mean `μ`, standard deviation `σ`,
+and scaling factor `ϕ`.
 """
 struct IsotropicGaussian{N,T} <: AbstractIsotropicGaussian{N,T}
     μ::SVector{N,T}
@@ -109,7 +110,10 @@ promote_rule(::Type{IsotropicGaussian{N,T}}, ::Type{IsotropicGaussian{N,S}}) whe
 (g::IsotropicGaussian)(pos::AbstractVector) = exp(-sum(abs2, pos-g.μ)/(2*g.σ^2))*g.ϕ
 
 """
-A collection of `IsotropicGaussian`s, making up a Gaussian Mixture Model (GMM).
+    IsotropicGMM(gaussians)
+
+Gaussian Mixture Model in `N` dimensions, consisting of a vector of `IsotropicGaussian{N,T}`
+components stored in the `.gaussians` field.
 """
 struct IsotropicGMM{N,T} <: AbstractIsotropicGMM{N,T}
     gaussians::Vector{IsotropicGaussian{N,T}}
@@ -125,8 +129,11 @@ eltype(::Type{IsotropicGMM{N,T}}) where {N,T} = IsotropicGaussian{N,T}
 (gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
 
 """
-A collection of labeled `IsotropicGMM`s, to each be considered separately during an alignment procedure. That is,
-only alignment scores between `IsotropicGMM`s with the same key are considered when aligning two `MultiGMM`s.
+    IsotropicMultiGMM(gmms)
+
+A keyed collection of `IsotropicGMM`s, each considered separately during alignment.
+Only overlap scores between `IsotropicGMM`s sharing the same key contribute when aligning
+two `IsotropicMultiGMM`s. `gmms` is a `Dict{K, IsotropicGMM{N,T}}`.
 """
 struct IsotropicMultiGMM{N,T,K} <: AbstractIsotropicMultiGMM{N,T,K}
     gmms::Dict{K, IsotropicGMM{N,T}}

@@ -188,7 +188,7 @@ end
 """
     result = branchbound(x, y; kwargs...)
 
-Finds the globally optimal rigid transform for alignment between two models, `x` and `y`, using
+Find the globally optimal rigid transform for alignment between two models, `x` and `y`, using
 branch-and-bound search.
 
 Returns a `GlobalAlignmentResult` containing the best transformation found, upper and lower bounds
