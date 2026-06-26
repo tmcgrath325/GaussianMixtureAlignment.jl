@@ -9,9 +9,10 @@ function align_local_points(P, Q; maxevals=1000, tformfun=AffineMap)
                 tformfun === LinearMap ? [π, π, π] :
                 [trlim, trlim, trlim]
 
-    # local optimization within the block
+    # local optimization within the block; the optimizer iterate X is a vector, while
+    # build_tform takes the fixed-arity transform parameters as a tuple
     function f(X)
-        tform = build_tform(tformfun, X)
+        tform = build_tform(tformfun, tuple(X...))
         score = squared_deviation(tform(P), Q)
         return score
     end

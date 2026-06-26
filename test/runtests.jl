@@ -68,6 +68,32 @@ end
     @test ubdist ≈ 8
 
     ### loose_distance_bounds
+    # full rotation: the nearest point on the circle, matching the tight bound
+    lbdist, ubdist = loose_distance_bounds(μx, μy, π, 0)
+    @test ubdist ≈ 7
+    @test lbdist ≈ 1
+    # pure translation: γᵣ = 0, so the loose bound equals the tight one
+    lbdist, ubdist = loose_distance_bounds(μx, μy, 0, 1/√3)
+    @test lbdist ≈ 6
+    @test ubdist ≈ 7
+    # intermediate rotation: the loose lower bound is strictly looser than the tight one
+    loose_lb, loose_ub = loose_distance_bounds(μx, μy, π/2/sqrt3, 0)
+    tight_lb, tight_ub = tight_distance_bounds(μx, μy, π/2/sqrt3, 0)
+    @test loose_lb < tight_lb
+    @test loose_ub ≈ tight_ub ≈ 7
+    # the loose bounds must enclose the tight ones across a range of uncertainties: a wider
+    # nearest point when minimizing, a wider farthest point when maximizing. Both share the
+    # region-center distance as their second element.
+    for σᵣ in (0.0, 0.3, 0.8, 1.5), σₜ in (0.0, 0.5, 2.0)
+        near_l, ctr_l = loose_distance_bounds(μx, μy, σᵣ, σₜ)
+        near_t, ctr_t = tight_distance_bounds(μx, μy, σᵣ, σₜ)
+        @test near_l ≤ near_t ≤ ctr_t
+        @test ctr_l ≈ ctr_t
+        far_l, fctr_l = loose_distance_bounds(μx, μy, σᵣ, σₜ, true)
+        far_t, _ = tight_distance_bounds(μx, μy, σᵣ, σₜ, true)
+        @test far_l ≥ far_t
+        @test fctr_l ≈ ctr_t
+    end
 
     ### Gaussian L2 bounds
     # rotation distances, no translation
@@ -458,9 +484,9 @@ end
     tiv_icp = tiv_goicp_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0)
     @test isfinite(tiv_icp.upperbound)
     @test_deprecated tiv_goicp_align(xset, yset, 10.0, 10.0)
-    # tiv_goih_align's keyword form dispatches into its rotation phase, which routes through
-    # loose_distance_bounds and currently throws; @test_broken flips to a failure once fixed.
-    @test_broken isfinite(tiv_goih_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0).upperbound)
+    tiv_ih = tiv_goih_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0)
+    @test isfinite(tiv_ih.upperbound)
+    @test_deprecated tiv_goih_align(xset, yset, 10.0, 10.0)
 
 end
 
