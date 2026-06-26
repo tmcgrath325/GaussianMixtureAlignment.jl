@@ -253,6 +253,11 @@ end
     res1 = gogma_align(gmmx, gmmy; maxsplits=1E3)
     res2 = tiv_gogma_align(gmmx, gmmy; maxsplits=1E3)
 
+    # TIV radius cutoffs are keyword arguments; the positional form is deprecated
+    res2_kw = tiv_gogma_align(gmmx, gmmy; cutoff_x=10.0, cutoff_y=10.0, maxsplits=1E3)
+    @test isfinite(res2_kw.upperbound)
+    @test_deprecated tiv_gogma_align(gmmx, gmmy, 10.0, 10.0; maxsplits=1E3)
+
     # branchbound accepts initial rotation/translation hints by keyword (forwarded through gogma_align)
     res_hint = gogma_align(gmmx, gmmy; initial_rotation=RotationVec(0.1, 0.0, 0.0),
                            initial_translation=SVector{3}(0.0, 0.0, 0.0), maxsplits=1E2)
@@ -448,6 +453,14 @@ end
     @test GaussianMixtureAlignment.transform_columns(goicp_res.tform, xset.coords) ≈ yset.coords
     goih_res = goih_align(xset, yset)
     @test GaussianMixtureAlignment.transform_columns(goih_res.tform, xset.coords) ≈ yset.coords
+
+    # TIV radius cutoffs are keyword arguments; the positional form is deprecated
+    tiv_icp = tiv_goicp_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0)
+    @test isfinite(tiv_icp.upperbound)
+    @test_deprecated tiv_goicp_align(xset, yset, 10.0, 10.0)
+    # tiv_goih_align's keyword form dispatches into its rotation phase, which routes through
+    # loose_distance_bounds and currently throws; @test_broken flips to a failure once fixed.
+    @test_broken isfinite(tiv_goih_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0).upperbound)
 
 end
 
