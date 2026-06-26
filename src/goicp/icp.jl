@@ -1,5 +1,4 @@
 # perform point-to-point ICP with provided correspondence and distance score functions
-# TO DO: for MultiPointSets, choose the appropriate number of weights
 function iterate_kabsch(P, Q, wp=ones(size(P,2)), wq=ones(size(Q,2)); iterations=1000, correspondence = hungarian_assignment)
     # initial correspondences
     matches = correspondence(P,Q)
