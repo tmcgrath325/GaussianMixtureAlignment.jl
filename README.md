@@ -126,7 +126,9 @@ julia> interactions = Dict(
 
 julia> # apply a random rigid transformation to one of the models
 
-julia> using CoordinateTransformations; randtform = AffineMap((rand(), rand(), rand(), rand(), rand(), rand()));
+julia> using CoordinateTransformations, Rotations, StaticArrays
+
+julia> randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1rand(3)...));
 
 julia> mgmmx = randtform(mgmmx);
 
