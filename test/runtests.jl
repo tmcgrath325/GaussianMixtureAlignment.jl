@@ -489,9 +489,11 @@ end
     # TIV radius cutoffs are keyword arguments; the positional form is deprecated
     tiv_icp = tiv_goicp_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0)
     @test isfinite(tiv_icp.upperbound)
+    @test GaussianMixtureAlignment.transform_columns(tiv_icp.tform, xset.coords) ≈ yset.coords
     @test_deprecated tiv_goicp_align(xset, yset, 10.0, 10.0)
     tiv_ih = tiv_goih_align(xset, yset; cutoff_x=10.0, cutoff_y=10.0)
     @test isfinite(tiv_ih.upperbound)
+    @test GaussianMixtureAlignment.transform_columns(tiv_ih.tform, xset.coords) ≈ yset.coords
     @test_deprecated tiv_goih_align(xset, yset, 10.0, 10.0)
 
 end

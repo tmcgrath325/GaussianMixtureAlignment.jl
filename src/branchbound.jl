@@ -457,8 +457,13 @@ function tiv_branchbound(   x::AbstractModel,
     spinvec, dist = planefit(tivx, R)
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = rot_localfun(tivx, tivy, spinblock)
-    if spinscore < rotscore
-        rotpos = RotationVec(spinrotpos...)
+    if spinscore <= rotscore
+        # TIV scores may be degenerate when the TIV set is coplanar: a 180° spin
+        # about the plane normal leaves all pairwise differences unchanged, so both
+        # candidates score identically on TIVs. Break the tie on the original points.
+        origscore, _ = localfun(x, y, RotationRegion(RotationVec(rotpos...), zeroTranslation, z))
+        spinscore_x, _ = localfun(x, y, RotationRegion(RotationVec(spinrotpos...), zeroTranslation, z))
+        rotpos = spinscore_x < origscore ? RotationVec(spinrotpos...) : RotationVec(rotpos...)
     else
         rotpos = RotationVec(rotpos...)
     end
