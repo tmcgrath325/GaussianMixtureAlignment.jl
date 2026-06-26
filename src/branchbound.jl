@@ -198,8 +198,8 @@ on the objective, and convergence statistics.
 
 - `nsplits=2`: number of subdivisions per dimension at each branching step (must be even)
 - `searchspace=nothing`: initial `UncertaintyRegion`; defaults to the smallest region guaranteed to contain the global optimum
-- `R=RotationVec(0,0,0)`: initial rotation hint passed to `blockfun`
-- `T=SVector(0,0,0)`: initial translation hint passed to `blockfun`
+- `initial_rotation=RotationVec(0,0,0)`: initial rotation hint passed to `blockfun`
+- `initial_translation=SVector(0,0,0)`: initial translation hint passed to `blockfun`
 - `centerinputs=false`: if `true`, center both models at their centroids before searching
 - `blockfun=UncertaintyRegion`: constructs `SearchRegion`s for each subspace
 - `nextblockfun=lowestlbblock`: selects which block to subdivide next (alternative: `randomblock`)
@@ -221,7 +221,7 @@ on the objective, and convergence statistics.
 - `maxstagnant=Inf`: terminate after this many splits without improvement
 """
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
-                     nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
+                     nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, initial_rotation=RotationVec(0.,0.,0.), initial_translation=SVector{3}(0.,0.,0.),
                      nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun::TF=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, separatesplit=false) where TF
     x = xinput
@@ -246,7 +246,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
 
     # initialization
     if isnothing(searchspace)
-        searchspace = blockfun(x, y, R, T)
+        searchspace = blockfun(x, y, initial_rotation, initial_translation)
     end
     ndims = length(center(searchspace))
     rot_trl_split = separatesplit && typeof(searchspace) <: UncertaintyRegion
@@ -464,7 +464,7 @@ function tiv_branchbound(   x::AbstractModel,
     end
 
     # perform translation alignment of original models
-    trl_res = trl_branchbound(x, y; R=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
+    trl_res = trl_branchbound(x, y; initial_rotation=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space

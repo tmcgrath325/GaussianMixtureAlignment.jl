@@ -84,7 +84,6 @@ function RotationRegion(R::RotationVec,T::SVector{3},σᵣ::Number)
     t = promote_type(eltype(R), eltype(T), typeof(σᵣ))
     return RotationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σᵣ))
 end
-RotationRegion(R,T,σᵣ::Number) = RotationRegion(R, T, σᵣ)
 RotationRegion(σᵣ::Number) = RotationRegion(one(RotationVec), zero(SVector{3}), σᵣ)
 RotationRegion() = RotationRegion(Float64(π))
 
@@ -112,7 +111,6 @@ function TranslationRegion(R::RotationVec,T::SVector{3},σₜ::Number)
     t = promote_type(eltype(R), eltype(T), typeof(σₜ))
     return TranslationRegion{t}(RotationVec{t}(R), SVector{3,t}(T), t(σₜ))
 end
-TranslationRegion(R,T,σₜ)   = TranslationRegion(R, T, σₜ)
 TranslationRegion(σₜ)       = TranslationRegion(one(RotationVec{typeof(σₜ)}), zero(SVector{3, typeof(σₜ)}), σₜ)
 TranslationRegion()         = TranslationRegion(1.0)
 

@@ -253,6 +253,11 @@ end
     res1 = gogma_align(gmmx, gmmy; maxsplits=1E3)
     res2 = tiv_gogma_align(gmmx, gmmy; maxsplits=1E3)
 
+    # branchbound accepts initial rotation/translation hints by keyword (forwarded through gogma_align)
+    res_hint = gogma_align(gmmx, gmmy; initial_rotation=RotationVec(0.1, 0.0, 0.0),
+                           initial_translation=SVector{3}(0.0, 0.0, 0.0), maxsplits=1E2)
+    @test isfinite(res_hint.upperbound)
+
     mgmmx = IsotropicMultiGMM(Dict(:x => gmmx, :y => gmmx))
     mgmmy = IsotropicMultiGMM(Dict(:x => gmmy, :y => gmmy))
     res3 = gogma_align(mgmmx, mgmmy; maxsplits=1E3)
