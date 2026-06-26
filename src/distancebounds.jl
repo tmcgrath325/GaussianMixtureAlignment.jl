@@ -38,7 +38,9 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     if xnorm*ynorm == 0
         cosα = one(promote_type(eltype(x),eltype(y)))
     else
-        cosα = dot(x, y)/(xnorm*ynorm) 
+        # Clamp to [-1,1]: floating-point rounding can push the ratio just past ±1,
+        # which would make 1-cosα² negative under the √ below.
+        cosα = clamp(dot(x, y)/(xnorm*ynorm), -1, 1)
     end
     cosβ = cos(min(sqrt3*σᵣ, π))
 
@@ -58,10 +60,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
         if cosα >= cosβ
             lbdist = max(abs(xnorm-ynorm) - sqrt3*σₜ, 0)
         else
-            lbdist = try max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
-            catch e     # when the argument for the square root is negative (within machine precision of 0, usually)
-                0
-            end
+            lbdist = max(√(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ+√((1-cosα^2)*(1-cosβ^2)))) - sqrt3*σₜ, 0)  # law of cosines
         end
     end
 

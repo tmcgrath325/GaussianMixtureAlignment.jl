@@ -66,6 +66,17 @@ end
     lbdist, ubdist = tight_distance_bounds(x+SVector(1,0,0),y,0,1/sqrt3)
     @test lbdist ≈ 7
     @test ubdist ≈ 8
+    # nearly (anti)parallel points: floating-point rounding pushes
+    # dot(x,y)/(norm(x)*norm(y)) just past ±1, where clamping cosα keeps 1-cosα²
+    # nonnegative under the √ instead of throwing a DomainError. xpar/1.3xpar give
+    # cosα = 1.0000000000000002; the negated pair gives -1.0000000000000002.
+    xpar = SVector{3,Float64}(1, 1, 1)
+    lbp, ubp = tight_distance_bounds(xpar, 1.3*xpar, 0.1, 0.0, true)   # parallel, maximize
+    @test isfinite(lbp) && isfinite(ubp)
+    @test lbp ≥ ubp
+    lbn, ubn = tight_distance_bounds(xpar, -1.3*xpar, 0.1, 0.0)        # anti-parallel, minimize
+    @test isfinite(lbn) && isfinite(ubn)
+    @test 0 ≤ lbn ≤ ubn
 
     ### loose_distance_bounds
     # full rotation: the nearest point on the circle, matching the tight bound
