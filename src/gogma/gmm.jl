@@ -154,5 +154,5 @@ Base.show(io::IO, gmm::AbstractSingleGMM) = println(io,
 
 Base.show(io::IO, mgmm::AbstractMultiGMM) = println(io,
     summary(mgmm),
-    " with $(length(mgmm)) labeled $(eltype(mgmm.gmms).parameters[2]) models made up of a total of $(sum([length(gmm) for (key,gmm) in mgmm.gmms])) $(eltype(values(mgmm.gmms))) distributions."
+    " with $(length(mgmm)) labeled $(valtype(mgmm)) models made up of a total of $(sum([length(gmm) for (key,gmm) in mgmm.gmms])) $(valtype(mgmm)) distributions."
 )

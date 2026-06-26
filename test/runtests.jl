@@ -219,6 +219,23 @@ end
     @test isempty(mgmmx)
 end
 
+@testset "multi-container show and valtype" begin
+    # `show` reports the value type via `valtype`, so it stays correct if the underlying
+    # container type changes (no positional `.parameters[2]` access).
+    g = IsotropicGaussian([0.,0.,0.], 1.0, 1.0)
+    mgmm = IsotropicMultiGMM(Dict(:a => IsotropicGMM([g, g]), :b => IsotropicGMM([g])))
+    @test sprint(show, mgmm) ==
+        "IsotropicMultiGMM{3, Float64, Symbol} with 2 labeled IsotropicGMM{3, Float64} " *
+        "models made up of a total of 3 IsotropicGMM{3, Float64} distributions.\n"
+
+    ps = PointSet([0.0 1.0; 0.0 0.0; 0.0 0.0], [1.0, 1.0])
+    mps = MultiPointSet(Dict(:a => ps, :b => ps))
+    @test valtype(mps) === valtype(mps.pointsets) === PointSet{3,Float64}
+    @test sprint(show, mps) ==
+        "MultiPointSet{3, Float64, Symbol} with 2 labeled PointSet{3, Float64} sets " *
+        "and a total of 4 points.\n"
+end
+
 @testset "combine MultiGMMs with differing keys" begin
     g1 = IsotropicGMM([IsotropicGaussian([0.,0.,0.], 1.0, 1.0)])
     g2 = IsotropicGMM([IsotropicGaussian([1.,0.,0.], 1.0, 1.0)])

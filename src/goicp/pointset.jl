@@ -115,6 +115,7 @@ end
 eltype(::Type{MultiPointSet{N,T,K}}) where {N,T,K} = Pair{K, PointSet{N,T}}
 convert(t::Type{MultiPointSet}, x::AbstractMultiPointSet) = t(x.pointsets)
 promote_rule(::Type{MultiPointSet{N,T,K}}, ::Type{MultiPointSet{N,S,L}}) where {N,T,S,K,L} = MultiPointSet{N,promote_type(T,S), promote_type(K,L)}
+Base.valtype(mps::AbstractMultiPointSet) = Base.valtype(mps.pointsets)
 
 function weights(mps::MultiPointSet{N,T,K}) where {N,T,K}
     w = Dict{K, Vector{T}}()
@@ -148,5 +149,5 @@ Base.show(io::IO, ps::AbstractSinglePointSet) = println(io,
 
 Base.show(io::IO, mps::AbstractMultiPointSet) = println(io,
     summary(mps),
-    " with $(length(mps)) labeled $(eltype(mps.pointsets).parameters[2]) sets and a total of $(sum([length(ps) for (key,ps) in mps.pointsets])) points."
+    " with $(length(mps)) labeled $(valtype(mps)) sets and a total of $(sum([length(ps) for (key,ps) in mps.pointsets])) points."
 )
