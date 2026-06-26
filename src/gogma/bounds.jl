@@ -49,17 +49,10 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
 end
 
 function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V <: Number}
-    t = promote_type(T, S, isnothing(interactions) ? T : V)
+    t = promote_type(T, S, V)
     xkeys = keys(mgmmx.gmms)
     ykeys = keys(mgmmy.gmms)
-    if isnothing(interactions)
-        interactions = Dict{Tuple{K,K},t}()
-        for key in xkeys ∩ ykeys
-            interactions[(key,key)] = one(t)
-        end
-    else
-        @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
-    end
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
     ukeys = unique(Iterators.flatten(keys(interactions)))
     for key1 in ukeys

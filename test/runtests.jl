@@ -458,7 +458,8 @@ end
         (:negative, :negative) => -1.0,
         (:steric, :steric) => -1.0,
     )
-    @test_throws AssertionError GMA.pairwise_consts(mgmmx, mgmmy, interactions)
+    @test_throws ArgumentError GMA.pairwise_consts(mgmmx, mgmmy, interactions)
+    @test_throws "must not include redundant key pairs" GMA.pairwise_consts(mgmmx, mgmmy, interactions)
     interactions = Dict(
         (:positive, :negative) =>  1.0,
         (:positive, :positive) => -1.0,
