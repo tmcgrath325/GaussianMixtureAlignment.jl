@@ -12,7 +12,7 @@ using Aqua
 using ExplicitImports
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
-using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
+using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, squared_dist_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
 const GMA = GaussianMixtureAlignment
 
 @testset "Aqua" begin
@@ -291,6 +291,28 @@ end
         @test newub <= ub
         (lb,ub) = (newlb, newub)
     end
+end
+
+@testset "squared_dist_bounds for MultiPointSets" begin
+    # The MultiPointSet method sums the single-pointset bounds over shared keys.
+    psx_a = PointSet([0.0 3.0 0.0; 0.0 0.0 4.0; 0.0 0.0 0.0])
+    psy_a = PointSet([1.0 1.0 1.0; 1.0 -2.0 1.0; 1.0 1.0 -3.0])
+    psx_b = PointSet([1.0 0.0; 0.0 1.0; 0.0 0.0])
+    psy_b = PointSet([0.0 1.0; 1.0 0.0; 0.0 0.0])
+
+    # Key :c appears in only one input and must be ignored by the key intersection.
+    mpsx = MultiPointSet(Dict(:a => psx_a, :b => psx_b, :c => psx_a))
+    mpsy = MultiPointSet(Dict(:a => psy_a, :b => psy_b))
+
+    σᵣ, σₜ = 1.0, 1.0
+    (lb, ub) = squared_dist_bounds(mpsx, mpsy, σᵣ, σₜ)
+
+    # Equal to the sum of the per-shared-key single-pointset bounds.
+    (alb, aub) = squared_dist_bounds(psx_a, psy_a, σᵣ, σₜ)
+    (blb, bub) = squared_dist_bounds(psx_b, psy_b, σᵣ, σₜ)
+    @test lb ≈ alb + blb
+    @test ub ≈ aub + bub
+    @test lb <= ub
 end
 
 @testset "GOGMA runs without errors" begin
