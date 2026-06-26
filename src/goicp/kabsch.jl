@@ -28,12 +28,13 @@ kabsch_centered_matches(P::PointSet, Q::PointSet, matches::AbstractVector{<:Tupl
 function transform_columns(tform::Translation, A::AbstractMatrix)
     return reduce(hcat, [tform(A[:,i]) for i=1:size(A,2)])
 end
+transform_columns(tform::LinearMap, A::AbstractMatrix) = tform.linear * A
 function transform_columns(tform::AffineMap, A::AbstractMatrix)
     l = LinearMap(tform.linear)
     t = Translation(tform.translation)
     transform_columns(t, l(A))
 end
-transform_columns(tform::Union{Translation,AffineMap}, P::PointSet) = PointSet(transform_columns(tform, P.coords), P.weights)
+transform_columns(tform::Union{LinearMap,Translation,AffineMap}, P::PointSet) = PointSet(transform_columns(tform, P.coords), P.weights)
 
 
 function kabsch_matches(P,Q,matches::AbstractVector{<:Tuple{Int,Int}},wp=ones(size(P,2)),wq=ones(size(Q,2)))

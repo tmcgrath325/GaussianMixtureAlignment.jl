@@ -83,7 +83,7 @@ function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet; cutoff_x=Inf, 
     objfun(X, x, y) = distanceobj(X, x, y; correspondence = hungarian_assignment);
     rot_localfun(xx, yy, block; kwargs...) = iterate_local_alignment(xx, yy, block; correspondence = hungarian_assignment, tformfun=LinearMap, kwargs...);
     trl_localfun(xx, yy, block; kwargs...) = iterate_local_alignment(xx, yy, block; correspondence = hungarian_assignment, tformfun=Translation, kwargs...);
-    return tiv_branchbound(x, y, tivpointset(x,cutoff_x), tivpointset(y,cutoff_y); boundsfun=squared_dist_bounds, localfun=local_iterative_hungarian, rot_localfun=rot_localfun, trl_localfun=rot_localfun, kwargs...)
+    return tiv_branchbound(x, y, tivpointset(x,cutoff_x), tivpointset(y,cutoff_y); boundsfun=squared_dist_bounds, localfun=local_iterative_hungarian, rot_localfun=rot_localfun, trl_localfun=trl_localfun, kwargs...)
 end
 
 function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet, cutoff_x, cutoff_y=Inf; kwargs...)

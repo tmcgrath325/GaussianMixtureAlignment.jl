@@ -13,7 +13,7 @@ function align_local_points(P, Q; maxevals=1000, tformfun=AffineMap)
     # build_tform takes the fixed-arity transform parameters as a tuple
     function f(X)
         tform = build_tform(tformfun, tuple(X...))
-        score = squared_deviation(tform(P), Q)
+        score = squared_deviation(transform_columns(tform, P), Q)
         return score
     end
     # res = optimize(f, initial_X, LBFGS(), Optim.Options(f_calls_limit=maxevals)) # ; autodiff = :forward)

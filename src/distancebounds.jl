@@ -48,7 +48,7 @@ function tight_distance_bounds(x::SVector{3,<:Number}, y::SVector{3,<:Number}, �
     if maximize
         # this case is intended for situations where the objective function scales negatively with distance\
         # lbdist, which will be the further point on the spherical cap, will be larger than ubdist
-        if cosα + cosβ >= π
+        if cosα + cosβ <= 0
             lbdist = xnorm + ynorm + sqrt3*σₜ
         else
             lbdist = √(xnorm^2 + ynorm^2 - 2*xnorm*ynorm*(cosα*cosβ-√((1-cosα^2)*(1-cosβ^2)))) + sqrt3*σₜ

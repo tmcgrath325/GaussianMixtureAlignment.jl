@@ -94,6 +94,12 @@ end
         @test far_l ≥ far_t
         @test fctr_l ≈ ctr_t
     end
+    # maximize: μx and μy are anti-aligned, so any rotation cap includes the anti-alignment
+    # direction; the farthest distance must equal norm(μx) + norm(μy) + sqrt3*σₜ
+    for σᵣ in (0.3, 0.8, 1.5), σₜ in (0.0, 0.5)
+        far_t, _ = tight_distance_bounds(μx, μy, σᵣ, σₜ, true)
+        @test far_t ≈ norm(μx) + norm(μy) + sqrt3*σₜ
+    end
 
     ### Gaussian L2 bounds
     # rotation distances, no translation
