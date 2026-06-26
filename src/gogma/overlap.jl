@@ -57,7 +57,7 @@ end
 
 Calculate the unnormalized overlap between two `AbstractMultiGMM` objects. The optional
 keyword argument `interactions` is a dictionary mapping `(key1, key2)` pairs to coefficient
-values; see [`pairwise_consts`](@ref) for the expected format.
+values; see `pairwise_consts` for the expected format.
 """
 function overlap(x::AbstractMultiGMM, y::AbstractMultiGMM, mpσ=nothing, mpϕ=nothing; interactions=nothing)
     # prepare pairwise widths and weights, if not provided

@@ -1,21 +1,11 @@
 """
-GaussianMixtureAlignment.jl
-===========================
+    GaussianMixtureAlignment
 
-GaussianMixtureAlignment.jl is a package used to align Gaussian mixture models. In particular, it uses an implementation
-of the [GOGMA algorithm (Campbell, 2016)](https://arxiv.org/abs/1603.00150) to find globally optimal alignments of mixtures of
-isotropic (spherical) Gaussian distributions.
+A Julia package for globally-optimal rigid alignment of point sets via Gaussian mixture
+models (GMMs). Implements the [GOGMA algorithm (Campbell, 2016)](https://arxiv.org/abs/1603.00150)
+and related methods.
 
-REPL help
-=========
-
-? followed by an algorithm or constructor name will print help to the terminal. See: \n
-    \t?IsotropicGaussian \n
-    \t?IsotropicGMM \n
-    \t?IsotropicMultiGMM \n
-    \t?gogma_align \n
-    \t?tiv_gogma_align \n
-    \t?rocs_align \n
+Main entry points: [`gogma_align`](@ref), [`tiv_gogma_align`](@ref), [`goicp_align`](@ref).
 """
 module GaussianMixtureAlignment
 
