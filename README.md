@@ -62,7 +62,7 @@ julia> res.tform.translation
  1.000000000557716
  0.9999999997059433
 
-julia> # Compute the overlap between the GMMs after alignment (equal to res.upperbound)
+julia> # Compute the overlap between the GMMs after alignment (the objective minimizes -overlap, so this equals -res.upperbound)
 
 julia> overlap(res.tform(gmmx), gmmy)
 3.251290635173653
@@ -118,17 +118,10 @@ IsotropicMultiGMM{3, Float64, Symbol} with 2 labeled IsotropicGMM{3, Float64} mo
 julia> # define interactions between each type of feature
 
 julia> interactions = Dict(
-           :positive => Dict(
-               :positive => -1.0,
-               :negative => 1.0,
-           ),
-           :negative => Dict(
-               :positive => 1.0,
-               :negative => -1.0,
-           ),
-           :steric => Dict(
-               :steric => -1.0,
-           ),
+           (:positive, :negative) => 1.0,
+           (:positive, :positive) => -1.0,
+           (:negative, :negative) => -1.0,
+           (:steric, :steric) => -1.0,
        );
 
 julia> # apply a random rigid transformation to one of the models
