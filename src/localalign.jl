@@ -1,4 +1,4 @@
-tformwithparams(X,x) = RotationVec(X[1], X[2], X[3])*x + SVector{3}(X[4], X[5], X[6])
+tformwithparams(X, x) = RotationVec(X[1], X[2], X[3]) * x + SVector{3}(X[4], X[5], X[6])
 # function tformwithparams(X,x)
 #     if sum(abs2, X[1:3]) == 0 # handled for autodiff around 0
 #         T = eltype(X)
@@ -16,19 +16,19 @@ tformwithparams(X,x) = RotationVec(X[1], X[2], X[3])*x + SVector{3}(X[4], X[5], 
 #     return R*x + t
 # end
 
-overlapobj(X,x,y,args...) = -overlap(tformwithparams(X,x), y, args...)
+overlapobj(X, x, y, args...) = -overlap(tformwithparams(X, x), y, args...)
 
 function distanceobj(X, x, y; correspondence = hungarian_assignment)
-    tformedx = tformwithparams(X,x)
-    return squared_deviation(tformedx, y, correspondence(tformedx,y))
+    tformedx = tformwithparams(X, x)
+    return squared_deviation(tformedx, y, correspondence(tformedx, y))
 end
 
-function alignment_objective(X, x::AbstractModel, y::AbstractModel, args...; objfun=overlapobj)
-    return objfun(X,x,y,args...)
+function alignment_objective(X, x::AbstractModel, y::AbstractModel, args...; objfun = overlapobj)
+    return objfun(X, x, y, args...)
 end
 
 # alignment objective for a rigid transformation
-alignment_objective(X, x::AbstractModel, y::AbstractModel, block::UncertaintyRegion, args...; kwargs...) = alignment_objective(X,x,y,args...; kwargs...)
+alignment_objective(X, x::AbstractModel, y::AbstractModel, block::UncertaintyRegion, args...; kwargs...) = alignment_objective(X, x, y, args...; kwargs...)
 
 # alignment objective for rigid rotation (i.e. the first stage of TIV-GOGMA)
 function alignment_objective(X, gmmx::AbstractModel, gmmy::AbstractModel, block::RotationRegion, args...; kwargs...)
@@ -46,8 +46,10 @@ end
 
 Performs local alignment within the specified `block` using L-BFGS to minimize objective function `objfun` for the provided GMMs, `x` and `y`.
 """
-function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, args...;
-                     autodiff=AutoForwardDiff(), maxevals=100, kwargs...)
+function local_align(
+        x::AbstractModel, y::AbstractModel, block::SearchRegion, args...;
+        autodiff = AutoForwardDiff(), maxevals = 100, kwargs...
+    )
 
     # set initial guess at the center of the block
     initial_X = center(block)
@@ -59,8 +61,8 @@ function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, ar
     # local optimization within the block
     f(X) = alignment_objective(X, x, y, block, args...; kwargs...)
     # res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
-    res = optimize(f, [initial_X...], LBFGS(), Optim.Options(f_calls_limit=maxevals); autodiff)
+    res = optimize(f, [initial_X...], LBFGS(), Optim.Options(f_calls_limit = maxevals); autodiff)
     return res.minimum, tuple(res.minimizer...)
 end
 
-local_align(x::AbstractModel, y::AbstractModel; kwargs...) = local_align(x, y, UncertaintyRegion(x,y); kwargs...)
+local_align(x::AbstractModel, y::AbstractModel; kwargs...) = local_align(x, y, UncertaintyRegion(x, y); kwargs...)

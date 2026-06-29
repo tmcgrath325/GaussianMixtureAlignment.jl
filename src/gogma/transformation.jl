@@ -1,48 +1,46 @@
-function Base.:*(R::AbstractMatrix{W}, x::IsotropicGaussian{N,V}) where {N,V,W}
+function Base.:*(R::AbstractMatrix{W}, x::IsotropicGaussian{N, V}) where {N, V, W}
     numtype = promote_type(V, W)
-    return IsotropicGaussian{N,numtype}(R*x.μ, x.σ, x.ϕ)
+    return IsotropicGaussian{N, numtype}(R * x.μ, x.σ, x.ϕ)
 end
 
-function Base.:+(x::IsotropicGaussian{N,V}, T::AbstractVector{W}) where {N,V,W}
+function Base.:+(x::IsotropicGaussian{N, V}, T::AbstractVector{W}) where {N, V, W}
     numtype = promote_type(V, W)
-    return IsotropicGaussian{N,numtype}(x.μ.+T, x.σ, x.ϕ)
+    return IsotropicGaussian{N, numtype}(x.μ .+ T, x.σ, x.ϕ)
 end
 
-Base.:-(x::IsotropicGaussian, T::AbstractVector,) = x + (-T)
+Base.:-(x::IsotropicGaussian, T::AbstractVector) = x + (-T)
 
-function Base.:*(R::AbstractMatrix{W}, x::IsotropicGMM{N,V}) where {N,V,W}
+function Base.:*(R::AbstractMatrix{W}, x::IsotropicGMM{N, V}) where {N, V, W}
     numtype = promote_type(V, W)
-    return IsotropicGMM{N,numtype}([R*g for g in x.gaussians])
+    return IsotropicGMM{N, numtype}([R * g for g in x.gaussians])
 end
 
-function Base.:+(x::IsotropicGMM{N,V}, T::AbstractVector{W}) where {N,V,W}
+function Base.:+(x::IsotropicGMM{N, V}, T::AbstractVector{W}) where {N, V, W}
     numtype = promote_type(V, W)
-    return IsotropicGMM{N,numtype}([g+T for g in x.gaussians])
+    return IsotropicGMM{N, numtype}([g + T for g in x.gaussians])
 end
 
-Base.:-(x::IsotropicGMM, T::AbstractVector,) = x + (-T)
+Base.:-(x::IsotropicGMM, T::AbstractVector) = x + (-T)
 
-function  Base.:*(R::AbstractMatrix{W}, x::IsotropicMultiGMM{N,V,K}) where {N,V,K,W}
+function Base.:*(R::AbstractMatrix{W}, x::IsotropicMultiGMM{N, V, K}) where {N, V, K, W}
     numtype = promote_type(V, W)
-    gmmdict = Dict{K, IsotropicGMM{N,numtype}}()
+    gmmdict = Dict{K, IsotropicGMM{N, numtype}}()
     for (key, gmm) in x.gmms
-        push!(gmmdict, key=>R*gmm)
+        push!(gmmdict, key => R * gmm)
     end
     return IsotropicMultiGMM(gmmdict)
 end
 
-function  Base.:+(x::IsotropicMultiGMM{N,V,K}, T::AbstractVector{W}) where {N,V,K,W}
+function Base.:+(x::IsotropicMultiGMM{N, V, K}, T::AbstractVector{W}) where {N, V, K, W}
     numtype = promote_type(V, W)
-    gmmdict = Dict{K, IsotropicGMM{N,numtype}}()
-    for  (key, gmm) in x.gmms
-        push!(gmmdict, key=>gmm+T)
+    gmmdict = Dict{K, IsotropicGMM{N, numtype}}()
+    for (key, gmm) in x.gmms
+        push!(gmmdict, key => gmm + T)
     end
     return IsotropicMultiGMM(gmmdict)
 end
 
 Base.:-(x::IsotropicMultiGMM, T::AbstractVector) = x + (-T)
-
-
 
 
 # There is some concern about the inferability of the functions below. Using Test.@inferred did not throw any errors
@@ -99,5 +97,3 @@ Base.:-(x::IsotropicMultiGMM, T::AbstractVector) = x + (-T)
 # end
 
 # Base.:-(x::AbstractIsotropicMultiGMM, T::AbstractVector) = x + (-T)
-
-

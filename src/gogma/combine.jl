@@ -18,12 +18,12 @@ function combine(mgmmx::IsotropicMultiGMM, mgmmy::IsotropicMultiGMM)
     if dims(mgmmx) != dims(mgmmy)
         throw(ArgumentError("GMMs must have the same dimensionality"))
     end
-    t = IsotropicGMM{dims(mgmmx),promote_type(numbertype(mgmmx), numbertype(mgmmy))}
+    t = IsotropicGMM{dims(mgmmx), promote_type(numbertype(mgmmx), numbertype(mgmmy))}
     d = promote_type(typeof(mgmmx.gmms), typeof(mgmmy.gmms))
     gmms = d()
     xkeys, ykeys = keys(mgmmx.gmms), keys(mgmmy.gmms)
     for key in xkeys ∪ ykeys
-        if key ∈ xkeys && key ∈ykeys
+        if key ∈ xkeys && key ∈ ykeys
             push!(gmms, Pair(key, convert(t, combine(mgmmx.gmms[key], mgmmy.gmms[key]))))
         elseif key ∈ xkeys
             push!(gmms, Pair(key, convert(t, mgmmx.gmms[key])))
@@ -34,9 +34,9 @@ function combine(mgmmx::IsotropicMultiGMM, mgmmy::IsotropicMultiGMM)
     return promote_type(typeof(mgmmx), typeof(mgmmy))(gmms)
 end
 
-function combine(gmms::Union{AbstractVector{<:AbstractSingleGMM},AbstractVector{<:AbstractMultiGMM}})
+function combine(gmms::Union{AbstractVector{<:AbstractSingleGMM}, AbstractVector{<:AbstractMultiGMM}})
     if length(gmms) > 1
-        return combine([combine(gmms[1],gmms[2]), gmms[3:end]...])
+        return combine([combine(gmms[1], gmms[2]), gmms[3:end]...])
     elseif length(gmms) == 1
         return gmms[1]
     else

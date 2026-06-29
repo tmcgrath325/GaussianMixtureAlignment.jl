@@ -10,24 +10,24 @@ import Makie: plot!
 using Makie: @recipe, lines!, mesh!, Attributes
 
 const HALFWAY_RADIUS = sqrt(3) / 2
-const EQUAL_VOL_CONST = 3*√π/4
+const EQUAL_VOL_CONST = 3 * √π / 4
 
 const DEFAULT_COLORS = [            # CUD colors: https://jfly.uni-koeln.de/color/#assign
-    RGB(0/255,   114/255, 178/255), # blue
-    RGB(230/255, 159/255, 0/255  ), # orange
-    RGB(0/255,   158/255, 115/255), # green
-    RGB(204/255, 121/255, 167/255), # reddish purple
-    RGB(86/255,  180/255, 233/255), # sky blue
-    RGB(213/255, 94/255,  0/255  ), # vermillion
-    RGB(240/255, 228/255, 66/255 ), # yellow
+    RGB(0 / 255, 114 / 255, 178 / 255), # blue
+    RGB(230 / 255, 159 / 255, 0 / 255), # orange
+    RGB(0 / 255, 158 / 255, 115 / 255), # green
+    RGB(204 / 255, 121 / 255, 167 / 255), # reddish purple
+    RGB(86 / 255, 180 / 255, 233 / 255), # sky blue
+    RGB(213 / 255, 94 / 255, 0 / 255), # vermillion
+    RGB(240 / 255, 228 / 255, 66 / 255), # yellow
 ]
 
 # use cached calculations for positions of points on a circle
-θs = range(0, 2π, length=32)        # use 32 points (arbitrary)
+θs = range(0, 2π, length = 32)        # use 32 points (arbitrary)
 const cosθs = [cos(θ) for θ in θs]
 const sinθs = [sin(θ) for θ in θs]
 
-equal_volume_radius(σ, ϕ) = (EQUAL_VOL_CONST*abs(ϕ))^(1/3) * σ
+equal_volume_radius(σ, ϕ) = (EQUAL_VOL_CONST * abs(ϕ))^(1 / 3) * σ
 
 function flat_circle!(f, pos, r, dim::Int, attrs::Attributes)
     if dim == 3
@@ -43,21 +43,22 @@ function flat_circle!(f, pos, r, dim::Int, attrs::Attributes)
         ys = [r * cosθ + pos[2] for cosθ in cosθs]
         zs = [r * sinθ + pos[3] for sinθ in sinθs]
     end
-    lines!(f, attrs, xs, ys, zs)
+    return lines!(f, attrs, xs, ys, zs)
 end
 
 function wire_sphere!(f, pos, r, attrs::Attributes)
     for dim in 1:3
         flat_circle!(f, pos, r, dim, attrs)
-        halfwaypos = Float32[0,0,0]
-        halfwaypos[dim] = r / 2;
+        halfwaypos = Float32[0, 0, 0]
+        halfwaypos[dim] = r / 2
         flat_circle!(f, pos .- halfwaypos, r * HALFWAY_RADIUS, dim, attrs)
         flat_circle!(f, pos .+ halfwaypos, r * HALFWAY_RADIUS, dim, attrs)
     end
+    return
 end
 
 function solid_sphere!(f, pos, r, attrs::Attributes)
-    mesh!(f, attrs, Sphere(GeometryBasics.Point{3}(pos...), r))
+    return mesh!(f, attrs, Sphere(GeometryBasics.Point{3}(pos...), r))
 end
 
 """
@@ -134,24 +135,24 @@ function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotrop
     color = gd[:color][]
     palette = gd[:palette][]
     label = gd[:label][]
-    base_attrs = Makie.shared_attributes(gd, GaussianDisplay; drop=[:color, :label, :palette])
+    base_attrs = Makie.shared_attributes(gd, GaussianDisplay; drop = [:color, :label, :palette])
     for (i, gauss) in enumerate(gmm)
-        col = isnothing(color) ? palette[(i-1) % length(palette) + 1] : color
-        gaussiandisplay!(gd, base_attrs, gauss; color=col, label)
+        col = isnothing(color) ? palette[(i - 1) % length(palette) + 1] : color
+        gaussiandisplay!(gd, base_attrs, gauss; color = col, label)
     end
     return gd
 end
 
-function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N,T,K}}}) where {N,T,K}
+function plot!(gd::GMMDisplay{<:Tuple{<:GaussianMixtureAlignment.AbstractIsotropicMultiGMM{N, T, K}}}) where {N, T, K}
     mgmm = gd[:g][]
     color = gd[:color][]
     palette = gd[:palette][]
-    base_attrs = Makie.shared_attributes(gd, GMMDisplay; drop=[:color, :label])
+    base_attrs = Makie.shared_attributes(gd, GMMDisplay; drop = [:color, :label])
     allkeys = collect(keys(mgmm))
     len = length(allkeys)
     for (i, k) in enumerate(allkeys)
-        col = isnothing(color) ? palette[(i-1) % len + 1] : color
-        haskey(mgmm, k) && gmmdisplay!(gd, base_attrs, mgmm[k]; color=col, label=string(k))
+        col = isnothing(color) ? palette[(i - 1) % len + 1] : color
+        haskey(mgmm, k) && gmmdisplay!(gd, base_attrs, mgmm[k]; color = col, label = string(k))
     end
     return gd
 end

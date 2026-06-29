@@ -6,7 +6,7 @@ GMM `y`, and `minimum` is the objective at that alignment. ROCS is a local metho
 result carries no global-optimality guarantee. See `AlignmentResults` for the shared accessor
 interface.
 """
-struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
+struct ROCSAlignmentResult{D, S, T, F <: AbstractAffineMap, X <: AbstractGMM{D, S}, Y <: AbstractGMM{D, T}} <: AlignmentResults
     x::X
     y::Y
     minimum::T
@@ -19,7 +19,7 @@ function Base.show(io::IO, ::MIME"text/plain", r::ROCSAlignmentResult)
     println(io, "ROCSAlignmentResult:")
     println(io, "  objective (overlap): ", r.minimum)
     println(io, "  converged:           false (local alignment; no global-optimality guarantee)")
-    print(io,   "  transform:           ", r.tform)
+    return print(io, "  transform:           ", r.tform)
 end
 
 """
@@ -27,27 +27,29 @@ end
 
 Returns the second order moment of `gmm`
 """
-function mass_matrix(positions::AbstractMatrix{<:Real},
-                     weights=ones(eltype(positions),size(positions,2)),
-                     widths=zeros(eltype(positions),size(positions,2)),
-                     center=centroid(positions,weights))
+function mass_matrix(
+        positions::AbstractMatrix{<:Real},
+        weights = ones(eltype(positions), size(positions, 2)),
+        widths = zeros(eltype(positions), size(positions, 2)),
+        center = centroid(positions, weights)
+    )
     t = eltype(positions)
-    npts = size(positions,2)
+    npts = size(positions, 2)
     M = fill(zero(t), 3, 3)
-    dists = [positions[:,i].-center for i=1:npts]
+    dists = [positions[:, i] .- center for i in 1:npts]
     # diagonal terms
-    for i=1:3
-        for j=1:npts
-            M[i,i] += weights[j] * (dists[j][i]^2 + widths[j]^2)
+    for i in 1:3
+        for j in 1:npts
+            M[i, i] += weights[j] * (dists[j][i]^2 + widths[j]^2)
         end
     end
     # off-diagonal terms
-    for i=1:3
-        for j=i+1:3
-            for k=1:npts
+    for i in 1:3
+        for j in (i + 1):3
+            for k in 1:npts
                 inc = weights[k] * dists[k][i] * dists[k][j]
-                M[i,j] += inc
-                M[j,i] += inc
+                M[i, j] += inc
+                M[j, i] += inc
             end
         end
     end
@@ -61,10 +63,12 @@ end
 Returns 10 transformations to put `gmm` in an inertial frame. That is, the mass matrix of the GMM
 is made diagonal, and the GMM center of mass is made the origin.
 """
-function inertial_transforms(positions::AbstractMatrix{<:Real},
-                             weights=ones(eltype(positions),size(positions,2)),
-                             widths=zeros(eltype(positions),size(positions,2));
-                             invert = false)
+function inertial_transforms(
+        positions::AbstractMatrix{<:Real},
+        weights = ones(eltype(positions), size(positions, 2)),
+        widths = zeros(eltype(positions), size(positions, 2));
+        invert = false
+    )
     com = centroid(positions, weights / sum(weights))
     massmat = mass_matrix(positions, weights, widths, com)
     evecs = eigvecs(massmat)
@@ -73,21 +77,21 @@ function inertial_transforms(positions::AbstractMatrix{<:Real},
     N = length(com)
 
     # obtain all rotations that align the mass matrix to the coordinate system
-    tforms = AffineMap{SMatrix{N,N,T,N^2},SVector{N,T}}[]
+    tforms = AffineMap{SMatrix{N, N, T, N^2}, SVector{N, T}}[]
 
     # first, align the the eigenvectors to the coordinate system axes
     # make sure that a reflection is not performed
     if det(evecs) < 0
-        evecs[:,end] = -evecs[:,end]
+        evecs[:, end] = -evecs[:, end]
     end
 
-    push!(tforms, inv(LinearMap(SMatrix{length(com),length(com)}(evecs))) ∘ Translation(-com))
+    push!(tforms, inv(LinearMap(SMatrix{length(com), length(com)}(evecs))) ∘ Translation(-com))
 
     # then consider unique rotations made up of 180 degree rotations about the coordinate axes (out of all 2^3, there are 4 unique poses)
-    for i=1:3
-        axis = zeros(T,N)
+    for i in 1:3
+        axis = zeros(T, N)
         axis[i] = one(T)
-        push!(tforms, LinearMap(AngleAxis(π, axis...)) ∘  tforms[1])
+        push!(tforms, LinearMap(AngleAxis(π, axis...)) ∘ tforms[1])
     end
     if invert
         return [inv(tform) for tform in tforms]
@@ -117,7 +121,7 @@ function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
     tformsmoving = inertial_transforms(gmmmoving)    # Take all 4 rotations for the GMM to be aligned
 
     # perform local alignment starting at each inertial rotation for the "moving" GMM
-    results = Tuple{Float64, NTuple{6,Float64}}[]
+    results = Tuple{Float64, NTuple{6, Float64}}[]
     for tformm in tformsmoving
         push!(results, local_align(tformm(gmmmoving), tformfixed(gmmfixed); kwargs...))
     end

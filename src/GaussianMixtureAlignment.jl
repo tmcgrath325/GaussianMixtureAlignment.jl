@@ -9,18 +9,18 @@ Main entry points: [`gogma_align`](@ref), [`tiv_gogma_align`](@ref), [`goicp_ali
 """
 module GaussianMixtureAlignment
 
-abstract type AbstractModel{N,T} end
+abstract type AbstractModel{N, T} end
 
 using ADTypes: ADTypes, AutoForwardDiff
 using CoordinateTransformations: CoordinateTransformations, AbstractAffineMap, AffineMap,
-                                 LinearMap, Translation, kabsch
+    LinearMap, Translation, kabsch
 using CoordinateTransformations: kabsch_centered
 using Distances: Distances, SqEuclidean, colwise
 using GenericLinearAlgebra: GenericLinearAlgebra
 using Hungarian: Hungarian, hungarian
 using LinearAlgebra: LinearAlgebra, det, dot, eigvecs, norm, svd, tr
 using MutableConvexHulls: MutableConvexHulls, CCW, ChanLowerConvexHull,
-                          addpoint!, mergepoints!, removepoint!
+    addpoint!, mergepoints!, removepoint!
 using NearestNeighbors: NearestNeighbors, Euclidean, KDTree, nn
 using Optim: Optim, Fminbox, LBFGS, optimize
 using PairedLinkedLists: PairedLinkedLists, ListNodeIterator, deletenode!, getnode, target
@@ -44,11 +44,15 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 # `public` is a parse error before Julia 1.11, so build the expression directly rather than
 # writing the keyword.
 @static if VERSION >= v"1.11"
-    eval(Expr(:public,
-        :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
-        :icp, :iterative_hungarian,
-        :converged, :tform, :upperbound, :lowerbound, :obj_calls,
-        :num_splits, :num_blocks, :stagnant_splits, :progress))
+    eval(
+        Expr(
+            :public,
+            :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+            :icp, :iterative_hungarian,
+            :converged, :tform, :upperbound, :lowerbound, :obj_calls,
+            :num_splits, :num_blocks, :stagnant_splits, :progress
+        )
+    )
 end
 
 """
