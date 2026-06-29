@@ -12,7 +12,21 @@ function validate_interactions(interactions::Dict{Tuple{K,K},V}) where {K,V<:Num
     return true
 end
 
-# prepare pairwise values for `σx^2 + σy^2` and `ϕx * ϕy` for all gaussians in `gmmx` and `gmmy`
+"""
+    pσ, pϕ = pairwise_consts(gmmx, gmmy, interactions=nothing)
+
+Precompute, for every pair of Gaussians drawn from `gmmx` and `gmmy`, the combined variance
+`σx^2 + σy^2` (`pσ`) and the amplitude product `ϕx * ϕy` (`pϕ`). For `AbstractIsotropicGMM`
+inputs the results are dense matrices indexed by Gaussian; for `AbstractMultiGMM` inputs they
+are nested dictionaries keyed by component label, with `interactions` weighting the
+cross-label terms.
+
+These constants depend only on the Gaussians' widths and amplitudes, not on the relative
+transformation, so they are invariant under the rigid search. They are the per-pair inputs to
+`gauss_l2_bounds` and `local_align`. The `*_align` entry points call `pairwise_consts` once and
+capture the result in the bounds and local-refinement closures passed to `branchbound`; computing
+them once amortizes the `O(length(gmmx) * length(gmmy))` work across every node of the search.
+"""
 function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM, interactions::Nothing=nothing)
     t = promote_type(numbertype(gmmx),numbertype(gmmy))
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
@@ -35,17 +49,10 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM
 end
 
 function pairwise_consts(mgmmx::AbstractMultiGMM{N,T,K}, mgmmy::AbstractMultiGMM{N,S,K}, interactions::Dict{Tuple{K,K},V}) where {N,T,S,K,V <: Number}
-    t = promote_type(T, S, isnothing(interactions) ? T : V)
+    t = promote_type(T, S, V)
     xkeys = keys(mgmmx.gmms)
     ykeys = keys(mgmmy.gmms)
-    if isnothing(interactions)
-        interactions = Dict{Tuple{K,K},t}()
-        for key in xkeys ∩ ykeys
-            interactions[(key,key)] = one(t)
-        end
-    else
-        @assert validate_interactions(interactions) "Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"
-    end
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
     mpσ, mpϕ = Dict{K, Dict{K, Matrix{t}}}(), Dict{K, Dict{K,Matrix{t}}}()
     ukeys = unique(Iterators.flatten(keys(interactions)))
     for key1 in ukeys

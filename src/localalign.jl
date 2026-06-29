@@ -60,7 +60,7 @@ function local_align(x::AbstractModel, y::AbstractModel, block::SearchRegion, ar
     f(X) = alignment_objective(X, x, y, block, args...; kwargs...)
     # res = optimize(f, lower, upper, initial_X, Fminbox(LBFGS()), Optim.Options(f_calls_limit=maxevals); autodiff = :forward)
     res = optimize(f, [initial_X...], LBFGS(), Optim.Options(f_calls_limit=maxevals); autodiff)
-    return Optim.minimum(res), tuple(Optim.minimizer(res)...)
+    return res.minimum, tuple(res.minimizer...)
 end
 
 local_align(x::AbstractModel, y::AbstractModel; kwargs...) = local_align(x, y, UncertaintyRegion(x,y); kwargs...)

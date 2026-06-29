@@ -1,8 +1,25 @@
+"""
+    ROCSAlignmentResult
+
+Result of a `rocs_align` local alignment. `tform` aligns the moving GMM `x` onto the fixed
+GMM `y`, and `minimum` is the objective at that alignment. ROCS is a local method, so the
+result carries no global-optimality guarantee. See `AlignmentResults` for the shared accessor
+interface.
+"""
 struct ROCSAlignmentResult{D,S,T,F<:AbstractAffineMap,X<:AbstractGMM{D,S},Y<:AbstractGMM{D,T}} <: AlignmentResults
     x::X
     y::Y
     minimum::T
     tform::F
+end
+
+converged(::ROCSAlignmentResult) = false
+
+function Base.show(io::IO, ::MIME"text/plain", r::ROCSAlignmentResult)
+    println(io, "ROCSAlignmentResult:")
+    println(io, "  objective (overlap): ", r.minimum)
+    println(io, "  converged:           false (local alignment; no global-optimality guarantee)")
+    print(io,   "  transform:           ", r.tform)
 end
 
 """
@@ -82,10 +99,17 @@ end
 inertial_transforms(x::AbstractModel; kwargs...) = inertial_transforms(coords(x), weights(x), widths(x); kwargs...)
 
 """
-    score, tform, nevals = rocs_align_gmms(gmmfixed, gmmmoving; maxevals=1000)
+    result = rocs_align(gmmmoving, gmmfixed; kwargs...)
 
-Finds the optimal alignment between the two supplied GMMs using steric multipoles,
-based on the [ROCS alignment algorithm.](https://docs.eyesopen.com/applications/rocs/theory/shape_shape.html)
+Align the moving GMM `gmmmoving` onto the fixed GMM `gmmfixed` using steric multipoles,
+based on the [ROCS alignment algorithm](https://docs.eyesopen.com/applications/rocs/theory/shape_shape.html).
+Returns a `ROCSAlignmentResult`.
+
+Unlike every other `*_align` function, `rocs_align` is a *local* method: it runs a local
+optimization from each of a few inertial-frame starting orientations and keeps the best
+result. It carries no global-optimality guarantee and may return a suboptimal alignment, so
+`converged` always returns `false` for a `ROCSAlignmentResult`. Use a branch-and-bound
+method such as `gogma_align` when a global guarantee is required.
 """
 function rocs_align(gmmmoving::AbstractGMM, gmmfixed::AbstractGMM; kwargs...)
     # align both GMMs to their inertial frames

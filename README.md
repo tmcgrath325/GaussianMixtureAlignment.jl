@@ -1,11 +1,24 @@
 # GaussianMixtureAlignment.jl
 
+[![Build Status](https://github.com/tmcgrath325/GaussianMixtureAlignment.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/tmcgrath325/GaussianMixtureAlignment.jl/actions/workflows/CI.yml)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://tmcgrath325.github.io/GaussianMixtureAlignment.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://tmcgrath325.github.io/GaussianMixtureAlignment.jl/dev/)
+[![Coverage](https://codecov.io/gh/tmcgrath325/GaussianMixtureAlignment.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/tmcgrath325/GaussianMixtureAlignment.jl)
+[![Aqua QA](https://juliatesting.github.io/Aqua.jl/dev/assets/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+
 A Julia implementation of the Globally-Optimal Gaussian Mixture Alignment (GOGMA) algorithm [(Campbell, 2016)](https://arxiv.org/abs/1603.00150), with modifications inspired by
-[Li et. al. (2018)](https://arxiv.org/abs/1812.11307). 
+[Li et. al. (2018)](https://arxiv.org/abs/1812.11307).
 
-The GOGMA algorithm uses a branch-and-bound procedure to return a globally optimal alignment of point sets via rigid transformation. In order to improve speed for small point sets, the alignment problem can be split to separately optimize rotational and translational alignments, while still guaranteeing global optimality, through the using of translation invariant vectors (TIVs).
+The GOGMA algorithm uses a branch-and-bound procedure to return a globally optimal alignment of point sets via rigid transformation. In order to improve speed for small point sets, the alignment problem can be split to separately optimize rotational and translational alignments, while still guaranteeing global optimality, through the use of translation invariant vectors (TIVs).
 
-Becaues the runtime of the GOGMA algorithm is O(n^2), and that of the TIV-GOGMA algorithm is O(n^4), they may be unsuitable for use with large point sets without downsampling. 
+Because the runtime of the GOGMA algorithm is O(n²), and that of the TIV-GOGMA algorithm is O(n⁴), they may be unsuitable for use with large point sets without downsampling.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add("GaussianMixtureAlignment")
+```
 
 ## Construct Isotropic Gaussian Mixture Models (GMMs) for alignment
 
@@ -60,7 +73,7 @@ julia> res.tform.translation
  1.000000000557716
  0.9999999997059433
 
-julia> # Compute the overlap between the GMMs after alignment (equal to res.upperbound)
+julia> # Compute the overlap between the GMMs after alignment (the objective minimizes -overlap, so this equals -res.upperbound)
 
 julia> overlap(res.tform(gmmx), gmmy)
 3.251290635173653
@@ -116,22 +129,17 @@ IsotropicMultiGMM{3, Float64, Symbol} with 2 labeled IsotropicGMM{3, Float64} mo
 julia> # define interactions between each type of feature
 
 julia> interactions = Dict(
-           :positive => Dict(
-               :positive => -1.0,
-               :negative => 1.0,
-           ),
-           :negative => Dict(
-               :positive => 1.0,
-               :negative => -1.0,
-           ),
-           :steric => Dict(
-               :steric => -1.0,
-           ),
+           (:positive, :negative) => 1.0,
+           (:positive, :positive) => -1.0,
+           (:negative, :negative) => -1.0,
+           (:steric, :steric) => -1.0,
        );
 
 julia> # apply a random rigid transformation to one of the models
 
-julia> using CoordinateTransformations; randtform = AffineMap((rand(), rand(), rand(), rand(), rand(), rand()));
+julia> using CoordinateTransformations, Rotations, StaticArrays
+
+julia> randtform = AffineMap(RotationVec(π*0.1rand(3)...), SVector{3}(0.1rand(3)...));
 
 julia> mgmmx = randtform(mgmmx);
 

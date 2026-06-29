@@ -6,8 +6,8 @@ DocMeta.setdocmeta!(GaussianMixtureAlignment, :DocTestSetup, :(using GaussianMix
 makedocs(;
     modules=[GaussianMixtureAlignment],
     authors="Tom McGrath <tmcgrath325@gmail.com> and contributors",
-    repo="https://github.com/tmcgrath325/GaussianMixtureAlignment.jl/blob/{commit}{path}#{line}",
     sitename="GaussianMixtureAlignment.jl",
+    checkdocs=:exports,
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://tmcgrath325.github.io/GaussianMixtureAlignment.jl",
@@ -16,6 +16,7 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "API Reference" => "reference.md",
     ],
 )
 

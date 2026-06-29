@@ -36,18 +36,18 @@ function goih_align(x::AbstractPointSet, y::AbstractPointSet; kwargs...)
 end
 
 """
-    result = tiv_goicp_align(x, y, cx=Inf, cy=Inf; kwargs...)
+    result = tiv_goicp_align(x, y; cutoff_x=Inf, cutoff_y=Inf, kwargs...)
 
 TIV (Translation-Invariant Vector) variant of `goicp_align`. Decomposes the 6-DOF search
 into a rotation-only phase on TIV point sets (using nearest-neighbor correspondence),
 followed by a translation-only phase on the original point sets.
 
-`cx` and `cy` are radius cutoffs for TIV construction (default `Inf`). Returns a
+`cutoff_x` and `cutoff_y` are radius cutoffs for TIV construction (default `Inf`). Returns a
 `TIVAlignmentResult` whose `.rotation_result` and `.translation_result` fields hold the
 individual `GlobalAlignmentResult`s.
 """
-function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, cx=Inf, cy=Inf; kwargs...)
-    tivx, tivy = tivpointset(x,cx), tivpointset(y,cy)
+function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet; cutoff_x=Inf, cutoff_y=Inf, kwargs...)
+    tivx, tivy = tivpointset(x,cutoff_x), tivpointset(y,cutoff_y)
     kdtree = KDTree(y.coords, Euclidean())
     tiv_kdtree = KDTree(tivy.coords, Euclidean())
     correspondence(xx::AbstractMatrix, yy::AbstractMatrix) = closest_points(xx, kdtree)
@@ -63,20 +63,30 @@ function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, c
     return tiv_branchbound(x, y, tivx, tivy; rot_boundsfun=rot_boundsfun, boundsfun=boundsfun, localfun=localfun, kwargs...)
 end
 
+function tiv_goicp_align(x::AbstractSinglePointSet, y::AbstractSinglePointSet, cutoff_x, cutoff_y=Inf; kwargs...)
+    Base.depwarn("passing TIV radius cutoffs positionally to `tiv_goicp_align` is deprecated; pass them as the `cutoff_x` and `cutoff_y` keyword arguments instead.", :tiv_goicp_align)
+    return tiv_goicp_align(x, y; cutoff_x, cutoff_y, kwargs...)
+end
+
 """
-    result = tiv_goih_align(x, y, cx=Inf, cy=Inf; kwargs...)
+    result = tiv_goih_align(x, y; cutoff_x=Inf, cutoff_y=Inf, kwargs...)
 
 TIV (Translation-Invariant Vector) variant of `goih_align`. Decomposes the 6-DOF search
 into a rotation-only phase on TIV point sets (using Hungarian assignment), followed by a
 translation-only phase on the original point sets.
 
-`cx` and `cy` are radius cutoffs for TIV construction (default `Inf`). Returns a
+`cutoff_x` and `cutoff_y` are radius cutoffs for TIV construction (default `Inf`). Returns a
 `TIVAlignmentResult`.
 """
-function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet, cx=Inf, cy=Inf; kwargs...)
+function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet; cutoff_x=Inf, cutoff_y=Inf, kwargs...)
     boundsfun(xx::AbstractSinglePointSet, yy::AbstractSinglePointSet, sr::SearchRegion) = squared_dist_bounds(xx,yy,sr; correspondence = hungarian_assignment, distance_bound_fun = tight_distance_bounds)
     objfun(X, x, y) = distanceobj(X, x, y; correspondence = hungarian_assignment);
     rot_localfun(xx, yy, block; kwargs...) = iterate_local_alignment(xx, yy, block; correspondence = hungarian_assignment, tformfun=LinearMap, kwargs...);
     trl_localfun(xx, yy, block; kwargs...) = iterate_local_alignment(xx, yy, block; correspondence = hungarian_assignment, tformfun=Translation, kwargs...);
-    return tiv_branchbound(x, y, tivpointset(x,cx), tivpointset(y,cy); boundsfun=squared_dist_bounds, localfun=local_iterative_hungarian, rot_localfun=rot_localfun, trl_localfun=rot_localfun, kwargs...)
+    return tiv_branchbound(x, y, tivpointset(x,cutoff_x), tivpointset(y,cutoff_y); boundsfun=squared_dist_bounds, localfun=local_iterative_hungarian, rot_localfun=rot_localfun, trl_localfun=trl_localfun, kwargs...)
+end
+
+function tiv_goih_align(x::AbstractPointSet, y::AbstractPointSet, cutoff_x, cutoff_y=Inf; kwargs...)
+    Base.depwarn("passing TIV radius cutoffs positionally to `tiv_goih_align` is deprecated; pass them as the `cutoff_x` and `cutoff_y` keyword arguments instead.", :tiv_goih_align)
+    return tiv_goih_align(x, y; cutoff_x, cutoff_y, kwargs...)
 end

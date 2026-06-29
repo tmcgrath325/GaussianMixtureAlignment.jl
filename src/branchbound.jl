@@ -1,5 +1,27 @@
+"""
+    AlignmentResults
+
+Abstract supertype for the results returned by the alignment functions.
+
+Every subtype carries the aligned models and the rigid transformation aligning the moving
+model onto the fixed one, accessible with `tform`. The branch-and-bound subtypes
+`GlobalAlignmentResult` and `TIVAlignmentResult` additionally support the accessors
+`upperbound`, `lowerbound`, `obj_calls`, `num_splits`, `num_blocks`, `stagnant_splits`, and
+`progress`, and the `converged` predicate.
+"""
 abstract type AlignmentResults end
 
+"""
+    GlobalAlignmentResult
+
+Result of a branch-and-bound search (`branchbound` and the `*_gogma_align`, `*_goicp_align`,
+and `*_goih_align` functions).
+
+`tform` aligns the moving model `x` onto the fixed model `y`, with `tform_params` the
+parameters generating it. `upperbound` and `lowerbound` bracket the optimal objective, and
+`terminated_by` records why the search stopped. See `AlignmentResults` for the shared
+accessor interface and `converged` for the convergence predicate.
+"""
 struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:AbstractModel{D,T}} <: AlignmentResults
     x::X
     y::Y
@@ -15,6 +37,15 @@ struct GlobalAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},
     terminated_by::String
 end
 
+"""
+    TIVAlignmentResult
+
+Result of a translation-invariant-vector branch-and-bound alignment, which searches for
+rotation and translation in two stages. `rotation_result` and `translation_result` hold the
+two underlying `GlobalAlignmentResult`s; the top-level fields aggregate them. `progress`
+traces the translation stage under the fixed rotation, ending at the reported optimum. See
+`AlignmentResults` for the shared accessor interface.
+"""
 struct TIVAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:AbstractModel{D,T},TD,TN,TF<:AbstractAffineMap,RD,RN,RF<:AbstractAffineMap,RX<:AbstractModel{TD,S},RY<:AbstractModel{TD,T}} <: AlignmentResults
     x::X
     y::Y
@@ -25,8 +56,107 @@ struct TIVAlignmentResult{D,S,T,N,F<:AbstractAffineMap,X<:AbstractModel{D,S},Y<:
     obj_calls::Int
     num_splits::Int
     num_blocks::Int
+    stagnant_splits::Int
+    progress::Vector{Tuple{Int,T,NTuple{N,T}}}
     rotation_result::GlobalAlignmentResult{RD,S,T,RN,RF,RX,RY}
     translation_result::GlobalAlignmentResult{TD,S,T,TN,TF,X,Y}
+end
+
+const BranchBoundResult = Union{GlobalAlignmentResult,TIVAlignmentResult}
+
+"""
+    tform(result)
+
+Return the `AbstractAffineMap` that aligns the moving model onto the fixed model in an
+alignment `result`.
+"""
+tform(r::AlignmentResults) = r.tform
+
+"""
+    upperbound(result)
+
+Return the objective value at the best transformation found by a branch-and-bound search.
+"""
+upperbound(r::BranchBoundResult) = r.upperbound
+
+"""
+    lowerbound(result)
+
+Return the lower bound on the objective at termination of a branch-and-bound search.
+"""
+lowerbound(r::BranchBoundResult) = r.lowerbound
+
+"""
+    obj_calls(result)
+
+Return the number of objective evaluations performed during a branch-and-bound search.
+"""
+obj_calls(r::BranchBoundResult) = r.obj_calls
+
+"""
+    num_splits(result)
+
+Return the number of branch-and-bound subdivisions performed during a search.
+"""
+num_splits(r::BranchBoundResult) = r.num_splits
+
+"""
+    num_blocks(result)
+
+Return the number of search regions left unexplored when a branch-and-bound search stopped.
+"""
+num_blocks(r::BranchBoundResult) = r.num_blocks
+
+"""
+    stagnant_splits(result)
+
+Return the number of subdivisions performed since the last improvement to the best objective
+in a branch-and-bound search.
+"""
+stagnant_splits(r::BranchBoundResult) = r.stagnant_splits
+
+"""
+    progress(result)
+
+Return the trace of accepted improvements during a branch-and-bound search, as a vector of
+`(split_index, objective, transformation_parameters)` tuples.
+"""
+progress(r::BranchBoundResult) = r.progress
+
+"""
+    converged(result)
+
+Return `true` if an alignment `result` certifies a globally optimal transformation within the
+requested tolerance.
+
+A `GlobalAlignmentResult` converges when the branch-and-bound search closes the gap between
+its bounds or exhausts the search queue, and does not converge when a split, evaluation,
+block, or stagnation limit halts the search first. A `TIVAlignmentResult` converges only if
+both its rotation and translation sub-searches converge. A `ROCSAlignmentResult` never
+converges in this sense, as ROCS is a local method carrying no global-optimality guarantee.
+"""
+converged(r::GlobalAlignmentResult) = r.terminated_by in ("optimum within tolerance", "priority queue empty")
+converged(r::TIVAlignmentResult) = converged(r.rotation_result) && converged(r.translation_result)
+
+function Base.show(io::IO, ::MIME"text/plain", r::GlobalAlignmentResult)
+    println(io, "GlobalAlignmentResult:")
+    println(io, "  objective (upper bound): ", r.upperbound)
+    println(io, "  lower bound:             ", r.lowerbound)
+    println(io, "  converged:               ", converged(r), " (", r.terminated_by, ")")
+    println(io, "  splits:                  ", r.num_splits)
+    println(io, "  blocks remaining:        ", r.num_blocks)
+    println(io, "  objective evaluations:   ", r.obj_calls)
+    print(io,   "  transform:               ", r.tform)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", r::TIVAlignmentResult)
+    println(io, "TIVAlignmentResult:")
+    println(io, "  objective (upper bound): ", r.upperbound)
+    println(io, "  lower bound:             ", r.lowerbound)
+    println(io, "  converged:               ", converged(r))
+    println(io, "  splits:                  ", r.num_splits)
+    println(io, "  objective evaluations:   ", r.obj_calls)
+    print(io,   "  transform:               ", r.tform)
 end
 
 function lowestlbblock(hull::ChanLowerConvexHull{<:Tuple{T,T,<:SearchRegion}}, lb::T) where T
@@ -58,7 +188,7 @@ end
 """
     result = branchbound(x, y; kwargs...)
 
-Finds the globally optimal rigid transform for alignment between two models, `x` and `y`, using
+Find the globally optimal rigid transform for alignment between two models, `x` and `y`, using
 branch-and-bound search.
 
 Returns a `GlobalAlignmentResult` containing the best transformation found, upper and lower bounds
@@ -68,8 +198,8 @@ on the objective, and convergence statistics.
 
 - `nsplits=2`: number of subdivisions per dimension at each branching step (must be even)
 - `searchspace=nothing`: initial `UncertaintyRegion`; defaults to the smallest region guaranteed to contain the global optimum
-- `R=RotationVec(0,0,0)`: initial rotation hint passed to `blockfun`
-- `T=SVector(0,0,0)`: initial translation hint passed to `blockfun`
+- `initial_rotation=RotationVec(0,0,0)`: initial rotation hint passed to `blockfun`
+- `initial_translation=SVector(0,0,0)`: initial translation hint passed to `blockfun`
 - `centerinputs=false`: if `true`, center both models at their centroids before searching
 - `blockfun=UncertaintyRegion`: constructs `SearchRegion`s for each subspace
 - `nextblockfun=lowestlbblock`: selects which block to subdivide next (alternative: `randomblock`)
@@ -91,7 +221,7 @@ on the objective, and convergence statistics.
 - `maxstagnant=Inf`: terminate after this many splits without improvement
 """
 function branchbound(xinput::AbstractModel, yinput::AbstractModel;
-                     nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, R=RotationVec(0.,0.,0.), T=SVector{3}(0.,0.,0.),
+                     nsplits=2, searchspace=nothing, blockfun=UncertaintyRegion, initial_rotation=RotationVec(0.,0.,0.), initial_translation=SVector{3}(0.,0.,0.),
                      nextblockfun=lowestlbblock, centerinputs=false, boundsfun=tight_distance_bounds, localfun=local_align, tformfun::TF=AffineMap,
                      atol=0.1, rtol=0, maxblocks=5e8, maxsplits=Inf, maxevals=Inf, maxstagnant=Inf, separatesplit=false) where TF
     x = xinput
@@ -116,7 +246,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
 
     # initialization
     if isnothing(searchspace)
-        searchspace = blockfun(x, y, R, T)
+        searchspace = blockfun(x, y, initial_rotation, initial_translation)
     end
     ndims = length(center(searchspace))
     rot_trl_split = separatesplit && typeof(searchspace) <: UncertaintyRegion
@@ -125,7 +255,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
     sblks2 = fill(searchspace, rot_trl_split ? nsblks : 0)
 
     lb, centerub = boundsfun(x, y, searchspace)
-    hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(CCW, true, x -> (x[1], -x[2]))
+    hull = ChanLowerConvexHull{Tuple{t,t,typeof(searchspace)}}(; orientation = CCW, collinear = true, sortedby = x -> (x[1], -x[2]))
     addpoint!(hull, (lb, centerub, searchspace))
 
     sbnds = fill((lb, centerub), nsblks)
@@ -149,9 +279,13 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
         # pick the next search region to subdivide
         lbnode, bl, lb = nextblockfun(hull, lb)
 
-        # delete the chosen search region from the convex hull
-        subhull = getfirst(x -> x.points===lbnode.target.list, hull.subhulls)
-        removepoint!(subhull, lbnode.target)
+        # delete the chosen search region from the convex hull.
+        # `hull.subhulls` and the targeted node's `.list` backreference are internal
+        # layout of MutableConvexHulls / PairedLinkedLists with no public accessor;
+        # this coupling is deliberate and pinned by [compat] (all three packages share
+        # an author). `target(node)` is the public accessor for the targeted node.
+        subhull = first(x for x in hull.subhulls if x.points===target(lbnode).list)
+        removepoint!(subhull, target(lbnode))
         deletenode!(lbnode)
 
         # if the best solution so far is close enough to the best possible solution, end
@@ -218,14 +352,7 @@ function branchbound(xinput::AbstractModel, yinput::AbstractModel;
                 lb = minimum(addbnds)[1]
             end
         end
-        try mergepoints!(hull, addblks)
-        catch e
-            @show lbnode.data[1], lbnode.data[2]
-            @show ndivisions
-            @show sbnds
-            @show sbnds == sbnds2
-            throw(e)
-        end
+        mergepoints!(hull, addblks)
     end
     if isempty(hull)
         tform = build_tform(tformfun, bestloc)
@@ -273,7 +400,7 @@ end
 
 # fit a plane to a set of points, returning the normal vector
 function planefit(pts)
-    decomp = GenericLinearAlgebra.svd(pts .- sum(pts, dims=2))
+    decomp = svd(pts .- sum(pts, dims=2))
     dist, nvecidx = findmin(decomp.S)
     return decomp.U[:, nvecidx], dist
 end
@@ -327,14 +454,19 @@ function tiv_branchbound(   x::AbstractModel,
     spinvec, dist = planefit(tivx, R)
     spinblock = RotationRegion(RotationVec(RotationVec(π*spinvec...) * R), zeroTranslation, z)
     spinscore, spinrotpos = rot_localfun(tivx, tivy, spinblock)
-    if spinscore < rotscore
-        rotpos = RotationVec(spinrotpos...)
+    if spinscore <= rotscore
+        # TIV scores may be degenerate when the TIV set is coplanar: a 180° spin
+        # about the plane normal leaves all pairwise differences unchanged, so both
+        # candidates score identically on TIVs. Break the tie on the original points.
+        origscore, _ = localfun(x, y, RotationRegion(RotationVec(rotpos...), zeroTranslation, z))
+        spinscore_x, _ = localfun(x, y, RotationRegion(RotationVec(spinrotpos...), zeroTranslation, z))
+        rotpos = spinscore_x < origscore ? RotationVec(spinrotpos...) : RotationVec(rotpos...)
     else
         rotpos = RotationVec(rotpos...)
     end
 
     # perform translation alignment of original models
-    trl_res = trl_branchbound(x, y; R=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
+    trl_res = trl_branchbound(x, y; initial_rotation=rotpos, localfun=trl_localfun, boundsfun=trl_boundsfun, kwargs...)
     trlpos = SVector{3}(trl_res.tform_params)
 
     # perform local alignment in the full transformation space
@@ -346,8 +478,17 @@ function tiv_branchbound(   x::AbstractModel,
         bestpos = (rot_res.tform_params...,  trl_res.tform_params...)
     end
 
+    # `progress` traces the translation stage, whose objective is the model overlap that
+    # the final result also reports. Each entry pairs its translation with the rotation
+    # `rotpos` held fixed during that stage; split indices continue past the rotation stage,
+    # and a final entry records the reported optimum.
+    rotparams = (t(rotpos.sx), t(rotpos.sy), t(rotpos.sz))
+    tiv_progress = [(rot_res.num_splits + s, obj, (rotparams..., trlp...))
+                    for (s, obj, trlp) in trl_res.progress]
+    push!(tiv_progress, (rot_res.num_splits + trl_res.num_splits, min, bestpos))
     return TIVAlignmentResult(x, y, min, trl_res.lowerbound, build_tform(AffineMap, bestpos), bestpos,
                               rot_res.obj_calls+trl_res.obj_calls, rot_res.num_splits+trl_res.num_splits,
                               rot_res.num_blocks+trl_res.num_blocks,
+                              rot_res.stagnant_splits+trl_res.stagnant_splits, tiv_progress,
                               rot_res, trl_res)
 end
