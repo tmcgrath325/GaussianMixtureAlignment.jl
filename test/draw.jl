@@ -6,20 +6,22 @@ using Test
 
 @testset "drawing" begin
     tetrahedral = [
-        [0.,0.,1.],
-        [sqrt(8/9), 0., -1/3],
-        [-sqrt(2/9),sqrt(2/3),-1/3],
-        [-sqrt(2/9),-sqrt(2/3),-1/3]
+        [0.0, 0.0, 1.0],
+        [sqrt(8 / 9), 0.0, -1 / 3],
+        [-sqrt(2 / 9), sqrt(2 / 3), -1 / 3],
+        [-sqrt(2 / 9), -sqrt(2 / 3), -1 / 3],
     ]
     gmm = IsotropicGMM([IsotropicGaussian(x, 1.2, 1) for x in tetrahedral])
     gmmdisplay(gmm)
-    gmmdisplay(gmm; display=:solid, color=:red, alpha=0.5, transparency=true)
+    gmmdisplay(gmm; display = :solid, color = :red, alpha = 0.5, transparency = true)
 
     ch_g = IsotropicGaussian(tetrahedral[1], 1.0, 1.0)
-    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i,x) in enumerate(tetrahedral)]
-    mgmmx = IsotropicMultiGMM(Dict(
-        :positive => IsotropicGMM([ch_g]),
-        :steric => IsotropicGMM(s_gs)
-    ))
+    s_gs = [IsotropicGaussian(x, 0.5, 1.0) for (i, x) in enumerate(tetrahedral)]
+    mgmmx = IsotropicMultiGMM(
+        Dict(
+            :positive => IsotropicGMM([ch_g]),
+            :steric => IsotropicGMM(s_gs)
+        )
+    )
     gmmdisplay(mgmmx)
 end
