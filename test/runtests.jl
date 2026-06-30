@@ -1109,3 +1109,12 @@ end
     @test GMA.icp(xset, yset) isa Vector{<:Tuple{Int, Int}}
     @test GMA.iterative_hungarian(xset, yset) isa Vector{<:Tuple{Int, Int}}
 end
+
+# The ThickGlobalOptimization global-search extension is exercised only when its weak
+# dependencies resolve in the test environment. They are unregistered, so they are not yet
+# part of the test target; the suite skips these tests until they are available.
+if all(p -> Base.identify_package(p) !== nothing, ("ThickGlobalOptimization", "ThickNumbers", "IntervalFastMath"))
+    include("thicksearch.jl")
+else
+    @info "Skipping ThickGlobalOptimization extension tests: weak dependencies not available in the test environment"
+end

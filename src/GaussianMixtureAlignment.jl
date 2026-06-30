@@ -34,6 +34,42 @@ export rocs_align
 export PointSet, MultiPointSet
 export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
 
+# Global alignment via the ThickGlobalOptimization backend. The methods live in the
+# `GaussianMixtureAlignmentThickExt` extension; loading `ThickGlobalOptimization` brings them
+# into existence. Until then these fallbacks report what is missing rather than a bare
+# `MethodError`.
+"""
+    thick_gogma_align(fixed::AbstractGMM, mobile::AbstractGMM; kwargs...) -> GlobalAlignmentResult
+    thick_gogma_align(fixed::AbstractGMM, mobiles::AbstractVector{<:AbstractGMM}; kwargs...) -> Vector{GlobalAlignmentResult}
+
+Globally align one or more `mobile` GMMs onto a `fixed` GMM by branch-and-bound minimization of
+the negated L2 overlap, using the ThickGlobalOptimization backend. A vector of mobiles is aligned
+simultaneously — each to `fixed` and to the others — returning one `GlobalAlignmentResult` per
+mobile, all sharing the joint objective bounds.
+
+Requires the ThickGlobalOptimization extension; run `using ThickGlobalOptimization`.
+"""
+function thick_gogma_align end
+thick_gogma_align(args...; kwargs...) = error(
+    "`thick_gogma_align` requires the ThickGlobalOptimization extension; run `using ThickGlobalOptimization`"
+)
+
+"""
+    globalalign(fixed::AbstractModel, mobiles::AbstractVector{<:AbstractModel}; kwargs...)
+
+Low-level driver beneath [`thick_gogma_align`](@ref): build the search box over the
+rigid-transformation space spanned by the `mobiles` and run `thicksearch` with the given
+objective and bounds functions.
+
+Requires the ThickGlobalOptimization extension; run `using ThickGlobalOptimization`.
+"""
+function globalalign end
+globalalign(args...; kwargs...) = error(
+    "`globalalign` requires the ThickGlobalOptimization extension; run `using ThickGlobalOptimization`"
+)
+
+export thick_gogma_align
+
 # Semi-public interface: callable and supported, but not brought into the caller's namespace by
 # `using`. `branchbound` and the search-region types are the low-level entry points beneath the
 # `*_align` functions; `icp` and `iterative_hungarian` are correspondence primitives returning
@@ -47,7 +83,7 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
     eval(
         Expr(
             :public,
-            :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+            :branchbound, :globalalign, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
             :icp, :iterative_hungarian,
             :converged, :tform, :upperbound, :lowerbound, :obj_calls,
             :num_splits, :num_blocks, :stagnant_splits, :progress
