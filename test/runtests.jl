@@ -511,6 +511,65 @@ end
     res = gogma_align(randtform(mgmmx), mgmmy; interactions = interactions, maxsplits = 5.0e3, nextblockfun = GMA.randomblock)
 end
 
+@testset "LabeledIsotropicGMM" begin
+    g1 = IsotropicGaussian([0.0, 0.0, 0.0], 1.0, 1.0)
+    g2 = IsotropicGaussian([1.0, 0.0, 0.0], 1.0, 1.0)
+    x = LabeledIsotropicGMM([g1, g2], [:A, :B])
+
+    # interface and supertypes
+    @test x isa GMA.AbstractLabeledIsotropicGMM{3, Float64, Symbol}
+    @test x isa GMA.AbstractIsotropicGMM
+    @test length(x) == 2
+    @test x[2] == g2
+    @test collect(x) == [g1, g2]              # iterate
+    @test eltype(x) === eltype(typeof(x)) === IsotropicGaussian{3, Float64}
+
+    # constructors
+    xcopy = LabeledIsotropicGMM(x)
+    @test xcopy.gaussians == x.gaussians && xcopy.labels == x.labels
+    empty_gmm = LabeledIsotropicGMM{3, Float64, Symbol}()
+    @test isempty(empty_gmm) && empty_gmm isa LabeledIsotropicGMM{3, Float64, Symbol}
+    @test_throws DimensionMismatch LabeledIsotropicGMM([g1, g2], [:A])
+
+    # convert and promote
+    @test convert(LabeledIsotropicGMM{3, Float32, Symbol}, x) isa LabeledIsotropicGMM{3, Float32, Symbol}
+    xf32 = LabeledIsotropicGMM([IsotropicGaussian([0.0f0, 0.0f0, 0.0f0], 1.0f0, 1.0f0)], [:A])
+    @test promote_type(typeof(x), typeof(xf32)) === LabeledIsotropicGMM{3, Float64, Symbol}
+
+    # transformations preserve labels and produce a LabeledIsotropicGMM
+    R = RotationVec(0.3, 0.1, -0.2)
+    @test R * x isa LabeledIsotropicGMM{3, Float64, Symbol}
+    @test (R * x).labels == x.labels
+    @test (x + SVector(1.0, 2.0, 3.0)).labels == x.labels
+    @test [g.μ for g in (x - SVector(1.0, 0.0, 0.0))] == [SVector(-1.0, 0.0, 0.0), SVector(0.0, 0.0, 0.0)]
+
+    # overlap: default uses same-label pairs only, each with coefficient 1
+    y = LabeledIsotropicGMM(
+        [
+            IsotropicGaussian([0.5, 0.2, 0.0], 1.0, 1.0),
+            IsotropicGaussian([1.7, 0.0, 0.3], 1.0, 1.0),
+        ], [:A, :B]
+    )
+    same_label = overlap(g1, y.gaussians[1]) + overlap(g2, y.gaussians[2])
+    @test overlap(x, y) ≈ same_label
+    @test overlap(x, y) ≈ overlap(x, y; interactions = Dict((:A, :A) => 1.0, (:B, :B) => 1.0))
+    @test overlap(x, y; interactions = Dict{Tuple{Symbol, Symbol}, Float64}()) == 0.0
+    @test !(overlap(x, y; interactions = Dict((:A, :B) => 1.0)) ≈ overlap(x, y))
+
+    # overlap is invariant when the same rigid transform is applied to both
+    @test overlap(R * x, R * y) ≈ overlap(x, y)
+
+    # redundant key pairs are rejected
+    @test_throws ArgumentError overlap(x, y; interactions = Dict((:A, :B) => 1.0, (:B, :A) => 1.0))
+    @test_throws "must not include redundant key pairs" GMA.pairwise_consts(x, y, Dict((:A, :B) => 1.0, (:B, :A) => 1.0))
+
+    # force and force! agree, and interactions change the result
+    f = zeros(3)
+    force!(f, x, y)
+    @test f ≈ force(x, y)
+    @test !(force(x, y) ≈ force(x, y; interactions = Dict((:A, :B) => 1.0)))
+end
+
 @testset "Forces" begin
     μx = randn(SVector{3, Float64})
     μy = randn(SVector{3, Float64})
