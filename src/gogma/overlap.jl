@@ -53,6 +53,19 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ = nothing, pϕ 
 end
 
 """
+    ovlp = overlap(x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM; interactions=nothing)
+
+Calculate the unnormalized overlap between two `AbstractLabeledIsotropicGMM` objects. The
+optional keyword argument `interactions` is a dictionary mapping `(label1, label2)` pairs to
+coefficient values; see `pairwise_consts` for the expected format. When omitted, only Gaussians
+with equal labels contribute, each with coefficient 1.
+"""
+function overlap(x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM; interactions = nothing)
+    pσ, pϕ = pairwise_consts(x, y, interactions)
+    return overlap(x, y, pσ, pϕ)
+end
+
+"""
     ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM; interactions=nothing)
 
 Calculate the unnormalized overlap between two `AbstractMultiGMM` objects. The optional
@@ -141,6 +154,16 @@ end
 function force!(f::AbstractVector, x::AbstractIsotropicGMM, y::AbstractIsotropicGMM, pσ = nothing, pϕ = nothing; kwargs...)
     if isnothing(pσ) && isnothing(pϕ)
         pσ, pϕ = pairwise_consts(x, y)
+    end
+    for (i, gx) in enumerate(x.gaussians)
+        force!(f, gx, y, pσ[i, :], pϕ[i, :]; kwargs...)
+    end
+    return
+end
+
+function force!(f::AbstractVector, x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM, pσ = nothing, pϕ = nothing; interactions = nothing, kwargs...)
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(x, y, interactions)
     end
     for (i, gx) in enumerate(x.gaussians)
         force!(f, gx, y, pσ[i, :], pϕ[i, :]; kwargs...)

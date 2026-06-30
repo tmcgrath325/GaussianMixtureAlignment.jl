@@ -29,6 +29,15 @@ abstract type AbstractIsotropicGMM{N, T} <: AbstractSingleGMM{N, T} end
 #   IsotropicGMM
 #   MolGMM (MolecularGaussians.jl)
 
+"""
+Abstract base type for single isotropic GMMs whose Gaussians each carry a label of type `K`.
+Overlap between two such GMMs is restricted to Gaussian pairs whose labels interact, as
+specified by an `interactions` dictionary. Concrete implementation: `LabeledIsotropicGMM`.
+"""
+abstract type AbstractLabeledIsotropicGMM{N, T, K} <: AbstractIsotropicGMM{N, T} end
+# concrete subtypes:
+#   LabeledIsotropicGMM
+
 abstract type AbstractMultiGMM{N, T, K} <: AbstractGMM{N, T} end
 abstract type AbstractIsotropicMultiGMM{N, T, K} <: AbstractMultiGMM{N, T, K} end
 # concrete subtypes:
@@ -127,6 +136,35 @@ promote_rule(::Type{IsotropicGMM{N, T}}, ::Type{IsotropicGMM{N, S}}) where {T, S
 eltype(::Type{IsotropicGMM{N, T}}) where {N, T} = IsotropicGaussian{N, T}
 
 (gmm::IsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
+
+"""
+    LabeledIsotropicGMM(gaussians, labels)
+
+Gaussian Mixture Model in `N` dimensions pairing a vector of `IsotropicGaussian{N,T}`
+components (in `.gaussians`) with a vector of per-Gaussian labels of type `K` (in `.labels`).
+The two vectors must have equal length. Unlike `IsotropicMultiGMM`, which groups Gaussians
+into keyed sub-GMMs, every Gaussian carries its own label; an `interactions` dictionary then
+selects which label pairs contribute to overlap (see [`overlap`](@ref) and `pairwise_consts`).
+"""
+struct LabeledIsotropicGMM{N, T, K} <: AbstractLabeledIsotropicGMM{N, T, K}
+    gaussians::Vector{IsotropicGaussian{N, T}}
+    labels::Vector{K}
+    function LabeledIsotropicGMM{N, T, K}(gaussians, labels) where {N, T, K}
+        length(gaussians) == length(labels) ||
+            throw(DimensionMismatch("number of Gaussians ($(length(gaussians))) must match number of labels ($(length(labels)))"))
+        return new{N, T, K}(gaussians, labels)
+    end
+end
+
+LabeledIsotropicGMM(gaussians::AbstractVector{IsotropicGaussian{N, T}}, labels::AbstractVector{K}) where {N, T, K} = LabeledIsotropicGMM{N, T, K}(gaussians, labels)
+LabeledIsotropicGMM(gmm::AbstractLabeledIsotropicGMM) = LabeledIsotropicGMM(gmm.gaussians, gmm.labels)
+LabeledIsotropicGMM{N, T, K}() where {N, T, K} = LabeledIsotropicGMM{N, T, K}(IsotropicGaussian{N, T}[], K[])
+
+convert(::Type{GMM}, gmm::AbstractLabeledIsotropicGMM) where {GMM <: LabeledIsotropicGMM} = GMM(gmm.gaussians, gmm.labels)
+promote_rule(::Type{LabeledIsotropicGMM{N, T, K}}, ::Type{LabeledIsotropicGMM{N, S, K}}) where {N, T, S, K} = LabeledIsotropicGMM{N, promote_type(T, S), K}
+eltype(::Type{LabeledIsotropicGMM{N, T, K}}) where {N, T, K} = IsotropicGaussian{N, T}
+
+(gmm::LabeledIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
 
 """
     IsotropicMultiGMM(gmms)

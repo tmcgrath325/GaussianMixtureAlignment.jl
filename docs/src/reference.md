@@ -23,6 +23,7 @@ AbstractGMM
 IsotropicGaussian
 IsotropicGMM
 IsotropicMultiGMM
+LabeledIsotropicGMM
 ```
 
 ### Point set types

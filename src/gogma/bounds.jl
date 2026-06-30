@@ -39,6 +39,30 @@ function pairwise_consts(gmmx::AbstractIsotropicGMM, gmmy::AbstractIsotropicGMM,
     return pσ, pϕ
 end
 
+function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Nothing = nothing) where {N, T, S, K}
+    t = promote_type(T, S)
+    self_interactions = Dict{Tuple{K, K}, t}()
+    for label in unique(gmmx.labels) ∩ unique(gmmy.labels)
+        self_interactions[(label, label)] = one(t)
+    end
+    return pairwise_consts(gmmx, gmmy, self_interactions)
+end
+
+function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, S, K, V <: Number}
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
+    t = promote_type(T, S, V)
+    pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
+    for (i, gaussx) in enumerate(gmmx.gaussians)
+        for (j, gaussy) in enumerate(gmmy.gaussians)
+            keypair = (gmmx.labels[i], gmmy.labels[j])
+            keypair = haskey(interactions, keypair) ? keypair : (keypair[2], keypair[1])
+            pσ[i, j] = gaussx.σ^2 + gaussy.σ^2
+            pϕ[i, j] = (haskey(interactions, keypair) ? interactions[keypair] : zero(t)) * gaussx.ϕ * gaussy.ϕ
+        end
+    end
+    return pσ, pϕ
+end
+
 function pairwise_consts(mgmmx::AbstractMultiGMM{N, T, K}, mgmmy::AbstractMultiGMM{N, S, K}, interactions::Nothing = nothing) where {N, T, S, K}
     t = promote_type(T, S)
     self_interactions = Dict{Tuple{K, K}, t}()
