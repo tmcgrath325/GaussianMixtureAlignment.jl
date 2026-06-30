@@ -6,9 +6,8 @@ module GaussianMixtureAlignmentThickExt
 # ThickGlobalOptimization's `thicksearch`; per-node bounds reuse the core `gauss_l2_bounds` /
 # `overlap` / `pairwise_consts` machinery, wrapped into ThickNumbers intervals.
 
-using GaussianMixtureAlignment: AbstractModel, AbstractGMM, SearchRegion, RotationRegion,
-    TranslationRegion, GlobalAlignmentResult, numbertype, dims, translation_limit,
-    gauss_l2_bounds, build_tform
+using GaussianMixtureAlignment: AbstractModel, AbstractGMM, SearchRegion,
+    GlobalAlignmentResult, numbertype, dims, translation_limit, gauss_l2_bounds, build_tform
 import GaussianMixtureAlignment: globalalign, thick_gogma_align, pairwise_consts, overlap,
     UncertaintyRegion
 
@@ -18,7 +17,7 @@ using CoordinateTransformations: AffineMap
 using ThickGlobalOptimization: thicksearch, SearchBox, bisect
 using ThickNumbers: lohi, mid, wid
 using IntervalFastMath: Interval
-import Optim
+using Optim: Optim, LBFGS, optimize
 using ADTypes: AutoForwardDiff
 
 # An already-transformed mobile is bounded around its current position; the identity rotation
@@ -130,11 +129,11 @@ end
 # at the identity, so a block centered at zero rotation yields a `NaN` gradient and an unbounded
 # line search would stall there. The cap turns that into a harmless no-op while subdivided blocks
 # (nonzero rotation centers) still refine.
-function thick_localsearch(func, box; autodiff = AutoForwardDiff(), maxevals = 100, inner_optimizer = Optim.LBFGS(), kwargs...)
+function thick_localsearch(func, box; autodiff = AutoForwardDiff(), maxevals = 100, inner_optimizer = LBFGS(), kwargs...)
     initial_x = collect(mid(box))
     options = Optim.Options(; f_calls_limit = maxevals, iterations = maxevals, kwargs...)
-    results = Optim.optimize(func, initial_x, inner_optimizer, options; autodiff)
-    return Optim.minimum(results), Optim.minimizer(results), results.f_calls
+    results = optimize(func, initial_x, inner_optimizer, options; autodiff)
+    return results.minimum, results.minimizer, results.f_calls
 end
 
 ## Result translation
@@ -152,14 +151,14 @@ function thick_terminated_by(res, atol, rtol)
     return "terminated early"
 end
 
-# Translate a `ThickSearchResult` into a `GlobalAlignmentResult` for the mobile occupying the
-# `params` coordinates of the flat minimizer. `GlobalAlignmentResult` cannot embed the
-# `ThickSearchResult` — ThickGlobalOptimization is a weak dependency. `stagnant_splits` is `0`:
-# `thicksearch` exposes no since-last-improvement count.
 # Unexplored regions left in the scheduler. `thicksearch`'s default `ConvexHullScheduler` keeps
 # them in a `.structure` hull; other schedulers expose no generic count, so fall back to 0.
 remaining_blocks(scheduler) = hasproperty(scheduler, :structure) ? length(scheduler.structure) : 0
 
+# Translate a `ThickSearchResult` into a `GlobalAlignmentResult` for the mobile occupying the
+# `params` coordinates of the flat minimizer. `GlobalAlignmentResult` cannot embed the
+# `ThickSearchResult` — ThickGlobalOptimization is a weak dependency. `stagnant_splits` is `0`:
+# `thicksearch` exposes no since-last-improvement count.
 function alignment_result(res, x::AbstractModel, y::AbstractModel, params::UnitRange, terminated_by)
     p = Tuple(res.bestminimizer[params])
     progress = [(c, v, Tuple(m[params])) for (c, m, v) in res.progress]
@@ -171,7 +170,8 @@ end
 
 ## Drivers
 
-function globalalign(fixed::AbstractModel, mobiles::AbstractVector{<:AbstractModel};
+function globalalign(
+        fixed::AbstractModel, mobiles::AbstractVector{<:AbstractModel};
         searchspace = nothing, blockfun = UncertaintyRegion, boxsplitter = bisect_largest_rigid,
         objfun, boundsfun, kwargs...
     )
