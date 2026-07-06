@@ -146,3 +146,21 @@ function flex(model::ArticulatedGMM{N, T}, φ) where {N, T}
     end
     return ArticulatedGMM{N, S}(gaussians, joints)
 end
+
+# Rigid transforms carry the joints along with the Gaussians (axes are directions, origins are
+# points), keeping the `ArticulatedGMM` type so a flexed model can be posed with `R * m + T`.
+function Base.:*(R::AbstractMatrix{W}, m::ArticulatedGMM{N, V}) where {N, V, W}
+    S = promote_type(V, W)
+    gaussians = IsotropicGaussian{N, S}[R * g for g in m.gaussians]
+    joints = Joint{N, S}[Joint{N, S}(R * j.axis, R * j.origin, j.features, j.children) for j in m.joints]
+    return ArticulatedGMM{N, S}(gaussians, joints)
+end
+
+function Base.:+(m::ArticulatedGMM{N, V}, T::AbstractVector{W}) where {N, V, W}
+    S = promote_type(V, W)
+    gaussians = IsotropicGaussian{N, S}[g + T for g in m.gaussians]
+    joints = Joint{N, S}[Joint{N, S}(j.axis, j.origin + T, j.features, j.children) for j in m.joints]
+    return ArticulatedGMM{N, S}(gaussians, joints)
+end
+
+Base.:-(m::ArticulatedGMM, T::AbstractVector) = m + (-T)

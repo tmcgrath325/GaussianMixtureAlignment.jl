@@ -187,3 +187,63 @@ end
     lb_loose = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ; distance_bound_fun = GMA.loose_distance_bounds)[1]
     @test lb_loose <= lb_tight + 1.0e-12
 end
+
+@testset "flexible: flex_gogma_align" begin
+    V3(a, b, c) = SVector(a, b, c)
+
+    # a model with no joints reduces exactly to rigid GOGMA alignment
+    xpts = [[0.0, 0, 0], [3.0, 0, 0], [0, 4.0, 0]]
+    ypts = [[1.0, 1, 1], [1.0, -2, 1], [1, 1, -3.0]]
+    gx = [IsotropicGaussian(SVector{3}(p), 1.0, 1.0) for p in xpts]
+    gy = IsotropicGMM([IsotropicGaussian(SVector{3}(p), 1.0, 1.0) for p in ypts])
+    x0 = GMA.ArticulatedGMM(gx, GMA.Joint{3, Float64}[])
+    rig = gogma_align(IsotropicGMM(gx), gy; maxsplits = 1.0e3)
+    flx0 = GMA.flex_gogma_align(x0, gy; maxsplits = 1.0e3)
+    @test flx0.upperbound ≈ rig.upperbound atol = 1.0e-8
+    @test GMA.joint_angles(flx0) == ()
+
+    # a jointed model aligned to a planted flexible transform of itself
+    gsf = [
+        IsotropicGaussian(V3(0, 0, 0), 0.7, 1.0), IsotropicGaussian(V3(1.0, 0, 0), 0.7, 1.0),
+        IsotropicGaussian(V3(2.0, 0, 0), 0.7, 1.0), IsotropicGaussian(V3(2.0, 1, 0), 0.7, 1.0),
+        IsotropicGaussian(V3(3.0, 0, 0), 0.7, 1.0), IsotropicGaussian(V3(2.0, -1, 0), 0.7, 1.0),
+    ]
+    jsf = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5, 6], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    xf = GMA.ArticulatedGMM(gsf, jsf)
+    Rstar = RotationVec(0.5, -0.3, 0.9)
+    planted = (Rstar.sx, Rstar.sy, Rstar.sz, 1.0, -1.5, 0.7, 0.8, -0.6)
+    yf = IsotropicGMM(GMA.flex_pose(planted, xf))
+    ideal = overlap(yf, yf)
+
+    # posing by the planted parameters reproduces the target overlap exactly
+    @test overlap(GMA.flex_pose(planted, xf), yf) ≈ ideal atol = 1.0e-8
+
+    res = GMA.flex_gogma_align(xf, yf; maxsplits = 300)
+    # the search is at least as good as the (feasible) planted conformation, and its bounds
+    # bracket the objective. An unlabeled flexible model may exceed the target's self-overlap
+    # by folding, so the invariant is `≥ ideal`, not exact recovery.
+    @test -res.upperbound >= ideal - 1.0e-6
+    @test res.lowerbound <= res.upperbound
+
+    # flexibility does at least as well as a rigid alignment of the same model
+    rigf = gogma_align(IsotropicGMM(gsf), yf; maxsplits = 300)
+    @test -res.upperbound >= -rigf.upperbound - 1.0e-6
+
+    # result interface
+    @test length(GMA.joint_angles(res)) == 2
+    @test GMA.aligned(res) isa GMA.ArticulatedGMM{3, Float64}
+    @test length(GMA.aligned(res)) == length(xf)
+    @test GMA.tform(res) isa AffineMap
+    @test GMA.upperbound(res) === res.upperbound
+    @test GMA.lowerbound(res) === res.lowerbound
+    @test GMA.num_splits(res) isa Int
+    @test GMA.num_blocks(res) isa Int
+    @test occursin("FlexibleAlignmentResult", sprint(show, MIME"text/plain"(), res))
+
+    early = GMA.flex_gogma_align(xf, yf; maxsplits = 1)
+    @test early.terminated_by == "terminated early"
+    @test !GMA.converged(early)
+end

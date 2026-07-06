@@ -72,7 +72,9 @@ function flex_gauss_l2_bounds(x, y::AbstractSingleGMM, block::FlexibleRegion, p�
         for (j, gy) in enumerate(y.gaussians)
             s = pσ[i, j]
             w = pϕ[i, j]
-            (lbdist, ubdist) = distance_bound_fun(gx.μ, gy.μ, R, Tr, σᵣ, σₜ, w < 0)
+            # apply the block-center rigid transform, then bound over the residual box — the
+            # same pre-transform the rigid `gauss_l2_bounds` uses
+            (lbdist, ubdist) = distance_bound_fun(R * gx.μ, gy.μ - Tr, σᵣ, σₜ, w < 0)
             lbdist = w < 0 ? lbdist + δ[i] : max(lbdist - δ[i], zero(lbdist))
             lb += -overlap(lbdist^2, s, w)
             ub += -overlap(ubdist^2, s, w)
