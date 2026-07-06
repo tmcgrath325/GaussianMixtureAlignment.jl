@@ -31,6 +31,7 @@ export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
 export StackedLabeledGaussian, StackedLabeledIsotropicGMM, stackedgmm
 export overlap, force!, force, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
+export flex_gogma_align
 export rocs_align
 export PointSet, MultiPointSet
 export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
@@ -52,6 +53,8 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
             :FlexibleRegion, :ArticulatedGMM, :Joint,
             :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
             :flex_displacements, :flex_gauss_l2_bounds,
+            :flex_branchbound, :flex_local_align, :flex_pose, :FlexibleAlignmentResult,
+            :joint_angles, :aligned,
             :icp, :iterative_hungarian,
             :converged, :tform, :upperbound, :lowerbound, :obj_calls,
             :num_splits, :num_blocks, :stagnant_splits, :progress
@@ -127,6 +130,7 @@ include("branchbound.jl")
 
 include("gogma/tiv.jl")
 include("gogma/align.jl")
+include("flexible/align.jl")
 include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")

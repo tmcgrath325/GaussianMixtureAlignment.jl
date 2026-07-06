@@ -90,8 +90,8 @@ function subregions(
     children = FlexibleRegion{T, K}[]
     for i in 0:(nsplits - 1)
         c = lower + 2 * i * σ2
-        φnew = Base.setindex(fr.φ, c, group)
-        σφnew = Base.setindex(fr.σφ, σ2, group)
+        φnew = SVector{K, T}(ntuple(d -> d == group ? c : fr.φ[d], K))
+        σφnew = SVector{K, T}(ntuple(d -> d == group ? σ2 : fr.σφ[d], K))
         push!(children, FlexibleRegion{T, K}(fr.rigid, φnew, σφnew))
     end
     return children
