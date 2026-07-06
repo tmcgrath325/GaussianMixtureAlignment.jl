@@ -50,6 +50,7 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
             :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
             :FlexibleRegion, :ArticulatedGMM, :Joint,
             :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
+            :flex_displacements, :flex_gauss_l2_bounds,
             :icp, :iterative_hungarian,
             :converged, :tform, :upperbound, :lowerbound, :obj_calls,
             :num_splits, :num_blocks, :stagnant_splits, :progress
@@ -111,6 +112,7 @@ include("gogma/combine.jl")
 include("gogma/transformation.jl")
 include("gogma/overlap.jl")
 include("gogma/bounds.jl")
+include("flexible/bounds.jl")
 
 include("goicp/bounds.jl")
 include("goicp/correspondence.jl")

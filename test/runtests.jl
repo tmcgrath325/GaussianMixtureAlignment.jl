@@ -38,6 +38,7 @@ end
                 :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
                 :FlexibleRegion, :ArticulatedGMM, :Joint,
                 :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
+                :flex_displacements, :flex_gauss_l2_bounds,
                 :icp, :iterative_hungarian,
                 :converged, :tform, :upperbound, :lowerbound, :obj_calls,
                 :num_splits, :num_blocks, :stagnant_splits, :progress,

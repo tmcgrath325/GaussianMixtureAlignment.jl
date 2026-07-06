@@ -1,3 +1,5 @@
+using Random: MersenneTwister
+
 @testset "flexible: ArticulatedGMM and forward kinematics" begin
     V(x, y, z) = SVector(x, y, z)
     mk(x, y, z) = IsotropicGaussian(V(x, y, z), 1.0, 1.0)
@@ -88,4 +90,100 @@ end
     @test Set(k.φ[1] for k in kids_j1) == Set((-π / 2, π / 2))   # ...and it tiles [-π, π]
     @test all(k.φ[2] == 0.5 && k.σφ[2] == 0.3 for k in kids_j1)  # the other joint is untouched
     @test all(UncertaintyRegion(k) === ur for k in kids_j1)      # rigid box unchanged
+end
+
+# Samplers for a search block and the exact objective at a concrete (R, T, φ). The objective
+# sums the signed per-pair -overlap the bounds bound, so it accepts explicit (pσ, pϕ) — with
+# some pϕ negative it also exercises the repulsive (w < 0) branch.
+_randR(rng, R, σᵣ) = RotationVec(ntuple(i -> (R.sx, R.sy, R.sz)[i] + σᵣ * (2rand(rng) - 1), 3)...)
+_randT(rng, T, σₜ) = SVector{3}(ntuple(i -> T[i] + σₜ * (2rand(rng) - 1), 3))
+_randφ(rng, φ, σφ) = [φ[k] + σφ[k] * (2rand(rng) - 1) for k in eachindex(φ)]
+
+function _objective(x, y, R, T, φ, pσ, pϕ)
+    tx = R * IsotropicGMM(GMA.flex(x, φ)) + T
+    tot = 0.0
+    for (i, gx) in enumerate(tx.gaussians), (j, gy) in enumerate(y.gaussians)
+        tot += -overlap(sum(abs2, gx.μ - gy.μ), pσ[i, j], pϕ[i, j])
+    end
+    return tot
+end
+
+@testset "flexible: bounds validity (Monte-Carlo)" begin
+    V3(x, y, z) = SVector(x, y, z)
+    gs = [
+        IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(1, 0, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(2, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(2, 1, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(3, 0, 0), 1.0, 1.0),
+    ]
+    # a chain of two joints: the root moves features 2..5 and reframes the distal joint
+    js = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    x = GMA.ArticulatedGMM(gs, js)
+    y = RotationVec(0.3, -0.2, 0.5) * IsotropicGMM(GMA.flex(x, [0.7, -0.4])) + V3(1.0, -2.0, 0.5)
+    pσ, pϕ = GMA.pairwise_consts(x, y)
+
+    # δ_g must upper-bound the true internal displacement over every sampled sub-box
+    rng = MersenneTwister(20260706)
+    δ_ok = true
+    for _ in 1:60
+        φc = [2π * rand(rng) - π for _ in 1:2]
+        σφ = [0.9 * rand(rng) for _ in 1:2]
+        block = GMA.FlexibleRegion(UncertaintyRegion(), φc, σφ)
+        xc, δ = GMA.flex_displacements(x, block)
+        for _ in 1:60
+            xf = GMA.flex(x, _randφ(rng, φc, σφ))
+            for g in 1:length(x)
+                δ_ok &= norm(xf.gaussians[g].μ - xc.gaussians[g].μ) <= δ[g] + 1.0e-9
+            end
+        end
+    end
+    @test δ_ok
+
+    # the lower bound must not exceed the objective at any sampled feasible (R, T, φ), the
+    # upper bound must equal the objective at the block center, and lb ≤ ub — for both
+    # attractive weights and a sign-flipped mix that turns some pairs repulsive
+    for pϕtest in (pϕ, (m = copy(pϕ); m[1:2, :] .*= -1; m))
+        lb_ok = true
+        ub_ok = true
+        order_ok = true
+        for _ in 1:60
+            R0 = _randR(rng, RotationVec(0, 0, 0), 0.6)
+            T0 = _randT(rng, V3(0, 0, 0), 1.0)
+            σᵣ = 0.3 + 0.5rand(rng)
+            σₜ = 0.3 + rand(rng)
+            φc = [2π * rand(rng) - π for _ in 1:2]
+            σφ = [0.8 * rand(rng) for _ in 1:2]
+            block = GMA.FlexibleRegion(UncertaintyRegion(R0, T0, σᵣ, σₜ), φc, σφ)
+            lb, ub = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕtest)
+            order_ok &= lb <= ub + 1.0e-9
+            ub_ok &= isapprox(ub, _objective(x, y, R0, T0, φc, pσ, pϕtest); atol = 1.0e-8, rtol = 1.0e-8)
+            for _ in 1:60
+                obj = _objective(x, y, _randR(rng, R0, σᵣ), _randT(rng, T0, σₜ), _randφ(rng, φc, σφ), pσ, pϕtest)
+                lb_ok &= lb <= obj + 1.0e-9
+            end
+        end
+        @test lb_ok
+        @test ub_ok
+        @test order_ok
+    end
+
+    # reductions: frozen joints match the rigid bounds on the flexed model, K = 0 matches the
+    # rigid bounds on the base model, and the loose distance bound is no tighter than the tight one
+    rigid = UncertaintyRegion(RotationVec(0.2, -0.1, 0.3), V3(0.5, -1.0, 0.2), 0.4, 0.7)
+    φ = [0.6, -0.9]
+    lbf, ubf = GMA.flex_gauss_l2_bounds(x, y, GMA.FlexibleRegion(rigid, φ, [0.0, 0.0]), pσ, pϕ)
+    lbr, ubr = gauss_l2_bounds(IsotropicGMM(GMA.flex(x, φ)), y, rigid, pσ, pϕ)
+    @test lbf ≈ lbr && ubf ≈ ubr
+
+    x0 = GMA.ArticulatedGMM(collect(x.gaussians), GMA.Joint{3, Float64}[])
+    lb0, ub0 = GMA.flex_gauss_l2_bounds(x0, y, GMA.FlexibleRegion(rigid, 0), pσ, pϕ)
+    lbb, ubb = gauss_l2_bounds(IsotropicGMM(collect(x.gaussians)), y, rigid, pσ, pϕ)
+    @test lb0 ≈ lbb && ub0 ≈ ubb
+
+    block = GMA.FlexibleRegion(rigid, φ, [0.5, 0.3])
+    lb_tight = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ; distance_bound_fun = GMA.tight_distance_bounds)[1]
+    lb_loose = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ; distance_bound_fun = GMA.loose_distance_bounds)[1]
+    @test lb_loose <= lb_tight + 1.0e-12
 end
