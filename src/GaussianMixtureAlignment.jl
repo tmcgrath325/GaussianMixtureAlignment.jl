@@ -49,6 +49,8 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
         Expr(
             :public,
             :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+            :FlexibleRegion, :ArticulatedGMM, :Joint,
+            :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
             :icp, :iterative_hungarian,
             :converged, :tform, :upperbound, :lowerbound, :obj_calls,
             :num_splits, :num_blocks, :stagnant_splits, :progress
@@ -102,6 +104,9 @@ include("gogma/gmm.jl")
 include("utils.jl")
 include("uncertaintyregion.jl")
 include("distancebounds.jl")
+
+include("flexible/articulated.jl")
+include("flexible/region.jl")
 
 include("gogma/combine.jl")
 include("gogma/transformation.jl")
