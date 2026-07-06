@@ -219,7 +219,7 @@ fixed GMM `y`: a rigid rotation and translation plus one rotation angle per join
 model carrying no joints this reduces to rigid GOGMA alignment.
 
 Returns a [`FlexibleAlignmentResult`](@ref). Additional keyword arguments are forwarded to
-[`flex_branchbound`](@ref) (tolerances and iteration limits).
+`flex_branchbound` (tolerances and iteration limits); see `?flex_branchbound`.
 """
 function flex_gogma_align(x, y; interactions = nothing, autodiff = AutoForwardDiff(), nsplits = 2, kwargs...)
     pσ, pϕ = pairwise_consts(x, y, interactions)
