@@ -53,6 +53,35 @@ tiv_gogma_align
 rocs_align
 ```
 
+### Flexible (articulated) alignment
+
+Align a model whose features are connected by rotatable joints — for example a molecule's
+rotatable bonds — optimizing one rotation angle per joint alongside the rigid transform. With
+a model that carries no joints this reduces to [`gogma_align`](@ref).
+
+```@docs
+flex_gogma_align
+FlexibleAlignmentResult
+joint_angles
+aligned
+```
+
+An articulated model supplies its kinematic tree through the interface below.
+[`ArticulatedGMM`](@ref) is the in-package implementation; external models, such as
+MolecularGaussians' `PharmacophoreGMM`, provide their own methods.
+
+```@docs
+ArticulatedGMM
+Joint
+njoints
+joint_axis
+joint_origin
+joint_features
+joint_children
+flex
+FlexibleRegion
+```
+
 ## Point set alignment
 
 ```@docs
