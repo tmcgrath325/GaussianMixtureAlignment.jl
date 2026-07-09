@@ -48,16 +48,41 @@ function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::Abstr
     return pairwise_consts(gmmx, gmmy, self_interactions)
 end
 
+"""
+    interaction_coefficient(interactions, k1, k2)
+
+The coefficient `interactions` assigns to the unordered label pair `{k1, k2}`, or zero when
+the pair is absent. `validate_interactions` guarantees at most one of the two orderings is
+present, so whichever is found is the only one.
+"""
+function interaction_coefficient(interactions::Dict{Tuple{K, K}, V}, k1::K, k2::K) where {K, V <: Number}
+    haskey(interactions, (k1, k2)) && return interactions[(k1, k2)]
+    haskey(interactions, (k2, k1)) && return interactions[(k2, k1)]
+    return zero(V)
+end
+
 function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, S, K, V <: Number}
     validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
     t = promote_type(T, S, V)
+    gxs, gys, lxs, lys = gmmx.gaussians, gmmy.gaussians, gmmx.labels, gmmy.labels
+    Base.require_one_based_indexing(gxs, gys, lxs, lys)
+
+    # A GMM carries far more Gaussians than distinct labels, so each label pair's
+    # coefficient is resolved once into `coefs` and thereafter indexed, rather than
+    # hashed again for every Gaussian pair.
+    uxs, uys = unique(lxs), unique(lys)
+    coefs = t[interaction_coefficient(interactions, kx, ky) for kx in uxs, ky in uys]
+    ix = [findfirst(isequal(l), uxs)::Int for l in lxs]
+    iy = [findfirst(isequal(l), uys)::Int for l in lys]
+
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
-    for (i, gaussx) in enumerate(gmmx.gaussians)
-        for (j, gaussy) in enumerate(gmmy.gaussians)
-            keypair = (gmmx.labels[i], gmmy.labels[j])
-            keypair = haskey(interactions, keypair) ? keypair : (keypair[2], keypair[1])
+    for i in eachindex(gxs)
+        gaussx = gxs[i]
+        cx = ix[i]
+        for j in eachindex(gys)
+            gaussy = gys[j]
             pσ[i, j] = gaussx.σ^2 + gaussy.σ^2
-            pϕ[i, j] = (haskey(interactions, keypair) ? interactions[keypair] : zero(t)) * gaussx.ϕ * gaussy.ϕ
+            pϕ[i, j] = coefs[cx, iy[j]] * gaussx.ϕ * gaussy.ϕ
         end
     end
     return pσ, pϕ

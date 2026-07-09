@@ -629,6 +629,63 @@ end
     @test lb <= -overlap(R * x + T, y, pσ, pϕ) <= ub
 end
 
+@testset "pairwise_consts resolves each label pair once" begin
+    # `pairwise_consts` indexes a coefficient table rather than hashing every Gaussian
+    # pair, so it must agree with a direct per-pair lookup for every label arrangement.
+    function reference(gmmx, gmmy, interactions::Dict{Tuple{K, K}, V}) where {K, V}
+        t = promote_type(GMA.numbertype(gmmx), GMA.numbertype(gmmy), V)
+        n, m = length(gmmx), length(gmmy)
+        pσ, pϕ = zeros(t, n, m), zeros(t, n, m)
+        for i in 1:n, j in 1:m
+            gaussx, gaussy = gmmx.gaussians[i], gmmy.gaussians[j]
+            key = (gmmx.labels[i], gmmy.labels[j])
+            key = haskey(interactions, key) ? key : reverse(key)
+            pσ[i, j] = gaussx.σ^2 + gaussy.σ^2
+            pϕ[i, j] = (haskey(interactions, key) ? interactions[key] : zero(t)) * gaussx.ϕ * gaussy.ϕ
+        end
+        return pσ, pϕ
+    end
+
+    gauss(x, σ, ϕ) = IsotropicGaussian([x, 0.0, 0.0], σ, ϕ)
+    x = LabeledIsotropicGMM([gauss(0.0, 1.0, 1.0), gauss(1.0, 1.3, 2.0), gauss(2.0, 0.7, 0.5)], [:A, :B, :A])
+    y = LabeledIsotropicGMM([gauss(0.5, 1.0, 1.5), gauss(1.5, 0.9, 0.8)], [:B, :C])
+
+    # (:B, :A) is stored in the order opposite to how the labels are encountered, :C
+    # interacts with nothing, and :A never meets itself across the two GMMs
+    for interactions in (
+            Dict((:B, :A) => -1.5, (:B, :B) => 2.0),
+            Dict((:A, :B) => -1.5, (:B, :B) => 2.0),
+            Dict((:A, :A) => 1.0),
+            Dict((:C, :C) => 3.0),
+            Dict((:A, :B) => 0.0, (:B, :B) => 2.0),   # an explicit zero coefficient
+            Dict{Tuple{Symbol, Symbol}, Float64}(),   # nothing interacts
+        )
+        @test GMA.pairwise_consts(x, y, interactions) == reference(x, y, interactions)
+    end
+
+    # a label present in one GMM but absent from the other
+    @test GMA.pairwise_consts(x, y, Dict((:A, :C) => 2.5)) == reference(x, y, Dict((:A, :C) => 2.5))
+
+    # labels need not be Symbols, and repeated labels share a table entry
+    xi = LabeledIsotropicGMM([gauss(0.0, 1.0, 1.0), gauss(1.0, 1.0, 1.0)], [7, 7])
+    yi = LabeledIsotropicGMM([gauss(0.5, 1.0, 1.0)], [7])
+    @test GMA.pairwise_consts(xi, yi, Dict((7, 7) => 2.0)) == reference(xi, yi, Dict((7, 7) => 2.0))
+
+    # empty GMMs produce empty constants rather than erroring on an empty label table
+    empty_gmm = LabeledIsotropicGMM{3, Float64, Symbol}()
+    epσ, epϕ = GMA.pairwise_consts(empty_gmm, y, Dict((:A, :B) => 1.0))
+    @test size(epσ) == size(epϕ) == (0, length(y))
+    @test overlap(empty_gmm, y; interactions = Dict((:A, :B) => 1.0)) == 0.0
+
+    # the coefficient helper is symmetric in its labels and zero for absent pairs
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :A, :B) == 1.5
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :B, :A) == 1.5
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :A, :A) == 0.0
+
+    # redundant key pairs are still rejected
+    @test_throws "must not include redundant key pairs" GMA.pairwise_consts(x, y, Dict((:A, :B) => 1.0, (:B, :A) => 2.0))
+end
+
 @testset "overlap keeps zero-valued weights that carry a derivative" begin
     # pϕ = coefficient * ϕx * ϕy, so differentiating with respect to an amplitude that is
     # itself zero yields a weight with zero value and a nonzero partial. Such a term still
