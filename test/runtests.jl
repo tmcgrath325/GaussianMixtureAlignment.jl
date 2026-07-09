@@ -509,6 +509,37 @@ end
     )
     randtform = AffineMap(RotationVec(π * 0.1rand(3)...), SVector{3}(0.1 * rand(3)...))
     res = gogma_align(randtform(mgmmx), mgmmy; interactions = interactions, maxsplits = 5.0e3, nextblockfun = GMA.randomblock)
+
+    # `mgmmx` holds :positive and :steric, `mgmmy` holds :negative and :steric
+
+    # a key pair is resolved in whichever order it is stored
+    forward = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :negative) => 1.0, (:steric, :steric) => -1.0))
+    reversed = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:negative, :positive) => 1.0, (:steric, :steric) => -1.0))
+    @test forward == reversed
+    @test sort(collect(keys(forward[1]))) == [:positive, :steric]
+    @test forward[1][:positive][:negative] == GMA.pairwise_consts(mgmmx.gmms[:positive], mgmmy.gmms[:negative])[1]
+    @test forward[2][:steric][:steric] == -1.0 .* GMA.pairwise_consts(mgmmx.gmms[:steric], mgmmy.gmms[:steric])[2]
+
+    # a coefficient of zero still produces an entry; an absent pair does not
+    zeroed = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :negative) => 0.0, (:steric, :steric) => -1.0))
+    @test haskey(zeroed[2][:positive], :negative)
+    @test all(iszero, zeroed[2][:positive][:negative])
+    @test !haskey(GMA.pairwise_consts(mgmmx, mgmmy, Dict((:steric, :steric) => -1.0))[2], :positive)
+
+    # a key of `mgmmx` whose partners are all absent from `mgmmy` is dropped entirely
+    dropped = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :positive) => -1.0, (:steric, :steric) => 1.0))
+    @test collect(keys(dropped[1])) == [:steric]
+
+    # overlap uses those constants, so it agrees with a per-key-pair sum
+    interactions = Dict((:positive, :negative) => 1.5, (:steric, :steric) => -1.0)
+    manual = 1.5 * overlap(mgmmx.gmms[:positive], mgmmy.gmms[:negative]) -
+        overlap(mgmmx.gmms[:steric], mgmmy.gmms[:steric])
+    @test overlap(mgmmx, mgmmy; interactions) ≈ manual
+
+    @test GMA.has_interaction(Dict((:a, :b) => 1.0), :a, :b)
+    @test GMA.has_interaction(Dict((:a, :b) => 1.0), :b, :a)     # either ordering
+    @test GMA.has_interaction(Dict((:a, :b) => 0.0), :a, :b)     # zero is still present
+    @test !GMA.has_interaction(Dict((:a, :b) => 1.0), :a, :a)
 end
 
 @testset "LabeledIsotropicGMM" begin

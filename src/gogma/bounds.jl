@@ -53,13 +53,23 @@ end
 
 The coefficient `interactions` assigns to the unordered label pair `{k1, k2}`, or zero when
 the pair is absent. `validate_interactions` guarantees at most one of the two orderings is
-present, so whichever is found is the only one.
+present, so whichever is found is the only one. A pair mapped to zero and an absent pair
+give the same coefficient; use [`has_interaction`](@ref) to tell them apart.
 """
 function interaction_coefficient(interactions::Dict{Tuple{K, K}, V}, k1::K, k2::K) where {K, V <: Number}
     haskey(interactions, (k1, k2)) && return interactions[(k1, k2)]
     haskey(interactions, (k2, k1)) && return interactions[(k2, k1)]
     return zero(V)
 end
+
+"""
+    has_interaction(interactions, k1, k2)
+
+Whether `interactions` assigns a coefficient to the unordered label pair `{k1, k2}`, in
+either ordering. A pair mapped explicitly to zero counts as present.
+"""
+has_interaction(interactions::Dict{Tuple{K, K}, V}, k1::K, k2::K) where {K, V <: Number} =
+    haskey(interactions, (k1, k2)) || haskey(interactions, (k2, k1))
 
 function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, S, K, V <: Number}
     validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
@@ -109,12 +119,12 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N, T, K}, mgmmy::AbstractMultiG
             push!(mpσ, key1 => Dict{K, Matrix{t}}())
             push!(mpϕ, key1 => Dict{K, Matrix{t}}())
             for key2 in ukeys
-                keypair = (key1, key2)
-                keypair = haskey(interactions, keypair) ? keypair : (key2, key1)
-                if key2 ∈ ykeys && haskey(interactions, keypair)
+                # a sub-GMM pair gets an entry only when the keys interact; the coefficient
+                # may still be zero, which `has_interaction` distinguishes from absence
+                if key2 ∈ ykeys && has_interaction(interactions, key1, key2)
                     pσ, pϕ = pairwise_consts(mgmmx.gmms[key1], mgmmy.gmms[key2])
                     push!(mpσ[key1], key2 => pσ)
-                    push!(mpϕ[key1], key2 => interactions[keypair] .* pϕ)
+                    push!(mpϕ[key1], key2 => interaction_coefficient(interactions, key1, key2) .* pϕ)
                 end
             end
             if isempty(mpσ[key1])
