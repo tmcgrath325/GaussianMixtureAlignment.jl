@@ -48,16 +48,51 @@ function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::Abstr
     return pairwise_consts(gmmx, gmmy, self_interactions)
 end
 
+"""
+    interaction_coefficient(interactions, k1, k2)
+
+The coefficient `interactions` assigns to the unordered label pair `{k1, k2}`, or zero when
+the pair is absent. `validate_interactions` guarantees at most one of the two orderings is
+present, so whichever is found is the only one. A pair mapped to zero and an absent pair
+give the same coefficient; use [`has_interaction`](@ref) to tell them apart.
+"""
+function interaction_coefficient(interactions::Dict{Tuple{K, K}, V}, k1::K, k2::K) where {K, V <: Number}
+    haskey(interactions, (k1, k2)) && return interactions[(k1, k2)]
+    haskey(interactions, (k2, k1)) && return interactions[(k2, k1)]
+    return zero(V)
+end
+
+"""
+    has_interaction(interactions, k1, k2)
+
+Whether `interactions` assigns a coefficient to the unordered label pair `{k1, k2}`, in
+either ordering. A pair mapped explicitly to zero counts as present.
+"""
+has_interaction(interactions::Dict{Tuple{K, K}, V}, k1::K, k2::K) where {K, V <: Number} =
+    haskey(interactions, (k1, k2)) || haskey(interactions, (k2, k1))
+
 function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, S, K, V <: Number}
     validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
     t = promote_type(T, S, V)
+    gxs, gys, lxs, lys = gmmx.gaussians, gmmy.gaussians, gmmx.labels, gmmy.labels
+    Base.require_one_based_indexing(gxs, gys, lxs, lys)
+
+    # A GMM carries far more Gaussians than distinct labels, so each label pair's
+    # coefficient is resolved once into `coefs` and thereafter indexed, rather than
+    # hashed again for every Gaussian pair.
+    uxs, uys = unique(lxs), unique(lys)
+    coefs = t[interaction_coefficient(interactions, kx, ky) for kx in uxs, ky in uys]
+    ix = [findfirst(isequal(l), uxs)::Int for l in lxs]
+    iy = [findfirst(isequal(l), uys)::Int for l in lys]
+
     pσ, pϕ = zeros(t, length(gmmx), length(gmmy)), zeros(t, length(gmmx), length(gmmy))
-    for (i, gaussx) in enumerate(gmmx.gaussians)
-        for (j, gaussy) in enumerate(gmmy.gaussians)
-            keypair = (gmmx.labels[i], gmmy.labels[j])
-            keypair = haskey(interactions, keypair) ? keypair : (keypair[2], keypair[1])
+    for i in eachindex(gxs)
+        gaussx = gxs[i]
+        cx = ix[i]
+        for j in eachindex(gys)
+            gaussy = gys[j]
             pσ[i, j] = gaussx.σ^2 + gaussy.σ^2
-            pϕ[i, j] = (haskey(interactions, keypair) ? interactions[keypair] : zero(t)) * gaussx.ϕ * gaussy.ϕ
+            pϕ[i, j] = coefs[cx, iy[j]] * gaussx.ϕ * gaussy.ϕ
         end
     end
     return pσ, pϕ
@@ -84,12 +119,12 @@ function pairwise_consts(mgmmx::AbstractMultiGMM{N, T, K}, mgmmy::AbstractMultiG
             push!(mpσ, key1 => Dict{K, Matrix{t}}())
             push!(mpϕ, key1 => Dict{K, Matrix{t}}())
             for key2 in ukeys
-                keypair = (key1, key2)
-                keypair = haskey(interactions, keypair) ? keypair : (key2, key1)
-                if key2 ∈ ykeys && haskey(interactions, keypair)
+                # a sub-GMM pair gets an entry only when the keys interact; the coefficient
+                # may still be zero, which `has_interaction` distinguishes from absence
+                if key2 ∈ ykeys && has_interaction(interactions, key1, key2)
                     pσ, pϕ = pairwise_consts(mgmmx.gmms[key1], mgmmy.gmms[key2])
                     push!(mpσ[key1], key2 => pσ)
-                    push!(mpϕ[key1], key2 => interactions[keypair] .* pϕ)
+                    push!(mpϕ[key1], key2 => interaction_coefficient(interactions, key1, key2) .* pϕ)
                 end
             end
             if isempty(mpσ[key1])
@@ -141,12 +176,21 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::Ro
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
     end
 
+    gxs, gys = gmmx.gaussians, gmmy.gaussians
+    # pσ and pϕ are allocated from `length`, so they index the Gaussians from 1.
+    Base.require_one_based_indexing(gxs, gys, pσ, pϕ)
+
     # sum bounds for each pair of points
     lb = 0.0
     ub = 0.0
-    for (i, x) in enumerate(gmmx.gaussians)
-        for (j, y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i, j], pϕ[i, j]; kwargs...)
+    for i in eachindex(gxs)
+        x = gxs[i]
+        for j in eachindex(gys)
+            w = pϕ[i, j]
+            # A zero weight bounds the overlap to (0, 0), so the distance bounds need not
+            # be evaluated at all.
+            iszero(w) && continue
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, gys[j], R, T, σᵣ, σₜ, pσ[i, j], w; kwargs...)
         end
     end
     return lb, ub

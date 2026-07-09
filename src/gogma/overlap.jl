@@ -42,11 +42,22 @@ function overlap(x::AbstractSingleGMM, y::AbstractSingleGMM, pσ = nothing, pϕ 
         pσ, pϕ = pairwise_consts(x, y)
     end
 
+    gxs, gys = x.gaussians, y.gaussians
+    # pσ and pϕ are allocated from `length`, so they index the Gaussians from 1.
+    Base.require_one_based_indexing(gxs, gys, pσ, pϕ)
+
     # sum overlaps for all pairwise combinations of Gaussians between x and y
     ovlp = zero(promote_type(numbertype(x), numbertype(y)))
-    for (i, gx) in enumerate(x.gaussians)
-        for (j, gy) in enumerate(y.gaussians)
-            ovlp += overlap(gx, gy, pσ[i, j], pϕ[i, j])
+    for i in eachindex(gxs)
+        gx = gxs[i]
+        for j in eachindex(gys)
+            w = pϕ[i, j]
+            # A zero weight contributes nothing, and skipping it avoids the `exp`. Labeled
+            # GMMs zero out every non-interacting pair, which is most of them. `iszero` is
+            # false for a dual number carrying a nonzero partial, so a coefficient that is
+            # zero-valued but differentiated is still accumulated.
+            iszero(w) && continue
+            ovlp += overlap(gx, gys[j], pσ[i, j], w)
         end
     end
     return ovlp

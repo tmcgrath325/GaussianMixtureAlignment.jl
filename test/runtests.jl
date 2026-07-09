@@ -509,6 +509,37 @@ end
     )
     randtform = AffineMap(RotationVec(π * 0.1rand(3)...), SVector{3}(0.1 * rand(3)...))
     res = gogma_align(randtform(mgmmx), mgmmy; interactions = interactions, maxsplits = 5.0e3, nextblockfun = GMA.randomblock)
+
+    # `mgmmx` holds :positive and :steric, `mgmmy` holds :negative and :steric
+
+    # a key pair is resolved in whichever order it is stored
+    forward = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :negative) => 1.0, (:steric, :steric) => -1.0))
+    reversed = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:negative, :positive) => 1.0, (:steric, :steric) => -1.0))
+    @test forward == reversed
+    @test sort(collect(keys(forward[1]))) == [:positive, :steric]
+    @test forward[1][:positive][:negative] == GMA.pairwise_consts(mgmmx.gmms[:positive], mgmmy.gmms[:negative])[1]
+    @test forward[2][:steric][:steric] == -1.0 .* GMA.pairwise_consts(mgmmx.gmms[:steric], mgmmy.gmms[:steric])[2]
+
+    # a coefficient of zero still produces an entry; an absent pair does not
+    zeroed = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :negative) => 0.0, (:steric, :steric) => -1.0))
+    @test haskey(zeroed[2][:positive], :negative)
+    @test all(iszero, zeroed[2][:positive][:negative])
+    @test !haskey(GMA.pairwise_consts(mgmmx, mgmmy, Dict((:steric, :steric) => -1.0))[2], :positive)
+
+    # a key of `mgmmx` whose partners are all absent from `mgmmy` is dropped entirely
+    dropped = GMA.pairwise_consts(mgmmx, mgmmy, Dict((:positive, :positive) => -1.0, (:steric, :steric) => 1.0))
+    @test collect(keys(dropped[1])) == [:steric]
+
+    # overlap uses those constants, so it agrees with a per-key-pair sum
+    interactions = Dict((:positive, :negative) => 1.5, (:steric, :steric) => -1.0)
+    manual = 1.5 * overlap(mgmmx.gmms[:positive], mgmmy.gmms[:negative]) -
+        overlap(mgmmx.gmms[:steric], mgmmy.gmms[:steric])
+    @test overlap(mgmmx, mgmmy; interactions) ≈ manual
+
+    @test GMA.has_interaction(Dict((:a, :b) => 1.0), :a, :b)
+    @test GMA.has_interaction(Dict((:a, :b) => 1.0), :b, :a)     # either ordering
+    @test GMA.has_interaction(Dict((:a, :b) => 0.0), :a, :b)     # zero is still present
+    @test !GMA.has_interaction(Dict((:a, :b) => 1.0), :a, :a)
 end
 
 @testset "LabeledIsotropicGMM" begin
@@ -568,6 +599,145 @@ end
     force!(f, x, y)
     @test f ≈ force(x, y)
     @test !(force(x, y) ≈ force(x, y; interactions = Dict((:A, :B) => 1.0)))
+end
+
+@testset "zero-weight pairs contribute nothing to overlap" begin
+    # `overlap` and `gauss_l2_bounds` skip Gaussian pairs whose weight is zero. Every pair
+    # of a labeled GMM whose labels do not interact has such a weight, so the skip has to
+    # reproduce a summation over all pairs exactly.
+    gx = [
+        IsotropicGaussian([0.0, 0.0, 0.0], 1.0, 1.0),
+        IsotropicGaussian([1.0, 0.0, 0.0], 1.3, 2.0),
+        IsotropicGaussian([0.0, 1.0, 0.5], 0.8, 1.5),
+    ]
+    gy = [
+        IsotropicGaussian([0.5, 0.2, 0.0], 1.0, 1.0),
+        IsotropicGaussian([1.7, 0.0, 0.3], 1.1, 0.7),
+        IsotropicGaussian([0.2, 0.9, 0.1], 0.9, 1.2),
+    ]
+    x = LabeledIsotropicGMM(gx, [:A, :B, :C])
+    y = LabeledIsotropicGMM(gy, [:A, :B, :C])
+    # :C interacts with nothing, and (:A,:B) is negative, as a charge penalty would be
+    interactions = Dict((:A, :A) => 1.0, (:B, :B) => 2.0, (:A, :B) => -1.5)
+
+    pσ, pϕ = GMA.pairwise_consts(x, y, interactions)
+    @test count(iszero, pϕ) > 0                                    # the skip is exercised
+    # pσ/pϕ are indexed [x, y]
+    @test size(pσ) == size(pϕ) == (length(gx), length(gy))
+    coefficient(a, b) = get(interactions, (a, b), get(interactions, (b, a), 0.0))
+    @test all(
+        pσ[i, j] == gx[i].σ^2 + gy[j].σ^2 &&
+            pϕ[i, j] == coefficient(x.labels[i], y.labels[j]) * gx[i].ϕ * gy[j].ϕ
+            for i in eachindex(gx), j in eachindex(gy)
+    )
+    naive = sum(
+        pϕ[i, j] * exp(-sum(abs2, gx[i].μ - gy[j].μ) / (2 * pσ[i, j]))
+            for i in eachindex(gx), j in eachindex(gy)
+    )
+    @test overlap(x, y; interactions) ≈ naive
+    @test overlap(x, y, pσ, pϕ) ≈ naive
+
+    # pσ/pϕ index the Gaussians from 1, so offset inputs are rejected, not mis-indexed
+    @test_throws "offset arrays are not supported" overlap(x, y, OffsetArray(pσ, 0:2, 0:2), OffsetArray(pϕ, 0:2, 0:2))
+
+    # an explicitly zero coefficient behaves exactly like an omitted one
+    @test overlap(x, y; interactions = Dict((:A, :A) => 0.0)) == 0.0
+    @test overlap(x, y; interactions = Dict((:A, :A) => 0.0, (:B, :B) => 2.0)) ≈
+        overlap(x, y; interactions = Dict((:B, :B) => 2.0))
+
+    # gauss_l2_bounds skips the same pairs, and must match a sum over every pair
+    R, T = RotationVec(0.2, -0.1, 0.35), SVector(0.3, -0.2, 0.1)
+    σᵣ, σₜ = 0.4, 0.25
+    lb, ub = gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ, pϕ)
+    naive_lb, naive_ub = 0.0, 0.0
+    for i in eachindex(gx), j in eachindex(gy)
+        naive_lb, naive_ub = (naive_lb, naive_ub) .+
+            gauss_l2_bounds(gx[i], gy[j], R, T, σᵣ, σₜ, pσ[i, j], pϕ[i, j])
+    end
+    @test lb ≈ naive_lb
+    @test ub ≈ naive_ub
+    # the objective at the region's center lies within the bounds it brackets
+    @test lb <= -overlap(R * x + T, y, pσ, pϕ) <= ub
+end
+
+@testset "pairwise_consts resolves each label pair once" begin
+    # `pairwise_consts` indexes a coefficient table rather than hashing every Gaussian
+    # pair, so it must agree with a direct per-pair lookup for every label arrangement.
+    function reference(gmmx, gmmy, interactions::Dict{Tuple{K, K}, V}) where {K, V}
+        t = promote_type(GMA.numbertype(gmmx), GMA.numbertype(gmmy), V)
+        n, m = length(gmmx), length(gmmy)
+        pσ, pϕ = zeros(t, n, m), zeros(t, n, m)
+        for i in 1:n, j in 1:m
+            gaussx, gaussy = gmmx.gaussians[i], gmmy.gaussians[j]
+            key = (gmmx.labels[i], gmmy.labels[j])
+            key = haskey(interactions, key) ? key : reverse(key)
+            pσ[i, j] = gaussx.σ^2 + gaussy.σ^2
+            pϕ[i, j] = (haskey(interactions, key) ? interactions[key] : zero(t)) * gaussx.ϕ * gaussy.ϕ
+        end
+        return pσ, pϕ
+    end
+
+    gauss(x, σ, ϕ) = IsotropicGaussian([x, 0.0, 0.0], σ, ϕ)
+    x = LabeledIsotropicGMM([gauss(0.0, 1.0, 1.0), gauss(1.0, 1.3, 2.0), gauss(2.0, 0.7, 0.5)], [:A, :B, :A])
+    y = LabeledIsotropicGMM([gauss(0.5, 1.0, 1.5), gauss(1.5, 0.9, 0.8)], [:B, :C])
+
+    # (:B, :A) is stored in the order opposite to how the labels are encountered, :C
+    # interacts with nothing, and :A never meets itself across the two GMMs
+    for interactions in (
+            Dict((:B, :A) => -1.5, (:B, :B) => 2.0),
+            Dict((:A, :B) => -1.5, (:B, :B) => 2.0),
+            Dict((:A, :A) => 1.0),
+            Dict((:C, :C) => 3.0),
+            Dict((:A, :B) => 0.0, (:B, :B) => 2.0),   # an explicit zero coefficient
+            Dict{Tuple{Symbol, Symbol}, Float64}(),   # nothing interacts
+        )
+        @test GMA.pairwise_consts(x, y, interactions) == reference(x, y, interactions)
+    end
+
+    # a label present in one GMM but absent from the other
+    @test GMA.pairwise_consts(x, y, Dict((:A, :C) => 2.5)) == reference(x, y, Dict((:A, :C) => 2.5))
+
+    # labels need not be Symbols, and repeated labels share a table entry
+    xi = LabeledIsotropicGMM([gauss(0.0, 1.0, 1.0), gauss(1.0, 1.0, 1.0)], [7, 7])
+    yi = LabeledIsotropicGMM([gauss(0.5, 1.0, 1.0)], [7])
+    @test GMA.pairwise_consts(xi, yi, Dict((7, 7) => 2.0)) == reference(xi, yi, Dict((7, 7) => 2.0))
+
+    # empty GMMs produce empty constants rather than erroring on an empty label table
+    empty_gmm = LabeledIsotropicGMM{3, Float64, Symbol}()
+    epσ, epϕ = GMA.pairwise_consts(empty_gmm, y, Dict((:A, :B) => 1.0))
+    @test size(epσ) == size(epϕ) == (0, length(y))
+    @test overlap(empty_gmm, y; interactions = Dict((:A, :B) => 1.0)) == 0.0
+
+    # the coefficient helper is symmetric in its labels and zero for absent pairs
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :A, :B) == 1.5
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :B, :A) == 1.5
+    @test GMA.interaction_coefficient(Dict((:A, :B) => 1.5), :A, :A) == 0.0
+
+    # redundant key pairs are still rejected
+    @test_throws "must not include redundant key pairs" GMA.pairwise_consts(x, y, Dict((:A, :B) => 1.0, (:B, :A) => 2.0))
+end
+
+@testset "overlap keeps zero-valued weights that carry a derivative" begin
+    # pϕ = coefficient * ϕx * ϕy, so differentiating with respect to an amplitude that is
+    # itself zero yields a weight with zero value and a nonzero partial. Such a term still
+    # contributes to the derivative and must not be skipped: `iszero` on a dual number is
+    # false unless the partials vanish too, which is what makes the skip sound.
+    @test !iszero(ForwardDiff.Dual(0.0, 1.0))
+    @test iszero(ForwardDiff.Dual(0.0, 0.0))
+
+    yg = LabeledIsotropicGMM([IsotropicGaussian([0.5, 0.0, 0.0], 1.0, 2.0)], [:A])
+    coefficient = 3.0
+    ovlp(ϕ) = overlap(
+        LabeledIsotropicGMM([IsotropicGaussian(SVector(0.0, 0.0, 0.0), 1.0, ϕ)], [:A]),
+        yg; interactions = Dict((:A, :A) => coefficient)
+    )
+
+    @test ovlp(0.0) == 0.0                       # the value really is zero at ϕ = 0
+    # d/dϕ [c * ϕ * ϕy * exp(-d²/2s)] = c * ϕy * exp(-d²/2s)
+    analytic = coefficient * 2.0 * exp(-0.5^2 / (2 * (1.0^2 + 1.0^2)))
+    @test ForwardDiff.derivative(ovlp, 0.0) ≈ analytic
+    @test ForwardDiff.derivative(ovlp, 0.0) ≈ central_fdm(5, 1)(ovlp, 0.0)
+    @test ForwardDiff.derivative(ovlp, 0.0) != 0.0
 end
 
 @testset "Forces" begin
