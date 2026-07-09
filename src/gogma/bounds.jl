@@ -141,12 +141,21 @@ function gauss_l2_bounds(gmmx::AbstractSingleGMM, gmmy::AbstractSingleGMM, R::Ro
         pσ, pϕ = pairwise_consts(gmmx, gmmy)
     end
 
+    gxs, gys = gmmx.gaussians, gmmy.gaussians
+    # pσ and pϕ are allocated from `length`, so they index the Gaussians from 1.
+    Base.require_one_based_indexing(gxs, gys, pσ, pϕ)
+
     # sum bounds for each pair of points
     lb = 0.0
     ub = 0.0
-    for (i, x) in enumerate(gmmx.gaussians)
-        for (j, y) in enumerate(gmmy.gaussians)
-            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ[i, j], pϕ[i, j]; kwargs...)
+    for i in eachindex(gxs)
+        x = gxs[i]
+        for j in eachindex(gys)
+            w = pϕ[i, j]
+            # A zero weight bounds the overlap to (0, 0), so the distance bounds need not
+            # be evaluated at all.
+            iszero(w) && continue
+            lb, ub = (lb, ub) .+ gauss_l2_bounds(x, gys[j], R, T, σᵣ, σₜ, pσ[i, j], w; kwargs...)
         end
     end
     return lb, ub

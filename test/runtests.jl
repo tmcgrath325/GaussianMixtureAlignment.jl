@@ -570,6 +570,88 @@ end
     @test !(force(x, y) ≈ force(x, y; interactions = Dict((:A, :B) => 1.0)))
 end
 
+@testset "zero-weight pairs contribute nothing to overlap" begin
+    # `overlap` and `gauss_l2_bounds` skip Gaussian pairs whose weight is zero. Every pair
+    # of a labeled GMM whose labels do not interact has such a weight, so the skip has to
+    # reproduce a summation over all pairs exactly.
+    gx = [
+        IsotropicGaussian([0.0, 0.0, 0.0], 1.0, 1.0),
+        IsotropicGaussian([1.0, 0.0, 0.0], 1.3, 2.0),
+        IsotropicGaussian([0.0, 1.0, 0.5], 0.8, 1.5),
+    ]
+    gy = [
+        IsotropicGaussian([0.5, 0.2, 0.0], 1.0, 1.0),
+        IsotropicGaussian([1.7, 0.0, 0.3], 1.1, 0.7),
+        IsotropicGaussian([0.2, 0.9, 0.1], 0.9, 1.2),
+    ]
+    x = LabeledIsotropicGMM(gx, [:A, :B, :C])
+    y = LabeledIsotropicGMM(gy, [:A, :B, :C])
+    # :C interacts with nothing, and (:A,:B) is negative, as a charge penalty would be
+    interactions = Dict((:A, :A) => 1.0, (:B, :B) => 2.0, (:A, :B) => -1.5)
+
+    pσ, pϕ = GMA.pairwise_consts(x, y, interactions)
+    @test count(iszero, pϕ) > 0                                    # the skip is exercised
+    # pσ/pϕ are indexed [x, y]
+    @test size(pσ) == size(pϕ) == (length(gx), length(gy))
+    coefficient(a, b) = get(interactions, (a, b), get(interactions, (b, a), 0.0))
+    @test all(
+        pσ[i, j] == gx[i].σ^2 + gy[j].σ^2 &&
+            pϕ[i, j] == coefficient(x.labels[i], y.labels[j]) * gx[i].ϕ * gy[j].ϕ
+            for i in eachindex(gx), j in eachindex(gy)
+    )
+    naive = sum(
+        pϕ[i, j] * exp(-sum(abs2, gx[i].μ - gy[j].μ) / (2 * pσ[i, j]))
+            for i in eachindex(gx), j in eachindex(gy)
+    )
+    @test overlap(x, y; interactions) ≈ naive
+    @test overlap(x, y, pσ, pϕ) ≈ naive
+
+    # pσ/pϕ index the Gaussians from 1, so offset inputs are rejected, not mis-indexed
+    @test_throws "offset arrays are not supported" overlap(x, y, OffsetArray(pσ, 0:2, 0:2), OffsetArray(pϕ, 0:2, 0:2))
+
+    # an explicitly zero coefficient behaves exactly like an omitted one
+    @test overlap(x, y; interactions = Dict((:A, :A) => 0.0)) == 0.0
+    @test overlap(x, y; interactions = Dict((:A, :A) => 0.0, (:B, :B) => 2.0)) ≈
+        overlap(x, y; interactions = Dict((:B, :B) => 2.0))
+
+    # gauss_l2_bounds skips the same pairs, and must match a sum over every pair
+    R, T = RotationVec(0.2, -0.1, 0.35), SVector(0.3, -0.2, 0.1)
+    σᵣ, σₜ = 0.4, 0.25
+    lb, ub = gauss_l2_bounds(x, y, R, T, σᵣ, σₜ, pσ, pϕ)
+    naive_lb, naive_ub = 0.0, 0.0
+    for i in eachindex(gx), j in eachindex(gy)
+        naive_lb, naive_ub = (naive_lb, naive_ub) .+
+            gauss_l2_bounds(gx[i], gy[j], R, T, σᵣ, σₜ, pσ[i, j], pϕ[i, j])
+    end
+    @test lb ≈ naive_lb
+    @test ub ≈ naive_ub
+    # the objective at the region's center lies within the bounds it brackets
+    @test lb <= -overlap(R * x + T, y, pσ, pϕ) <= ub
+end
+
+@testset "overlap keeps zero-valued weights that carry a derivative" begin
+    # pϕ = coefficient * ϕx * ϕy, so differentiating with respect to an amplitude that is
+    # itself zero yields a weight with zero value and a nonzero partial. Such a term still
+    # contributes to the derivative and must not be skipped: `iszero` on a dual number is
+    # false unless the partials vanish too, which is what makes the skip sound.
+    @test !iszero(ForwardDiff.Dual(0.0, 1.0))
+    @test iszero(ForwardDiff.Dual(0.0, 0.0))
+
+    yg = LabeledIsotropicGMM([IsotropicGaussian([0.5, 0.0, 0.0], 1.0, 2.0)], [:A])
+    coefficient = 3.0
+    ovlp(ϕ) = overlap(
+        LabeledIsotropicGMM([IsotropicGaussian(SVector(0.0, 0.0, 0.0), 1.0, ϕ)], [:A]),
+        yg; interactions = Dict((:A, :A) => coefficient)
+    )
+
+    @test ovlp(0.0) == 0.0                       # the value really is zero at ϕ = 0
+    # d/dϕ [c * ϕ * ϕy * exp(-d²/2s)] = c * ϕy * exp(-d²/2s)
+    analytic = coefficient * 2.0 * exp(-0.5^2 / (2 * (1.0^2 + 1.0^2)))
+    @test ForwardDiff.derivative(ovlp, 0.0) ≈ analytic
+    @test ForwardDiff.derivative(ovlp, 0.0) ≈ central_fdm(5, 1)(ovlp, 0.0)
+    @test ForwardDiff.derivative(ovlp, 0.0) != 0.0
+end
+
 @testset "Forces" begin
     μx = randn(SVector{3, Float64})
     μy = randn(SVector{3, Float64})
