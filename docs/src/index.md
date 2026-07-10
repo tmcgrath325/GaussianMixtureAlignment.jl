@@ -35,6 +35,10 @@ interaction matrix controls which feature pairs attract or repel.
 
 For aligning raw point sets (no Gaussian smoothing), see `goicp_align` and `goih_align`.
 
+For models whose features are connected by rotatable joints — such as a molecule's rotatable
+bonds — `flex_gogma_align` optimizes a rotation angle per joint alongside the rigid transform,
+still within the branch-and-bound framework.
+
 ## Quick start
 
 Build a pair of GMMs and compute their overlap:
