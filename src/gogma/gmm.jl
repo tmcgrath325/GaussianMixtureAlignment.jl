@@ -167,6 +167,48 @@ eltype(::Type{LabeledIsotropicGMM{N, T, K}}) where {N, T, K} = IsotropicGaussian
 (gmm::LabeledIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
 
 """
+    TIVGMM(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+
+Translation-invariant-vector model built from a `LabeledIsotropicGMM` by [`tivgmm`](@ref).
+Each Gaussian's mean is the difference vector `μ_head - μ_tail` between two features of the
+source model; the widths, weights, and labels of both endpoint features are kept in the
+parallel `head*`/`tail*` vectors so that a TIV pair can be scored as the sum of a head-head
+and a tail-tail feature overlap (see `tiv_pairwise_consts`). Endpoint positions are not
+stored: they are not translation invariant, so they would go stale under the rigid
+transformations applied during rotational search.
+
+The `σ` and `ϕ` stored on the Gaussians themselves are the geometric means of the endpoint
+values, used only where a TIV must be treated as a single feature (e.g. the generic
+`pairwise_consts` fallback).
+"""
+struct TIVGMM{N, T, K} <: AbstractIsotropicGMM{N, T}
+    gaussians::Vector{IsotropicGaussian{N, T}}
+    headσ::Vector{T}
+    headϕ::Vector{T}
+    headlabels::Vector{K}
+    tailσ::Vector{T}
+    tailϕ::Vector{T}
+    taillabels::Vector{K}
+    function TIVGMM{N, T, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels) where {N, T, K}
+        n = length(gaussians)
+        for v in (headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+            length(v) == n ||
+                throw(DimensionMismatch("each endpoint vector must match the number of Gaussians ($n); got length $(length(v))"))
+        end
+        return new{N, T, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+    end
+end
+
+function TIVGMM(
+        gaussians::AbstractVector{IsotropicGaussian{N, T}}, headσ, headϕ, headlabels::AbstractVector{K},
+        tailσ, tailϕ, taillabels::AbstractVector{K}
+    ) where {N, T, K}
+    return TIVGMM{N, T, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+end
+
+eltype(::Type{TIVGMM{N, T, K}}) where {N, T, K} = IsotropicGaussian{N, T}
+
+"""
     IsotropicMultiGMM(gmms)
 
 A keyed collection of `IsotropicGMM`s, each considered separately during alignment.

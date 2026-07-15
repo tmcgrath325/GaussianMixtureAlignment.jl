@@ -11,6 +11,7 @@ using ADTypes
 using Aqua
 using ExplicitImports
 using OffsetArrays
+using JLD2
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, squared_dist_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
@@ -1278,4 +1279,104 @@ end
     xset = PointSet(P); yset = PointSet(Q)
     @test GMA.icp(xset, yset) isa Vector{<:Tuple{Int, Int}}
     @test GMA.iterative_hungarian(xset, yset) isa Vector{<:Tuple{Int, Int}}
+end
+
+@testset "TIV alignment with interactions" begin
+    models = JLD2.load(joinpath(@__DIR__, "..", "assets", "test_models.jld2"))["models"]
+    x = models[1]
+
+    # tivgmm on a labeled GMM keeps each TIV's endpoint widths, weights, and labels;
+    # zero-length TIVs (i == j) are excluded as rotation-independent
+    tiv = GMA.tivgmm(x)
+    @test tiv isa GMA.TIVGMM{3, Float64, Symbol}
+    @test length(tiv) == length(x)^2 - length(x)
+    @test length(GMA.tivgmm(x, 3.0)) == 3 * length(x)                  # radius cutoff limits the count
+    # each TIV's mean and endpoint data are consistent with a pair of source features
+    @test all(eachindex(tiv.gaussians)) do i
+        any(Iterators.product(pairs(x.gaussians), pairs(x.gaussians))) do ((a, ga), (b, gb))
+            tiv.gaussians[i].μ == ga.μ - gb.μ &&
+                (tiv.headσ[i], tiv.headϕ[i], tiv.headlabels[i]) == (ga.σ, ga.ϕ, x.labels[a]) &&
+                (tiv.tailσ[i], tiv.tailϕ[i], tiv.taillabels[i]) == (gb.σ, gb.ϕ, x.labels[b])
+        end
+    end
+
+    # two-term pairwise constants: hand-computed on a two-feature toy
+    ga = GMA.IsotropicGaussian(SVector(0.0, 0.0, 0.0), 0.5, 2.0)
+    gb = GMA.IsotropicGaussian(SVector(1.0, 0.0, 0.0), 1.0, 3.0)
+    toy = LabeledIsotropicGMM([ga, gb], [:A, :B])
+    ttoy = GMA.tivgmm(toy)
+    toyints = Dict((:A, :A) => 1.0, (:B, :B) => 1.0, (:A, :B) => 0.25)
+    tpσ, tpϕ = GMA.tiv_pairwise_consts(ttoy, ttoy, toyints)
+    i_ab = findfirst(==((:A, :B)), collect(zip(ttoy.headlabels, ttoy.taillabels)))
+    let i = i_ab, j = i_ab
+        s_h = 2 * 0.5^2                              # head-head: both endpoints are feature a
+        s_t = 2 * 1.0^2                              # tail-tail: both endpoints are feature b
+        s_sum = s_h + s_t
+        @test tpσ[i, j] ≈ SVector(s_sum^2 / s_h, s_sum^2 / s_t)
+        @test tpϕ[i, j] ≈ SVector(1.0 * 2.0^2, 1.0 * 3.0^2)
+    end
+
+    # direction sensitivity: an antiparallel match pairs head with tail, so its terms carry the
+    # cross coefficient instead of the self coefficients
+    i_ba = findfirst(==((:B, :A)), collect(zip(ttoy.headlabels, ttoy.taillabels)))
+    @test tpϕ[i_ab, i_ba] ≈ SVector(0.25 * 2.0 * 3.0, 0.25 * 3.0 * 2.0)
+
+    # with no interactions dictionary, only equal-label endpoint pairs contribute with
+    # coefficient 1 (matching the labeled `pairwise_consts` default)
+    self_toy = Dict((:A, :A) => 1.0, (:B, :B) => 1.0)
+    @test GMA.tiv_pairwise_consts(ttoy, ttoy, nothing) == GMA.tiv_pairwise_consts(ttoy, ttoy, self_toy)
+    @test GMA.tiv_pairwise_consts(ttoy, ttoy, nothing)[2][i_ab, i_ba] == SVector(0.0, 0.0)
+
+    # the two-term kernel sums per-term overlaps, and its bounds sandwich the objective
+    @test overlap(0.7, SVector(2.0, 4.0), SVector(1.5, -0.5)) ≈
+        overlap(0.7, 2.0, 1.5) + overlap(0.7, 4.0, -0.5)
+    let block = UncertaintyRegion(RotationVec(0.1, -0.2, 0.3), SVector(0.0, 0.0, 0.0), 0.3, 0.0)
+        mixσ, mixϕ = SVector(2.0, 4.0), SVector(1.5, -0.5)
+        lb, ub = gauss_l2_bounds(ga, gb, block, mixσ, mixϕ)
+        obj_center = -overlap(sum(abs2, block.R * ga.μ - gb.μ), mixσ, mixϕ)
+        @test ub ≈ obj_center
+        @test lb <= ub
+    end
+
+    # repulsion penalizes: a doubly-repulsive TIV pair has both term weights negative,
+    # unlike a product of coefficients, for which the signs would cancel
+    rep = Dict((:A, :A) => -1.0, (:B, :B) => -0.5)
+    reppϕ = GMA.tiv_pairwise_consts(ttoy, ttoy, rep)[2]
+    @test all(<(0), reppϕ[i_ab, i_ab])
+
+    # end-to-end: a known rotation is recovered, and interactions are honored in both stages
+    Rtrue = RotationVec(0.5, -0.3, 0.8)
+    labels = sort(unique(x.labels))
+    self_interactions = Dict((l, l) => 1.0 for l in labels)
+    res = tiv_gogma_align(Rtrue * x, x; interactions = self_interactions, cutoff_x = 3.0, cutoff_y = 3.0, maxsplits = 2.0e3)
+    Rfound = RotationVec(res.tform_params[1:3]...)
+    @test rad2deg(rotation_angle(Rtrue * Rfound)) < 1.0e-2             # recovers the rotation
+    @test res.upperbound ≈ -overlap(x, x; interactions = self_interactions) rtol = 1.0e-3
+
+    # half-matches steer the rotation search: with a single interacting feature amid inert
+    # ones, every TIV has a non-interacting endpoint, so a per-TIV coefficient *product*
+    # would zero the entire rotation objective; summed endpoint terms recover the rotation
+    # from the interacting-feature halves alone
+    hm_pts = [SVector(0.0, 0.0, 0.0), SVector(2.0, 0.0, 0.0), SVector(0.0, 3.0, 0.5), SVector(-1.0, -1.0, 2.0)]
+    hm = LabeledIsotropicGMM([IsotropicGaussian(p, 0.4, 1.0) for p in hm_pts], [:A, :B, :B, :B])
+    hm_ints = Dict((:A, :A) => 1.0)
+    hmpϕ = GMA.tiv_pairwise_consts(GMA.tivgmm(hm), GMA.tivgmm(hm), hm_ints)[2]
+    @test all(v -> iszero(v[1]) || iszero(v[2]), hmpϕ)                 # every pair product is zero
+    @test any(v -> !iszero(v), hmpϕ)                                   # but half-matches remain
+    hm_res = tiv_gogma_align(Rtrue * hm, hm; interactions = hm_ints, maxsplits = 5.0e3)
+    @test rad2deg(rotation_angle(Rtrue * RotationVec(hm_res.tform_params[1:3]...))) < 1.0e-2
+
+    # coplanar models: a 180° spin about the plane normal maps every TIV to its negative, so
+    # the unlabeled TIV objective is exactly degenerate; endpoint labels break the tie
+    pl_pts = [SVector(1.0, 0.0, 0.0), SVector(-1.0, 0.5, 0.0), SVector(0.3, 1.2, 0.0), SVector(-0.4, -0.9, 0.0)]
+    pl = LabeledIsotropicGMM([IsotropicGaussian(p, 0.5, 1.0) for p in pl_pts], [:A, :A, :B, :B])
+    pl_tiv = GMA.tivgmm(pl)
+    pl_plain = GMA.tivgmm(IsotropicGMM(pl.gaussians))
+    spin = RotationVec(0.0, 0.0, π)
+    @test overlap(spin * pl_plain, pl_plain) ≈ overlap(pl_plain, pl_plain)
+    plpσ, plpϕ = GMA.tiv_pairwise_consts(pl_tiv, pl_tiv, nothing)
+    @test overlap(spin * pl_tiv, pl_tiv, plpσ, plpϕ) < overlap(pl_tiv, pl_tiv, plpσ, plpϕ)
+
+    # the interactions keyword is threaded through without breaking the unlabeled path
+    @test isfinite(tiv_gogma_align(Rtrue * IsotropicGMM(x.gaussians), IsotropicGMM(x.gaussians); cutoff_x = 3.0, cutoff_y = 3.0, maxsplits = 2.0e3).upperbound)
 end

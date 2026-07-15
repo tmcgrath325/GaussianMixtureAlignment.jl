@@ -11,6 +11,25 @@ function overlap(distsq::Real, s::Real, w::Real)
 end
 
 """
+    ovlp = overlap(distsq, s::AbstractVector, w::AbstractVector)
+
+Sum of per-term overlaps for a multi-term kernel evaluated at a single squared distance:
+entry `k` of `s` and `w` is the width and weight of one Gaussian term. `TIVGMM` pairwise
+constants store the head and tail overlap terms of each TIV pair this way (see
+`tiv_pairwise_consts`). Zero-weight terms are skipped; `iszero` is false for a dual number
+carrying a nonzero partial, so a weight that is zero-valued but differentiated is still
+accumulated.
+"""
+function overlap(distsq::Real, s::AbstractVector, w::AbstractVector)
+    ovlp = zero(promote_type(eltype(s), eltype(w), typeof(distsq)))
+    for k in eachindex(s, w)
+        iszero(w[k]) && continue
+        ovlp += overlap(distsq, s[k], w[k])
+    end
+    return ovlp
+end
+
+"""
     ovlp = overlap(dist, σx, σy, ϕx, ϕy)
 
 Calculate the unnormalized overlap between two Gaussian distributions with standard deviations

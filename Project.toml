@@ -1,6 +1,6 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
 
 [deps]
@@ -38,6 +38,7 @@ GenericLinearAlgebra = "0.3"
 GeometryBasics = "0.5"
 Hungarian = "0.7"
 IntervalSets = "0.7"
+JLD2 = "0.5, 0.6"
 LinearAlgebra = "1.10"
 Makie = "0.24"
 MutableConvexHulls = "0.3"
@@ -56,8 +57,9 @@ ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "OffsetArrays", "Test", "FiniteDifferences", "ForwardDiff", "IntervalSets"]
+test = ["Aqua", "ExplicitImports", "OffsetArrays", "Test", "FiniteDifferences", "ForwardDiff", "IntervalSets", "JLD2"]

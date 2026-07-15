@@ -60,11 +60,20 @@ GMM size at the cost of some accuracy in the rotation phase.
 Returns a `TIVAlignmentResult` whose `.rotation_result` and `.translation_result` fields
 hold the individual `GlobalAlignmentResult`s. Accepts the same additional keyword arguments
 as `gogma_align`.
+
+# Keyword arguments
+- `interactions`: optional interaction-coefficient dictionary between labeled GMM components
+  (only used when both inputs are `AbstractLabeledIsotropicGMM`). The rotation stage scores
+  each TIV match as the sum of its head-head and tail-tail feature overlaps, each weighted by
+  that endpoint pair's interaction coefficient, so repulsive endpoint matches penalize the
+  rotation search; see `tiv_pairwise_consts`.
+- `cutoff_x`, `cutoff_y`: TIV radius cutoffs (default `Inf`)
+- `autodiff`: autodiff backend for local optimization (default: `AutoForwardDiff()`)
 """
-function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; cutoff_x = Inf, cutoff_y = Inf, autodiff = AutoForwardDiff(), kwargs...)
+function tiv_gogma_align(gmmx::AbstractGMM, gmmy::AbstractGMM; cutoff_x = Inf, cutoff_y = Inf, interactions = nothing, autodiff = AutoForwardDiff(), kwargs...)
     tivgmmx, tivgmmy = tivgmm(gmmx, cutoff_x), tivgmm(gmmy, cutoff_y)
-    pσ, pϕ = pairwise_consts(gmmx, gmmy)
-    tivpσ, tivpϕ = pairwise_consts(tivgmmx, tivgmmy)
+    pσ, pϕ = pairwise_consts(gmmx, gmmy, interactions)
+    tivpσ, tivpϕ = tiv_pairwise_consts(tivgmmx, tivgmmy, interactions)
     boundsfun(x, y, block) = gauss_l2_bounds(x, y, block, pσ, pϕ)
     rot_boundsfun(x, y, block) = gauss_l2_bounds(x, y, block, tivpσ, tivpϕ)
     localfun(x, y, block) = local_align(x, y, block, pσ, pϕ; autodiff)
