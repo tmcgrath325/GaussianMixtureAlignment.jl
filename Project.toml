@@ -1,6 +1,6 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
 
 [deps]
