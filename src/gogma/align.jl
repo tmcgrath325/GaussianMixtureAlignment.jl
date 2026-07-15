@@ -63,8 +63,10 @@ as `gogma_align`.
 
 # Keyword arguments
 - `interactions`: optional interaction-coefficient dictionary between labeled GMM components
-  (only used when both inputs are `AbstractLabeledIsotropicGMM`). The rotation stage weights
-  each TIV match by the product of its endpoints' interactions; see `tiv_pairwise_consts`.
+  (only used when both inputs are `AbstractLabeledIsotropicGMM`). The rotation stage scores
+  each TIV match as the sum of its head-head and tail-tail feature overlaps, each weighted by
+  that endpoint pair's interaction coefficient, so repulsive endpoint matches penalize the
+  rotation search; see `tiv_pairwise_consts`.
 - `cutoff_x`, `cutoff_y`: TIV radius cutoffs (default `Inf`)
 - `autodiff`: autodiff backend for local optimization (default: `AutoForwardDiff()`)
 """

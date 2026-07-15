@@ -158,6 +158,28 @@ function gauss_l2_bounds(x::AbstractIsotropicGaussian, y::AbstractIsotropicGauss
     return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
 end
 
+# multi-term kernel (e.g. the head and tail overlap terms of a TIV pair; see
+# `tiv_pairwise_consts`): sum per-term bounds, where each term's distance bounds depend on the
+# sign of its weight
+function gauss_l2_bounds(
+        x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ,
+        s::AbstractVector, w::AbstractVector; distance_bound_fun = tight_distance_bounds
+    )
+    xμ = R * x.μ
+    yμ = y.μ - T
+    mindists = distance_bound_fun(xμ, yμ, σᵣ, σₜ, false)
+    maxdists = any(wk -> wk < 0, w) ? distance_bound_fun(xμ, yμ, σᵣ, σₜ, true) : mindists
+    lb = ub = zero(promote_type(eltype(s), eltype(w)))
+    for k in eachindex(s, w)
+        wk = w[k]
+        iszero(wk) && continue
+        (lbdist, ubdist) = wk < 0 ? maxdists : mindists
+        lb -= overlap(lbdist^2, s[k], wk)
+        ub -= overlap(ubdist^2, s[k], wk)
+    end
+    return lb, ub
+end
+
 # gauss_l2_bounds(x::AbstractGaussian, y::AbstractGaussian, R::RotationVec, T::SVector{3}, σᵣ, σₜ, s=x.σ^2 + y.σ^2, w=x.ϕ*y.ϕ; kwargs...
 #     ) = gauss_l2_bounds(R*x, y-T, σᵣ, σₜ, tform.translation, s, w; kwargs...)
 
