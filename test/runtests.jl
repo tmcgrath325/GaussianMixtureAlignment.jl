@@ -11,6 +11,7 @@ using ADTypes
 using Aqua
 using ExplicitImports
 using OffsetArrays
+using JLD2
 
 using GaussianMixtureAlignment: UncertaintyRegion, RotationRegion, TranslationRegion
 using GaussianMixtureAlignment: tight_distance_bounds, loose_distance_bounds, squared_dist_bounds, gauss_l2_bounds, subranges, sqrt3, UncertaintyRegion, subregions, branchbound, rocs_align, overlap, gogma_align, tiv_gogma_align, tiv_goih_align, overlapobj
@@ -1278,4 +1279,48 @@ end
     xset = PointSet(P); yset = PointSet(Q)
     @test GMA.icp(xset, yset) isa Vector{<:Tuple{Int, Int}}
     @test GMA.iterative_hungarian(xset, yset) isa Vector{<:Tuple{Int, Int}}
+end
+
+@testset "TIV alignment with interactions" begin
+    models = JLD2.load(joinpath(@__DIR__, "..", "assets", "test_models.jld2"))["models"]
+    x = models[1]
+
+    # tivgmm on a labeled GMM carries endpoint label-pairs
+    tiv = GMA.tivgmm(x)
+    @test tiv isa LabeledIsotropicGMM{3, Float64, Tuple{Symbol, Symbol}}
+    @test length(tiv) == length(x)^2                                   # c = Inf: all ordered pairs
+    @test length(GMA.tivgmm(x, 3.0)) == 3 * length(x)                  # radius cutoff limits the count
+    # the plain (unlabeled) TIVs match the labeled ones' means, so the label attachment is the
+    # only difference from the generic method
+    plain = GMA.tivgmm(IsotropicGMM(x.gaussians))
+    @test [g.μ for g in tiv.gaussians] == [g.μ for g in plain.gaussians]
+
+    # derived TIV interactions: one ordering per unordered TIV-label pair (so pairwise_consts
+    # accepts them), coefficient equal to the product of the endpoint interactions
+    labels = sort(unique(x.labels))
+    interactions = Dict((l, l) => 1.0 for l in labels)
+    interactions[(:Blue, :Green)] = 2.0
+    ty = GMA.tivgmm(models[2])
+    derived = GMA.tiv_interactions(interactions, unique(tiv.labels), unique(ty.labels))
+    @test GMA.validate_interactions(derived)
+    # resolved in either ordering, the coefficient is the product of the endpoint interactions
+    @test GMA.interaction_coefficient(derived, (:Blue, :White), (:Green, :White)) ==
+        GMA.interaction_coefficient(interactions, :Blue, :Green) *
+        GMA.interaction_coefficient(interactions, :White, :White)
+
+    # with no interactions, the labeled TIV constants reduce to the plain pairwise constants
+    @test GMA.tiv_pairwise_consts(tiv, ty, nothing) == GMA.pairwise_consts(tiv, ty)
+    # a non-default interaction dictionary changes the weights
+    @test GMA.tiv_pairwise_consts(tiv, ty, interactions)[2] != GMA.tiv_pairwise_consts(tiv, ty, nothing)[2]
+
+    # end-to-end: a known rotation is recovered, and interactions are honored in both stages
+    Rtrue = RotationVec(0.5, -0.3, 0.8)
+    self_interactions = Dict((l, l) => 1.0 for l in labels)
+    res = tiv_gogma_align(Rtrue * x, x; interactions = self_interactions, cutoff_x = 3.0, cutoff_y = 3.0, maxsplits = 2.0e3)
+    Rfound = RotationVec(res.tform_params[1:3]...)
+    @test rad2deg(rotation_angle(Rtrue * Rfound)) < 1.0e-2             # recovers the rotation
+    @test res.upperbound ≈ -overlap(x, x; interactions = self_interactions) rtol = 1.0e-3
+
+    # the interactions keyword is threaded through without breaking the unlabeled path
+    @test isfinite(tiv_gogma_align(Rtrue * IsotropicGMM(x.gaussians), IsotropicGMM(x.gaussians); cutoff_x = 3.0, cutoff_y = 3.0, maxsplits = 2.0e3).upperbound)
 end
