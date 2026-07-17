@@ -83,6 +83,27 @@ end
     lbn, ubn = tight_distance_bounds(xpar, -1.3 * xpar, 0.1, 0.0)        # anti-parallel, minimize
     @test isfinite(lbn) && isfinite(ubn)
     @test 0 ≤ lbn ≤ ubn
+    # nearly-coincident points: the outer law-of-cosines radicand
+    # xnorm²+ynorm²-2·xnorm·ynorm·cos(α∓β) is a squared distance (≥ 0) that rounds
+    # slightly negative when the points nearly coincide (equal norms, α ≈ β),
+    # which threw a DomainError under the √ before the radicand was clamped.
+    xthrow = SVector(2.7731554579023157, 0.0, 0.0)                       # threw DomainError pre-fix
+    ythrow = SVector(1.9505050369704133, 1.9712740290736779, 0.0)
+    lbt, ubt = tight_distance_bounds(xthrow, ythrow, 0.4565073488921946, 0.0)
+    @test isfinite(lbt) && isfinite(ubt)
+    @test 0 ≤ lbt ≤ ubt
+    # dense sweep of near-coincident configurations (equal-ish norms, angle ≈ β):
+    # every case must yield finite, nonnegative bounds rather than throwing.
+    for r in (0.5, 2.0, 7.5), σᵣ in (0.1, 0.35, 0.45, 0.9), dθ in (-2.0e-9, 0.0, 3.0e-9), dr in (-1.0e-9, 0.0, 2.0e-9)
+        β = sqrt3 * σᵣ
+        xc = SVector(r, 0.0, 0.0)
+        yc = (r + dr) * SVector(cos(β + dθ), sin(β + dθ), 0.0)
+        for maxflag in (false, true)
+            lb, ub = tight_distance_bounds(xc, yc, σᵣ, 0.0, maxflag)
+            @test isfinite(lb) && isfinite(ub)
+            @test lb ≥ 0 && ub ≥ 0
+        end
+    end
 
     ### loose_distance_bounds
     # full rotation: the nearest point on the circle, matching the tight bound
