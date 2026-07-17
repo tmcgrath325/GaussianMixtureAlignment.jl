@@ -54,14 +54,17 @@ function tight_distance_bounds(x::SVector{3, <:Number}, y::SVector{3, <:Number},
         if cosα + cosβ <= 0
             lbdist = xnorm + ynorm + sqrt3 * σₜ
         else
-            lbdist = √(xnorm^2 + ynorm^2 - 2 * xnorm * ynorm * (cosα * cosβ - √((1 - cosα^2) * (1 - cosβ^2)))) + sqrt3 * σₜ
+            # Radicand is a squared distance (≥ 0 mathematically); clamp its
+            # floating-point residual so near-coincident points don't push it
+            # negative under the √.
+            lbdist = √(max(xnorm^2 + ynorm^2 - 2 * xnorm * ynorm * (cosα * cosβ - √((1 - cosα^2) * (1 - cosβ^2))), 0)) + sqrt3 * σₜ
         end
     else
         # lower bound distance from the nearest point on the "spherical cap"
         if cosα >= cosβ
             lbdist = max(abs(xnorm - ynorm) - sqrt3 * σₜ, 0)
         else
-            lbdist = max(√(xnorm^2 + ynorm^2 - 2 * xnorm * ynorm * (cosα * cosβ + √((1 - cosα^2) * (1 - cosβ^2)))) - sqrt3 * σₜ, 0)  # law of cosines
+            lbdist = max(√(max(xnorm^2 + ynorm^2 - 2 * xnorm * ynorm * (cosα * cosβ + √((1 - cosα^2) * (1 - cosβ^2))), 0)) - sqrt3 * σₜ, 0)  # law of cosines (radicand clamped ≥ 0 against float residual)
         end
     end
 
