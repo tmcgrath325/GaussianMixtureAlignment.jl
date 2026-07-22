@@ -24,6 +24,9 @@ IsotropicGaussian
 IsotropicGMM
 IsotropicMultiGMM
 LabeledIsotropicGMM
+StackedLabeledGaussian
+StackedLabeledIsotropicGMM
+stackedgmm
 ```
 
 ### Point set types
