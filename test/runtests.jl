@@ -215,6 +215,8 @@ end
     @test !isa(GMA.coords(gmm), StaticArray)
     @test !isa(GMA.weights(gmm), StaticArray)
     @test !isa(GMA.widths(gmm), StaticArray)
+    @test GMA.weights(gmm) == [g.ϕ for g in s_gs] == fill(1.0, 4)
+    @test GMA.widths(gmm) == [g.σ for g in s_gs] == fill(0.5, 4)
     mgmmx = IsotropicMultiGMM(
         Dict(
             :positive => IsotropicGMM([ch_g]),
@@ -244,6 +246,7 @@ end
     @test !isa(GMA.coords(mgmmx), StaticArray)
     @test !isa(GMA.weights(mgmmx), StaticArray)
     @test !isa(GMA.widths(mgmmx), StaticArray)
+    @test sort(GMA.widths(mgmmx)) == [0.5, 0.5, 0.5, 0.5, 1.0]
     empty!(mgmmx)
     @test isempty(mgmmx)
 end
@@ -403,6 +406,12 @@ end
 
     # ROCS alignment should work perfectly for these GMMs
     @test isapprox(rocs_align(gmmx, gmmy).minimum, -overlap(gmmx, gmmx); atol = 1.0e-12)
+
+    # non-uniform σ and ϕ: the inertial starting orientations depend on the widths through
+    # the mass matrix, so recovery here requires `widths` to actually return σ
+    gx2 = IsotropicGMM([IsotropicGaussian(x, 0.5 + 0.3i, 1.0 + 0.5i) for (i, x) in enumerate(xpts)])
+    gy2 = AffineMap(RotationVec(0.4, -0.3, 0.7), SVector(1.0, -2.0, 0.5))(gx2)
+    @test isapprox(rocs_align(gx2, gy2).minimum, -overlap(gx2, gx2); atol = 1.0e-6)
 end
 
 @testset "AlignmentResults interface" begin

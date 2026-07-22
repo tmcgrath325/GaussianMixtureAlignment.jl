@@ -69,7 +69,7 @@ empty!(gmm::AbstractSingleGMM) = empty!(gmm.gaussians)
 
 coords(gmm::AbstractSingleGMM) = reduce(hcat, [g.μ for g in gmm.gaussians])
 weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
-widths(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
+widths(gmm::AbstractSingleGMM) = [g.σ for g in gmm.gaussians]
 
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
