@@ -25,10 +25,11 @@ using NearestNeighbors: NearestNeighbors, Euclidean, KDTree, nn
 using Optim: Optim, Fminbox, LBFGS, optimize
 using PairedLinkedLists: PairedLinkedLists, ListNodeIterator, deletenode!, getnode, target
 using Rotations: Rotations, AngleAxis, RotationVec
-using StaticArrays: StaticArrays, SMatrix, SVector
+using StaticArrays: StaticArrays, MVector, SMatrix, SVector
 
 export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
+export StackedLabeledGaussian, StackedLabeledIsotropicGMM, stackedgmm
 export overlap, force!, force, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
 export rocs_align
 export PointSet, MultiPointSet

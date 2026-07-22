@@ -38,6 +38,15 @@ abstract type AbstractLabeledIsotropicGMM{N, T, K} <: AbstractIsotropicGMM{N, T}
 # concrete subtypes:
 #   LabeledIsotropicGMM
 
+"""
+Abstract base type for single isotropic GMMs whose Gaussians each stack `L` labeled features
+on a shared mean, with slot-wise widths, amplitudes, and labels (see
+`StackedLabeledGaussian`). Concrete implementation: `StackedLabeledIsotropicGMM`.
+"""
+abstract type AbstractStackedLabeledIsotropicGMM{N, T, L, K} <: AbstractIsotropicGMM{N, T} end
+# concrete subtypes:
+#   StackedLabeledIsotropicGMM
+
 abstract type AbstractMultiGMM{N, T, K} <: AbstractGMM{N, T} end
 abstract type AbstractIsotropicMultiGMM{N, T, K} <: AbstractMultiGMM{N, T, K} end
 # concrete subtypes:
@@ -209,6 +218,211 @@ end
 eltype(::Type{TIVGMM{N, T, K}}) where {N, T, K} = IsotropicGaussian{N, T}
 
 """
+    StackedLabeledGaussian(μ, σ, ϕ, labels)
+
+`L` isotropic Gaussian features stacked on a single point: one mean `μ` shared by all slots,
+with slot-wise widths `σ`, amplitudes `ϕ`, and labels stored as length-`L` `SVector`s. Slot
+`k` represents an isotropic Gaussian with mean `μ`, width `σ[k]`, amplitude `ϕ[k]`, and
+label `labels[k]`.
+
+Slots with `ϕ = 0` contribute nothing to overlaps, so a point with fewer than `L` features
+is padded with amplitude-zero slots. A padded slot's width is arbitrary but must be positive
+(conventionally `σ = 1`), and its label may repeat any valid label.
+"""
+struct StackedLabeledGaussian{N, T, L, K} <: AbstractIsotropicGaussian{N, T}
+    μ::SVector{N, T}
+    σ::SVector{L, T}
+    ϕ::SVector{L, T}
+    labels::SVector{L, K}
+    function StackedLabeledGaussian{N, T, L, K}(μ, σ, ϕ, labels) where {N, T, L, K}
+        g = new{N, T, L, K}(μ, σ, ϕ, labels)
+        all(>(0), g.σ) || throw(ArgumentError("all slot widths must be positive, including padded slots (pad with σ = 1, ϕ = 0); got σ = $(g.σ)"))
+        return g
+    end
+end
+
+function StackedLabeledGaussian(μ::AbstractVector, σ::AbstractVector, ϕ::AbstractVector, labels::AbstractVector)
+    length(σ) == length(ϕ) == length(labels) ||
+        throw(DimensionMismatch("σ, ϕ, and labels must have equal lengths; got $(length(σ)), $(length(ϕ)), and $(length(labels))"))
+    t = promote_type(eltype(μ), eltype(σ), eltype(ϕ))
+    return StackedLabeledGaussian{length(μ), t, length(σ), eltype(labels)}(μ, σ, ϕ, labels)
+end
+
+StackedLabeledGaussian(g::StackedLabeledGaussian) = StackedLabeledGaussian(g.μ, g.σ, g.ϕ, g.labels)
+StackedLabeledGaussian(g::AbstractIsotropicGaussian, label) =
+    StackedLabeledGaussian(g.μ, SVector(g.σ), SVector(g.ϕ), SVector(label))
+
+convert(::Type{StackedLabeledGaussian{N, T, L, K}}, g::StackedLabeledGaussian) where {N, T, L, K} =
+    StackedLabeledGaussian{N, T, L, K}(g.μ, g.σ, g.ϕ, g.labels)
+promote_rule(::Type{StackedLabeledGaussian{N, T, L, K}}, ::Type{StackedLabeledGaussian{N, S, L, K}}) where {N, T, S, L, K} =
+    StackedLabeledGaussian{N, promote_type(T, S), L, K}
+
+function (g::StackedLabeledGaussian)(pos::AbstractVector)
+    distsq = sum(abs2, pos - g.μ)
+    return sum(g.ϕ[k] * exp(-distsq / (2 * g.σ[k]^2)) for k in eachindex(g.σ, g.ϕ))
+end
+
+"""
+    StackedLabeledIsotropicGMM(gaussians)
+    StackedLabeledIsotropicGMM(μs, σs, ϕs, labelss; padσ = 1)
+    StackedLabeledIsotropicGMM(gmm::AbstractLabeledIsotropicGMM)
+
+Gaussian Mixture Model in `N` dimensions whose components are
+`StackedLabeledGaussian{N,T,L,K}`s, each stacking `L` labeled features on a single mean.
+The stacking degree `L` is uniform across the model — enforced by the concrete element type
+— which keeps the pairwise constants type-stable; points with fewer features are padded with
+amplitude-zero slots.
+
+Compared to a `LabeledIsotropicGMM` that repeats a mean once per feature, aligning stacked
+models computes distances and distance bounds once per pair of means rather than once per
+pair of features, while producing identical overlaps and bounds (see [`stackedgmm`](@ref)).
+
+The four-vector form builds the model from per-point feature data: point `i` has mean
+`μs[i]` and features with widths `σs[i]`, amplitudes `ϕs[i]`, and labels `labelss[i]`. `L`
+is the maximum feature count; points with fewer features are padded with amplitude-zero
+slots of width `padσ`, repeating the point's first label. Every point must have at least one
+feature.
+
+Constructing from an `AbstractLabeledIsotropicGMM` lifts each labeled Gaussian to a
+single-slot (`L = 1`) stacked Gaussian without any grouping of equal means.
+"""
+struct StackedLabeledIsotropicGMM{N, T, L, K} <: AbstractStackedLabeledIsotropicGMM{N, T, L, K}
+    gaussians::Vector{StackedLabeledGaussian{N, T, L, K}}
+end
+
+StackedLabeledIsotropicGMM(gmm::AbstractStackedLabeledIsotropicGMM) = StackedLabeledIsotropicGMM(gmm.gaussians)
+StackedLabeledIsotropicGMM{N, T, L, K}() where {N, T, L, K} = StackedLabeledIsotropicGMM{N, T, L, K}(StackedLabeledGaussian{N, T, L, K}[])
+
+function StackedLabeledIsotropicGMM(gmm::AbstractLabeledIsotropicGMM{N, T, K}) where {N, T, K}
+    gaussians = [
+        StackedLabeledGaussian{N, T, 1, K}(g.μ, SVector(g.σ), SVector(g.ϕ), SVector(l))
+            for (g, l) in zip(gmm.gaussians, gmm.labels)
+    ]
+    return StackedLabeledIsotropicGMM{N, T, 1, K}(gaussians)
+end
+
+function StackedLabeledIsotropicGMM(μs::AbstractVector, σs::AbstractVector, ϕs::AbstractVector, labelss::AbstractVector; padσ = 1)
+    axes(μs) == axes(σs) == axes(ϕs) == axes(labelss) ||
+        throw(DimensionMismatch("μs, σs, ϕs, and labelss must share axes; got $(axes(μs)), $(axes(σs)), $(axes(ϕs)), and $(axes(labelss))"))
+    isempty(μs) && throw(ArgumentError("at least one point is required"))
+    for i in eachindex(σs, ϕs, labelss)
+        length(σs[i]) == length(ϕs[i]) == length(labelss[i]) ||
+            throw(DimensionMismatch("point $i has mismatched feature counts: $(length(σs[i])) widths, $(length(ϕs[i])) amplitudes, and $(length(labelss[i])) labels"))
+        isempty(σs[i]) && throw(ArgumentError("point $i has no features; every point needs at least one to supply a label for padded slots"))
+    end
+    N = length(first(μs))
+    T = promote_type(
+        mapreduce(eltype, promote_type, μs), mapreduce(eltype, promote_type, σs),
+        mapreduce(eltype, promote_type, ϕs), typeof(padσ)
+    )
+    K = mapreduce(eltype, promote_type, labelss)
+    L = maximum(length, σs)
+    gaussians = map(eachindex(μs, σs, ϕs, labelss)) do i
+        npad = L - length(σs[i])
+        σ = [σs[i]; fill(padσ, npad)]
+        ϕ = [ϕs[i]; zeros(npad)]
+        labels = [labelss[i]; fill(first(labelss[i]), npad)]
+        StackedLabeledGaussian{N, T, L, K}(μs[i], σ, ϕ, labels)
+    end
+    return StackedLabeledIsotropicGMM{N, T, L, K}(gaussians)
+end
+
+convert(::Type{GMM}, gmm::AbstractStackedLabeledIsotropicGMM) where {GMM <: StackedLabeledIsotropicGMM} = GMM(gmm.gaussians)
+promote_rule(::Type{StackedLabeledIsotropicGMM{N, T, L, K}}, ::Type{StackedLabeledIsotropicGMM{N, S, L, K}}) where {N, T, S, L, K} =
+    StackedLabeledIsotropicGMM{N, promote_type(T, S), L, K}
+eltype(::Type{StackedLabeledIsotropicGMM{N, T, L, K}}) where {N, T, L, K} = StackedLabeledGaussian{N, T, L, K}
+
+(gmm::StackedLabeledIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
+
+weights(gmm::AbstractStackedLabeledIsotropicGMM) = [sum(g.ϕ) for g in gmm.gaussians]
+# amplitude-weighted RMS width: reproduces the stack's total second moment Σₖ ϕₖσₖ² in the
+# `weights .* widths .^ 2` products consumed by `inertial_transforms`
+function widths(gmm::AbstractStackedLabeledIsotropicGMM{N, T}) where {N, T}
+    z = zero(sqrt(one(T)))
+    return map(gmm.gaussians) do g
+        ϕtot = sum(g.ϕ)
+        iszero(ϕtot) ? z : sqrt(sum(g.ϕ .* g.σ .^ 2) / ϕtot)
+    end
+end
+
+"""
+    sgmm = stackedgmm(gmm::AbstractLabeledIsotropicGMM)
+
+Convert a labeled GMM to a [`StackedLabeledIsotropicGMM`](@ref) by grouping Gaussians with
+exactly equal means into stacked components. The stacking degree is the largest group size;
+smaller groups are padded with amplitude-zero slots. Groups are ordered by first appearance,
+and features within a group keep their order in `gmm`.
+
+The result's stacking degree depends on run-time values, so this function is not type
+stable; the `*_align` entry points act as function barriers, so this does not affect
+alignment performance.
+"""
+function stackedgmm(gmm::AbstractLabeledIsotropicGMM{N, T, K}) where {N, T, K}
+    idxof = Dict{SVector{N, T}, Int}()
+    groups = Vector{Int}[]
+    for i in eachindex(gmm.gaussians)
+        gi = get!(idxof, gmm.gaussians[i].μ) do
+            push!(groups, Int[])
+            length(groups)
+        end
+        push!(groups[gi], i)
+    end
+    μs = [gmm.gaussians[first(group)].μ for group in groups]
+    σs = [[gmm.gaussians[i].σ for i in group] for group in groups]
+    ϕs = [[gmm.gaussians[i].ϕ for i in group] for group in groups]
+    labelss = [[gmm.labels[i] for i in group] for group in groups]
+    return StackedLabeledIsotropicGMM(μs, σs, ϕs, labelss; padσ = one(T))
+end
+
+"""
+    StackedTIVGMM(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+
+Translation-invariant-vector model built from a `StackedLabeledIsotropicGMM` by
+[`tivgmm`](@ref). Each Gaussian's mean is the difference vector between two stacked points
+of the source model; the slot-wise widths, amplitudes, and labels of both endpoint stacks
+are kept in the parallel `head*`/`tail*` vectors so that a TIV pair can be scored as the sum
+of head-head and tail-tail feature overlaps over all pairings of endpoint slots (see
+`tiv_pairwise_consts`). Endpoint positions are not stored: they are not translation
+invariant, so they would go stale under the rigid transformations applied during rotational
+search.
+
+The `σ` and `ϕ` stored on the Gaussians themselves are geometric means of aggregate endpoint
+values (total amplitude and amplitude-weighted RMS width), used only where a TIV must be
+treated as a single unlabeled feature.
+"""
+struct StackedTIVGMM{N, T, L, K} <: AbstractIsotropicGMM{N, T}
+    gaussians::Vector{IsotropicGaussian{N, T}}
+    headσ::Vector{SVector{L, T}}
+    headϕ::Vector{SVector{L, T}}
+    headlabels::Vector{SVector{L, K}}
+    tailσ::Vector{SVector{L, T}}
+    tailϕ::Vector{SVector{L, T}}
+    taillabels::Vector{SVector{L, K}}
+    function StackedTIVGMM{N, T, L, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels) where {N, T, L, K}
+        n = length(gaussians)
+        for v in (headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+            length(v) == n ||
+                throw(DimensionMismatch("each endpoint vector must match the number of Gaussians ($n); got length $(length(v))"))
+        end
+        return new{N, T, L, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+    end
+end
+
+function StackedTIVGMM(
+        gaussians::AbstractVector{IsotropicGaussian{N, T}}, headσ, headϕ, headlabels::AbstractVector{SVector{L, K}},
+        tailσ, tailϕ, taillabels::AbstractVector{SVector{L, K}}
+    ) where {N, T, L, K}
+    return StackedTIVGMM{N, T, L, K}(gaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+end
+
+StackedTIVGMM(tiv::TIVGMM{N, T, K}) where {N, T, K} = StackedTIVGMM{N, T, 1, K}(
+    tiv.gaussians, SVector.(tiv.headσ), SVector.(tiv.headϕ), SVector.(tiv.headlabels),
+    SVector.(tiv.tailσ), SVector.(tiv.tailϕ), SVector.(tiv.taillabels)
+)
+
+eltype(::Type{StackedTIVGMM{N, T, L, K}}) where {N, T, L, K} = IsotropicGaussian{N, T}
+
+"""
     IsotropicMultiGMM(gmms)
 
 A keyed collection of `IsotropicGMM`s, each considered separately during alignment.
@@ -233,6 +447,12 @@ Base.show(io::IO, g::AbstractIsotropicGaussian) = println(
     summary(g),
     " with μ = $(g.μ), σ = $(g.σ), and ϕ = $(g.ϕ).\n"
 
+)
+
+Base.show(io::IO, g::StackedLabeledGaussian) = println(
+    io,
+    summary(g),
+    " with μ = $(g.μ), σ = $(g.σ), ϕ = $(g.ϕ), and labels = $(g.labels).\n"
 )
 
 Base.show(io::IO, gmm::AbstractSingleGMM) = println(

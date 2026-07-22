@@ -21,6 +21,12 @@ inputs the results are dense matrices indexed by Gaussian; for `AbstractMultiGMM
 are nested dictionaries keyed by component label, with `interactions` weighting the
 cross-label terms.
 
+For `AbstractStackedLabeledIsotropicGMM` inputs the matrices hold one `SVector{Lx*Ly}` per
+pair of stacked points — one combined variance and one weight per pairing of feature slots —
+consumed termwise by the multi-term `overlap` and `gauss_l2_bounds` kernels at the single
+distance between the shared means (the same layout `tiv_pairwise_consts` uses for the head
+and tail terms of a TIV pair).
+
 These constants depend only on the Gaussians' widths and amplitudes, not on the relative
 transformation, so they are invariant under the rigid search. They are the per-pair inputs to
 `gauss_l2_bounds` and `local_align`. The `*_align` entry points call `pairwise_consts` once and
@@ -96,6 +102,122 @@ function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::Abstr
         end
     end
     return pσ, pϕ
+end
+
+# For stacked GMMs, a pair's overlap is the sum of one term per pairing of feature slots,
+# all sharing the mean pair's single distance: entry `m` of `pσ[i,j]`/`pϕ[i,j]` holds the
+# combined variance and weight of slot pair `(k, l) = fldmod1(m, Ly)`. Zero-amplitude
+# (padded) and non-interacting slot pairs get zero weight and are skipped by the multi-term
+# `overlap` and `gauss_l2_bounds` kernels.
+function pairwise_consts(
+        gmmx::AbstractStackedLabeledIsotropicGMM{N, T, Lx, K}, gmmy::AbstractStackedLabeledIsotropicGMM{N, S, Ly, K},
+        interactions::Nothing = nothing
+    ) where {N, T, S, Lx, Ly, K}
+    t = promote_type(T, S)
+    xlabels = unique!([l for g in gmmx.gaussians for l in g.labels])
+    ylabels = unique!([l for g in gmmy.gaussians for l in g.labels])
+    self_interactions = Dict{Tuple{K, K}, t}()
+    for label in xlabels ∩ ylabels
+        self_interactions[(label, label)] = one(t)
+    end
+    return pairwise_consts(gmmx, gmmy, self_interactions)
+end
+
+function pairwise_consts(
+        gmmx::AbstractStackedLabeledIsotropicGMM{N, T, Lx, K}, gmmy::AbstractStackedLabeledIsotropicGMM{N, S, Ly, K},
+        interactions::Dict{Tuple{K, K}, V}
+    ) where {N, T, S, Lx, Ly, K, V <: Number}
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
+    t = promote_type(T, S, V)
+    gxs, gys = gmmx.gaussians, gmmy.gaussians
+    Base.require_one_based_indexing(gxs, gys)
+
+    # as in the labeled method: each label pair's coefficient is resolved once into `coefs`
+    # and thereafter indexed, rather than hashed again for every slot pair
+    uxs = unique!([l for g in gxs for l in g.labels])
+    uys = unique!([l for g in gys for l in g.labels])
+    coefs = t[interaction_coefficient(interactions, kx, ky) for kx in uxs, ky in uys]
+    ix = [map(l -> findfirst(isequal(l), uxs)::Int, g.labels) for g in gxs]
+    iy = [map(l -> findfirst(isequal(l), uys)::Int, g.labels) for g in gys]
+
+    P = Lx * Ly
+    pσ = Matrix{SVector{P, t}}(undef, length(gmmx), length(gmmy))
+    pϕ = Matrix{SVector{P, t}}(undef, length(gmmx), length(gmmy))
+    for i in eachindex(gxs)
+        gx, cx = gxs[i], ix[i]
+        for j in eachindex(gys)
+            gy, cy = gys[j], iy[j]
+            pσ[i, j] = SVector{P, t}(
+                ntuple(Val(P)) do m
+                    k, l = fldmod1(m, Ly)
+                    gx.σ[k]^2 + gy.σ[l]^2
+                end
+            )
+            pϕ[i, j] = SVector{P, t}(
+                ntuple(Val(P)) do m
+                    k, l = fldmod1(m, Ly)
+                    coefs[cx[k], cy[l]] * gx.ϕ[k] * gy.ϕ[l]
+                end
+            )
+        end
+    end
+    return pσ, pϕ
+end
+
+# a labeled GMM is a stacked GMM with one feature per point, so mixed alignments lift the
+# labeled side; both Nothing and Dict methods are needed to stay more specific than the
+# generic `(AbstractIsotropicGMM, AbstractIsotropicGMM, Nothing)` method in every argument
+pairwise_consts(gmmx::AbstractStackedLabeledIsotropicGMM{N, T, L, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Nothing = nothing) where {N, T, L, K, S} =
+    pairwise_consts(gmmx, StackedLabeledIsotropicGMM(gmmy), interactions)
+pairwise_consts(gmmx::AbstractStackedLabeledIsotropicGMM{N, T, L, K}, gmmy::AbstractLabeledIsotropicGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, L, K, S, V <: Number} =
+    pairwise_consts(gmmx, StackedLabeledIsotropicGMM(gmmy), interactions)
+pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractStackedLabeledIsotropicGMM{N, S, L, K}, interactions::Nothing = nothing) where {N, T, K, S, L} =
+    pairwise_consts(StackedLabeledIsotropicGMM(gmmx), gmmy, interactions)
+pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::AbstractStackedLabeledIsotropicGMM{N, S, L, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, K, S, L, V <: Number} =
+    pairwise_consts(StackedLabeledIsotropicGMM(gmmx), gmmy, interactions)
+
+const STACKED_UNLABELED_ERROR = "cannot pair a stacked labeled GMM with an unlabeled IsotropicGMM; wrap the IsotropicGMM in a LabeledIsotropicGMM first"
+pairwise_consts(gmmx::AbstractStackedLabeledIsotropicGMM, gmmy::IsotropicGMM, interactions::Nothing = nothing) = throw(ArgumentError(STACKED_UNLABELED_ERROR))
+pairwise_consts(gmmx::AbstractStackedLabeledIsotropicGMM, gmmy::IsotropicGMM, interactions::Dict) = throw(ArgumentError(STACKED_UNLABELED_ERROR))
+pairwise_consts(gmmx::IsotropicGMM, gmmy::AbstractStackedLabeledIsotropicGMM, interactions::Nothing = nothing) = throw(ArgumentError(STACKED_UNLABELED_ERROR))
+pairwise_consts(gmmx::IsotropicGMM, gmmy::AbstractStackedLabeledIsotropicGMM, interactions::Dict) = throw(ArgumentError(STACKED_UNLABELED_ERROR))
+
+# single-pair form of the stacked constants, for direct Gaussian-pair `overlap` calls
+function stacked_pair_consts(x::StackedLabeledGaussian{N, T, Lx, K}, y::StackedLabeledGaussian{N, S, Ly, K}, interactions::Nothing = nothing) where {N, T, Lx, K, S, Ly}
+    t = promote_type(T, S)
+    P = Lx * Ly
+    s = SVector{P, t}(
+        ntuple(Val(P)) do m
+            k, l = fldmod1(m, Ly)
+            x.σ[k]^2 + y.σ[l]^2
+        end
+    )
+    w = SVector{P, t}(
+        ntuple(Val(P)) do m
+            k, l = fldmod1(m, Ly)
+            x.labels[k] == y.labels[l] ? x.ϕ[k] * y.ϕ[l] : zero(t)
+        end
+    )
+    return s, w
+end
+
+function stacked_pair_consts(x::StackedLabeledGaussian{N, T, Lx, K}, y::StackedLabeledGaussian{N, S, Ly, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, Lx, K, S, Ly, V <: Number}
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
+    t = promote_type(T, S, V)
+    P = Lx * Ly
+    s = SVector{P, t}(
+        ntuple(Val(P)) do m
+            k, l = fldmod1(m, Ly)
+            x.σ[k]^2 + y.σ[l]^2
+        end
+    )
+    w = SVector{P, t}(
+        ntuple(Val(P)) do m
+            k, l = fldmod1(m, Ly)
+            interaction_coefficient(interactions, x.labels[k], y.labels[l]) * x.ϕ[k] * y.ϕ[l]
+        end
+    )
+    return s, w
 end
 
 function pairwise_consts(mgmmx::AbstractMultiGMM{N, T, K}, mgmmy::AbstractMultiGMM{N, S, K}, interactions::Nothing = nothing) where {N, T, S, K}

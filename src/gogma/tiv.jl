@@ -77,6 +77,52 @@ function tivgmm(gmm::AbstractLabeledIsotropicGMM{N, T, K}, c = Inf) where {N, T,
     return TIVGMM(tivgaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
 end
 
+"""
+    tgmm = tivgmm(gmm::AbstractStackedLabeledIsotropicGMM, c=Inf)
+
+Build TIVs for a stacked labeled GMM, returning a [`StackedTIVGMM`](@ref) that keeps the
+slot-wise widths, amplitudes, and labels of each TIV's two endpoint stacks: the TIV
+connecting stacked point `i` (head) to stacked point `j` (tail) has mean `μᵢ - μⱼ`, head
+slots from point `i`, and tail slots from point `j`.
+
+TIV selection mirrors the labeled method, scoring each candidate by its length times the
+geometric mean of the endpoints' total amplitudes; `c` counts stacked points, so with
+`c = Inf` this yields `n² - n` TIVs for `n` stacked points (zero-length TIVs, `i == j`, are
+excluded as rotation-independent).
+"""
+function tivgmm(gmm::AbstractStackedLabeledIsotropicGMM{N, T, L, K}, c = Inf) where {N, T, L, K}
+    npts = length(gmm)
+    n = Int(min(ceil(c * npts), npts^2 - npts))
+    ϕtot = weights(gmm)
+    σagg = widths(gmm)
+    scores = fill(zero(T), npts, npts)
+    for i in 1:npts
+        for j in i:npts
+            scores[i, j] = scores[j, i] = norm(gmm.gaussians[i].μ - gmm.gaussians[j].μ) * √(ϕtot[i] * ϕtot[j])
+        end
+    end
+
+    tivgaussians = IsotropicGaussian{N, T}[]
+    headσ, headϕ, headlabels = SVector{L, T}[], SVector{L, T}[], SVector{L, K}[]
+    tailσ, tailϕ, taillabels = SVector{L, T}[], SVector{L, T}[], SVector{L, K}[]
+    order = sortperm(vec(scores), rev = true)
+    for idx in order
+        length(tivgaussians) == n && break
+        i = Int(floor((idx - 1) / npts) + 1)
+        j = mod(idx - 1, npts) + 1
+        i == j && continue
+        x, y = gmm.gaussians[i], gmm.gaussians[j]
+        push!(tivgaussians, IsotropicGaussian(x.μ - y.μ, √(σagg[i] * σagg[j]), √(ϕtot[i] * ϕtot[j])))
+        push!(headσ, x.σ)
+        push!(headϕ, x.ϕ)
+        push!(headlabels, x.labels)
+        push!(tailσ, y.σ)
+        push!(tailϕ, y.ϕ)
+        push!(taillabels, y.labels)
+    end
+    return StackedTIVGMM{N, T, L, K}(tivgaussians, headσ, headϕ, headlabels, tailσ, tailϕ, taillabels)
+end
+
 function tivgmm(mgmm::AbstractIsotropicMultiGMM, c = Inf)
     gmms = Dict{Symbol, IsotropicGMM{dims(mgmm), numbertype(mgmm)}}()
     for key in keys(mgmm.gmms)
@@ -156,3 +202,87 @@ function tiv_pairwise_consts(
     end
     return pσ, pϕ
 end
+
+function tiv_pairwise_consts(tivx::StackedTIVGMM{N, T, Lx, K}, tivy::StackedTIVGMM{N, S, Ly, K}, ::Nothing) where {N, T, S, Lx, Ly, K}
+    t = promote_type(T, S)
+    xlabels = unique!([l for ls in Iterators.flatten((tivx.headlabels, tivx.taillabels)) for l in ls])
+    ylabels = unique!([l for ls in Iterators.flatten((tivy.headlabels, tivy.taillabels)) for l in ls])
+    self_interactions = Dict{Tuple{K, K}, t}()
+    for label in xlabels ∩ ylabels
+        self_interactions[(label, label)] = one(t)
+    end
+    return tiv_pairwise_consts(tivx, tivy, self_interactions)
+end
+
+# For a stacked TIV pair, the head/tail variance split of the scalar TIV kernel is applied
+# per pairing of endpoint slots: choosing head slots (a, c) and tail slots (b, d) fixes
+# `s_h = σ_h[a]² + σ_h[c]²`, `s_t = σ_t[b]² + σ_t[d]²`, and `S = s_h + s_t`, contributing a
+# head term of width `S²/s_h` and a tail term of width `S²/s_t`, each weighted by that
+# endpoint slot pair's interaction coefficient and amplitude product. This enumerates
+# `2⋅Lx²⋅Ly²` terms per TIV pair — exactly the terms a mean-duplicated model produces, so
+# stacked and duplicated models give identical TIV overlaps, while the distance bounds are
+# evaluated once per TIV pair instead of once per slot pairing. The per-pair term count
+# grows as `L⁴`, so large stacking degrees are expensive.
+#
+# A zero-amplitude slot is treated as an absent feature: a duplicated model has no TIV
+# ending on it, so every term whose split involves that slot is gated to zero weight — not
+# only the terms whose own amplitude product vanishes. Without the gate, a head term would
+# be counted once per padded tail pairing, with a width computed from the padding σ.
+function tiv_pairwise_consts(
+        tivx::StackedTIVGMM{N, T, Lx, K}, tivy::StackedTIVGMM{N, S, Ly, K}, interactions::Dict{Tuple{K, K}, V}
+    ) where {N, T, S, Lx, Ly, K, V <: Number}
+    validate_interactions(interactions) || throw(ArgumentError("Interactions must not include redundant key pairs (i.e. (k1,k2) and (k2,k1))"))
+    t = promote_type(T, S, V)
+
+    uxs = unique!([l for ls in Iterators.flatten((tivx.headlabels, tivx.taillabels)) for l in ls])
+    uys = unique!([l for ls in Iterators.flatten((tivy.headlabels, tivy.taillabels)) for l in ls])
+    coefs = t[interaction_coefficient(interactions, kx, ky) for kx in uxs, ky in uys]
+    hix = [map(l -> findfirst(isequal(l), uxs)::Int, ls) for ls in tivx.headlabels]
+    tix = [map(l -> findfirst(isequal(l), uxs)::Int, ls) for ls in tivx.taillabels]
+    hiy = [map(l -> findfirst(isequal(l), uys)::Int, ls) for ls in tivy.headlabels]
+    tiy = [map(l -> findfirst(isequal(l), uys)::Int, ls) for ls in tivy.taillabels]
+
+    P = 2 * Lx * Lx * Ly * Ly
+    pσ = Matrix{SVector{P, t}}(undef, length(tivx), length(tivy))
+    pϕ = Matrix{SVector{P, t}}(undef, length(tivx), length(tivy))
+    sbuf = MVector{P, t}(undef)
+    wbuf = MVector{P, t}(undef)
+    for i in eachindex(tivx.gaussians)
+        xhσ, xtσ, xhϕ, xtϕ = tivx.headσ[i], tivx.tailσ[i], tivx.headϕ[i], tivx.tailϕ[i]
+        chx, ctx = hix[i], tix[i]
+        for j in eachindex(tivy.gaussians)
+            yhσ, ytσ, yhϕ, ytϕ = tivy.headσ[j], tivy.tailσ[j], tivy.headϕ[j], tivy.tailϕ[j]
+            chy, cty = hiy[j], tiy[j]
+            m = 0
+            for a in 1:Lx, c in 1:Ly
+                s_h = xhσ[a]^2 + yhσ[c]^2
+                w_h = coefs[chx[a], chy[c]] * xhϕ[a] * yhϕ[c]
+                head_present = !(iszero(xhϕ[a]) || iszero(yhϕ[c]))
+                for b in 1:Lx, d in 1:Ly
+                    s_t = xtσ[b]^2 + ytσ[d]^2
+                    s_sum = s_h + s_t
+                    tail_present = !(iszero(xtϕ[b]) || iszero(ytϕ[d]))
+                    sbuf[m + 1] = s_sum^2 / s_h
+                    sbuf[m + 2] = s_sum^2 / s_t
+                    wbuf[m + 1] = tail_present ? w_h : zero(t)
+                    wbuf[m + 2] = head_present ? coefs[ctx[b], cty[d]] * xtϕ[b] * ytϕ[d] : zero(t)
+                    m += 2
+                end
+            end
+            pσ[i, j] = SVector(sbuf)
+            pϕ[i, j] = SVector(wbuf)
+        end
+    end
+    return pσ, pϕ
+end
+
+# mixed TIV models lift the unstacked side to a single-slot StackedTIVGMM; Nothing and Dict
+# methods keep these more specific than the `(AbstractGMM, AbstractGMM, Nothing)` fallback
+tiv_pairwise_consts(tivx::StackedTIVGMM{N, T, L, K}, tivy::TIVGMM{N, S, K}, interactions::Nothing) where {N, T, L, K, S} =
+    tiv_pairwise_consts(tivx, StackedTIVGMM(tivy), interactions)
+tiv_pairwise_consts(tivx::StackedTIVGMM{N, T, L, K}, tivy::TIVGMM{N, S, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, L, K, S, V <: Number} =
+    tiv_pairwise_consts(tivx, StackedTIVGMM(tivy), interactions)
+tiv_pairwise_consts(tivx::TIVGMM{N, T, K}, tivy::StackedTIVGMM{N, S, L, K}, interactions::Nothing) where {N, T, K, S, L} =
+    tiv_pairwise_consts(StackedTIVGMM(tivx), tivy, interactions)
+tiv_pairwise_consts(tivx::TIVGMM{N, T, K}, tivy::StackedTIVGMM{N, S, L, K}, interactions::Dict{Tuple{K, K}, V}) where {N, T, K, S, L, V <: Number} =
+    tiv_pairwise_consts(StackedTIVGMM(tivx), tivy, interactions)
