@@ -1410,3 +1410,310 @@ end
     # the interactions keyword is threaded through without breaking the unlabeled path
     @test isfinite(tiv_gogma_align(Rtrue * IsotropicGMM(x.gaussians), IsotropicGMM(x.gaussians); cutoff_x = 3.0, cutoff_y = 3.0, maxsplits = 2.0e3).upperbound)
 end
+
+@testset "StackedLabeledGaussian and StackedLabeledIsotropicGMM" begin
+    g = StackedLabeledGaussian([0.0, 0.0, 1.0], [0.5, 0.8], [1.0, 2.0], [:a, :b])
+    @test g isa StackedLabeledGaussian{3, Float64, 2, Symbol}
+    @test g isa GMA.AbstractIsotropicGaussian{3, Float64}
+    @test g.μ === SVector(0.0, 0.0, 1.0)
+    @test g.σ === SVector(0.5, 0.8) && g.ϕ === SVector(1.0, 2.0) && g.labels === SVector(:a, :b)
+
+    # point evaluation is the sum of the slot Gaussians
+    pos = [0.3, -0.2, 0.4]
+    @test g(pos) ≈ sum(ϕ * exp(-sum(abs2, pos - g.μ) / (2σ^2)) for (σ, ϕ) in zip(g.σ, g.ϕ))
+
+    # numeric promotion in the outer constructor
+    @test StackedLabeledGaussian([0, 0, 1], [1, 1], [1.0f0, 2.0f0], [:a, :b]) isa StackedLabeledGaussian{3, Float32, 2, Symbol}
+
+    # fail-fast validation
+    @test_throws DimensionMismatch StackedLabeledGaussian([0.0, 0.0, 1.0], [0.5], [1.0, 2.0], [:a, :b])
+    @test_throws "all slot widths must be positive" StackedLabeledGaussian([0.0, 0.0, 1.0], [0.5, 0.0], [1.0, 0.0], [:a, :a])
+    @test_throws "all slot widths must be positive" StackedLabeledGaussian([0.0, 0.0, 1.0], [0.5, -1.0], [1.0, 2.0], [:a, :b])
+
+    # single-slot lift from a plain Gaussian
+    lifted = StackedLabeledGaussian(IsotropicGaussian([1.0, 0.0, 0.0], 0.7, 1.5), :c)
+    @test lifted isa StackedLabeledGaussian{3, Float64, 1, Symbol}
+    @test lifted.σ == SVector(0.7) && lifted.labels == SVector(:c)
+
+    # copy, convert, promote
+    @test StackedLabeledGaussian(g) == g
+    @test convert(StackedLabeledGaussian{3, Float32, 2, Symbol}, g) isa StackedLabeledGaussian{3, Float32, 2, Symbol}
+    @test promote_type(typeof(g), StackedLabeledGaussian{3, Float32, 2, Symbol}) === typeof(g)
+
+    g2 = StackedLabeledGaussian([1.0, 1.0, 0.0], [0.6, 1.0], [1.5, 0.0], [:a, :a])
+    gmm = StackedLabeledIsotropicGMM([g, g2])
+    @test gmm isa StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}
+    @test gmm isa GMA.AbstractStackedLabeledIsotropicGMM{3, Float64, 2, Symbol}
+    @test gmm isa GMA.AbstractIsotropicGMM{3, Float64}
+    @test !(gmm isa GMA.AbstractLabeledIsotropicGMM)
+    @test length(gmm) == 2
+    @test gmm[2] == g2
+    @test collect(gmm) == [g, g2]
+    @test eltype(gmm) === eltype(typeof(gmm)) === StackedLabeledGaussian{3, Float64, 2, Symbol}
+    @test isempty(StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}())
+    @test StackedLabeledIsotropicGMM(gmm).gaussians == gmm.gaussians
+    @test convert(StackedLabeledIsotropicGMM{3, Float32, 2, Symbol}, gmm) isa StackedLabeledIsotropicGMM{3, Float32, 2, Symbol}
+    @test gmm(pos) ≈ g(pos) + g2(pos)
+
+    # show smoke tests
+    @test occursin("labels", sprint(show, g))
+    @test occursin("StackedLabeledGaussian", sprint(show, gmm))
+
+    # accessors: weights sum slot amplitudes; widths are amplitude-weighted RMS widths
+    @test GMA.coords(gmm) == [g.μ g2.μ]
+    @test GMA.weights(gmm) == [3.0, 1.5]
+    @test GMA.widths(gmm) ≈ [sqrt((1.0 * 0.5^2 + 2.0 * 0.8^2) / 3.0), 0.6]
+    allpad = StackedLabeledIsotropicGMM([StackedLabeledGaussian([0.0, 0.0, 0.0], [1.0, 1.0], [0.0, 0.0], [:a, :a])])
+    @test GMA.weights(allpad) == [0.0]
+    @test GMA.widths(allpad) == [0.0]
+
+    # per-point construction with automatic padding
+    padded = StackedLabeledIsotropicGMM(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+        [[0.5, 0.8], [0.9]], [[1.0, 2.0], [1.5]], [[:a, :b], [:c]]
+    )
+    @test padded isa StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}
+    @test padded.gaussians[2].σ == SVector(0.9, 1.0)
+    @test padded.gaussians[2].ϕ == SVector(1.5, 0.0)
+    @test padded.gaussians[2].labels == SVector(:c, :c)
+    @test_throws DimensionMismatch StackedLabeledIsotropicGMM([[0.0, 0.0, 0.0]], [[0.5]], [[1.0, 2.0]], [[:a]])
+    @test_throws "has no features" StackedLabeledIsotropicGMM([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], [[0.5], Float64[]], [[1.0], Float64[]], [[:a], Symbol[]])
+
+    # single-slot lift from a labeled GMM (no grouping)
+    labgmm = LabeledIsotropicGMM([IsotropicGaussian([0.0, 0.0, 0.0], 0.5, 1.0), IsotropicGaussian([0.0, 0.0, 0.0], 0.8, 2.0)], [:a, :b])
+    lifted_gmm = StackedLabeledIsotropicGMM(labgmm)
+    @test lifted_gmm isa StackedLabeledIsotropicGMM{3, Float64, 1, Symbol}
+    @test length(lifted_gmm) == 2
+
+    # stackedgmm groups exactly equal means and pads shorter groups
+    grouped = stackedgmm(labgmm)
+    @test grouped isa StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}
+    @test length(grouped) == 1
+    @test grouped.gaussians[1].σ == SVector(0.5, 0.8)
+    @test grouped.gaussians[1].labels == SVector(:a, :b)
+end
+
+@testset "stacked transformations" begin
+    g = StackedLabeledGaussian([0.0, 0.0, 1.0], [0.5, 0.8], [1.0, 2.0], [:a, :b])
+    gmm = StackedLabeledIsotropicGMM([g, StackedLabeledGaussian([1.0, 1.0, 0.0], [0.6, 1.0], [1.5, 0.0], [:a, :a])])
+    R = RotationVec(0.4, -0.3, 0.7)
+    T = SVector(1.0, -2.0, 0.5)
+    affine = AffineMap(R, T)
+
+    tg = affine(g)
+    @test tg isa typeof(g)
+    @test tg.μ ≈ R * g.μ + T
+    @test tg.σ == g.σ && tg.ϕ == g.ϕ && tg.labels == g.labels
+    @test (@inferred affine(g)) isa typeof(g)
+    @test ((g + T) - T).μ ≈ g.μ
+
+    tgmm = affine(gmm)
+    @test tgmm isa typeof(gmm)
+    @test (@inferred affine(gmm)) isa typeof(gmm)
+    @test all(tG.σ == G.σ && tG.ϕ == G.ϕ && tG.labels == G.labels for (tG, G) in zip(tgmm.gaussians, gmm.gaussians))
+    @test GMA.coords(tgmm) ≈ R * GMA.coords(gmm) .+ T
+
+    # overlap is invariant under a shared rigid transformation
+    other = StackedLabeledIsotropicGMM([StackedLabeledGaussian([0.5, 0.2, -0.3], [0.7, 0.9], [1.0, 0.5], [:a, :b])])
+    @test overlap(affine(gmm), affine(other)) ≈ overlap(gmm, other)
+end
+
+@testset "stacked equals duplicated labeled model" begin
+    # a labeled model with duplicate-mean groups of sizes 3, 2, and 1, including a negative
+    # amplitude and label pairs with negative or absent interaction coefficients
+    pts = [SVector(0.0, 0.0, 0.0), SVector(3.0, 0.0, 0.0), SVector(0.0, 4.0, 0.0)]
+    feats = [
+        [(0.5, 1.0, :a), (0.8, 2.0, :b), (1.1, -0.5, :c)],
+        [(0.6, 1.5, :a), (0.9, 0.7, :c)],
+        [(1.0, 1.2, :b)],
+    ]
+    gaussians = IsotropicGaussian{3, Float64}[]
+    labels = Symbol[]
+    for (p, fs) in zip(pts, feats), (σ, ϕ, lab) in fs
+        push!(gaussians, IsotropicGaussian(p, σ, ϕ))
+        push!(labels, lab)
+    end
+    lab_x = LabeledIsotropicGMM(gaussians, labels)
+    stk_x = stackedgmm(lab_x)
+    @test stk_x isa StackedLabeledIsotropicGMM{3, Float64, 3, Symbol}
+    @test length(stk_x) == 3 && length(lab_x) == 6
+
+    tform = AffineMap(RotationVec(0.3, -0.2, 0.5), SVector(1.0, -1.0, 2.0))
+    lab_y, stk_y = tform(lab_x), stackedgmm(tform(lab_x))
+    interactions = Dict((:a, :a) => 1.0, (:b, :b) => 0.5, (:a, :c) => -0.3)
+
+    # overlaps match, with and without interactions
+    @test overlap(stk_x, stk_y; interactions) ≈ overlap(lab_x, lab_y; interactions) rtol = 1e-12
+    @test overlap(stk_x, stk_y) ≈ overlap(lab_x, lab_y) rtol = 1e-12
+
+    # pairwise constants: one SVector{Lx*Ly} entry per mean pair, zero weight for padded
+    # and non-interacting slot pairs
+    pσ, pϕ = GMA.pairwise_consts(stk_x, stk_y, interactions)
+    @test pσ isa Matrix{SVector{9, Float64}} && pϕ isa Matrix{SVector{9, Float64}}
+    @test size(pσ) == (3, 3)
+    # point 3 has one feature (:b): against point 3 only the (1, 1) slot pair can interact
+    @test count(!iszero, pϕ[3, 3]) == 1
+    @test pϕ[3, 3][1] ≈ 0.5 * 1.2 * 1.2
+    @test pσ[3, 3][1] ≈ 1.0^2 + 1.0^2
+    # slot-pair weights carry the interaction coefficients: (:a, :c) → -0.3
+    g1, g1y = stk_x.gaussians[1], stk_y.gaussians[2]
+    m_ac = findfirst(m -> (fldmod1(m, 3) == (1, 2)), 1:9)  # slot 1 (:a) of x vs slot 2 (:c) of y
+    @test pϕ[1, 2][m_ac] ≈ -0.3 * g1.ϕ[1] * g1y.ϕ[2]
+
+    # the mean-pair distance bounds are shared, so bounds match the duplicated model exactly
+    plσ, plϕ = GMA.pairwise_consts(lab_x, lab_y, interactions)
+    R, T = RotationVec(0.1, 0.2, -0.1), SVector(0.5, -0.3, 0.2)
+    for (σᵣ, σₜ) in ((0.5, 0.5), (0.1, 1.0), (1.0, 0.05))
+        b_lab = gauss_l2_bounds(lab_x, lab_y, R, T, σᵣ, σₜ, plσ, plϕ)
+        b_stk = gauss_l2_bounds(stk_x, stk_y, R, T, σᵣ, σₜ, pσ, pϕ)
+        @test all(isapprox.(b_lab, b_stk; atol = 1e-12))
+        @test b_stk[1] <= -overlap(AffineMap(R, T)(stk_x), stk_y, pσ, pϕ) <= b_stk[2] + 1e-12
+    end
+
+    # pσ/pϕ index the Gaussians from 1
+    @test_throws ArgumentError overlap(stk_x, stk_y, OffsetArray(pσ, -1, -1), OffsetArray(pϕ, -1, -1))
+
+    # Gaussian-pair overlap sums the slot cross-terms at the shared distance
+    gx, gy = stk_x.gaussians[1], stk_y.gaussians[2]
+    distsq = sum(abs2, gx.μ - gy.μ)
+    manual = sum(
+        GMA.interaction_coefficient(interactions, gx.labels[k], gy.labels[l]) * gx.ϕ[k] * gy.ϕ[l] *
+            exp(-distsq / (2 * (gx.σ[k]^2 + gy.σ[l]^2)))
+            for k in 1:3, l in 1:3
+    )
+    @test overlap(gx, gy; interactions) ≈ manual rtol = 1e-12
+    @test overlap(gx, gy) ≈ sum(
+        (gx.labels[k] == gy.labels[l]) * gx.ϕ[k] * gy.ϕ[l] * exp(-distsq / (2 * (gx.σ[k]^2 + gy.σ[l]^2)))
+            for k in 1:3, l in 1:3
+    ) rtol = 1e-12
+
+    # forces match the duplicated model
+    f_stk, f_lab = zeros(3), zeros(3)
+    GMA.force!(f_stk, stk_x, stk_y; interactions)
+    GMA.force!(f_lab, lab_x, lab_y; interactions)
+    @test f_stk ≈ f_lab rtol = 1e-10
+
+    # mixed stacked × labeled overlaps lift the labeled side
+    @test overlap(stk_x, lab_y; interactions) ≈ overlap(lab_x, lab_y; interactions) rtol = 1e-12
+    @test overlap(lab_x, stk_y; interactions) ≈ overlap(lab_x, lab_y; interactions) rtol = 1e-12
+
+    # unlabeled models cannot be paired with stacked ones
+    iso = IsotropicGMM([IsotropicGaussian(SVector(0.0, 0.0, 0.0), 1.0, 1.0)])
+    @test_throws "wrap the IsotropicGMM in a LabeledIsotropicGMM" GMA.pairwise_consts(stk_x, iso)
+    @test_throws "wrap the IsotropicGMM in a LabeledIsotropicGMM" GMA.pairwise_consts(iso, stk_x)
+end
+
+@testset "stacked TIV" begin
+    # nonnegative amplitudes: TIV selection scores take geometric means of amplitudes
+    pts = [SVector(0.0, 0.0, 0.0), SVector(3.0, 0.0, 0.0), SVector(0.0, 4.0, 0.0)]
+    feats = [
+        [(0.5, 1.0, :a), (0.8, 2.0, :b), (1.1, 0.5, :c)],
+        [(0.6, 1.5, :a), (0.9, 0.7, :c)],
+        [(1.0, 1.2, :b)],
+    ]
+    gaussians = IsotropicGaussian{3, Float64}[]
+    labels = Symbol[]
+    for (p, fs) in zip(pts, feats), (σ, ϕ, lab) in fs
+        push!(gaussians, IsotropicGaussian(p, σ, ϕ))
+        push!(labels, lab)
+    end
+    lab_x = LabeledIsotropicGMM(gaussians, labels)
+    stk_x = stackedgmm(lab_x)
+    tform = AffineMap(RotationVec(0.3, -0.2, 0.5), SVector(1.0, -1.0, 2.0))
+    lab_y, stk_y = tform(lab_x), stackedgmm(tform(lab_x))
+    interactions = Dict((:a, :a) => 1.0, (:b, :b) => 0.5, (:a, :c) => -0.3)
+
+    # structure: one TIV per ordered pair of distinct stacked points, with slot-wise endpoint data
+    tivs_x = GMA.tivgmm(stk_x, Inf)
+    @test tivs_x isa GMA.StackedTIVGMM{3, Float64, 3, Symbol}
+    @test length(tivs_x) == length(stk_x)^2 - length(stk_x)
+    @test length(tivs_x.headσ) == length(tivs_x) && length(tivs_x.taillabels) == length(tivs_x)
+
+    # a mean-duplicated model produces the same TIV overlap once its zero-length TIVs
+    # (between co-located duplicate features) are removed: those pair overlaps are
+    # rotation-independent constants that a stacked model deliberately omits
+    tivd_full = GMA.tivgmm(lab_x, Inf)
+    keep = [i for i in eachindex(tivd_full.gaussians) if !iszero(norm(tivd_full.gaussians[i].μ))]
+    tivd_x = GMA.TIVGMM(
+        tivd_full.gaussians[keep], tivd_full.headσ[keep], tivd_full.headϕ[keep], tivd_full.headlabels[keep],
+        tivd_full.tailσ[keep], tivd_full.tailϕ[keep], tivd_full.taillabels[keep]
+    )
+    tivd_yfull = GMA.tivgmm(lab_y, Inf)
+    keepy = [i for i in eachindex(tivd_yfull.gaussians) if !iszero(norm(tivd_yfull.gaussians[i].μ))]
+    tivd_y = GMA.TIVGMM(
+        tivd_yfull.gaussians[keepy], tivd_yfull.headσ[keepy], tivd_yfull.headϕ[keepy], tivd_yfull.headlabels[keepy],
+        tivd_yfull.tailσ[keepy], tivd_yfull.tailϕ[keepy], tivd_yfull.taillabels[keepy]
+    )
+    tivs_y = GMA.tivgmm(stk_y, Inf)
+
+    dpσ, dpϕ = GMA.tiv_pairwise_consts(tivd_x, tivd_y, interactions)
+    spσ, spϕ = GMA.tiv_pairwise_consts(tivs_x, tivs_y, interactions)
+    @test spσ isa Matrix{SVector{162, Float64}}  # 2 ⋅ 3² ⋅ 3² terms per TIV pair
+    for R in (RotationVec(0.0, 0.0, 0.0), RotationVec(0.3, -0.2, 0.5), RotationVec(-1.0, 0.4, 0.9))
+        @test overlap(R * tivs_x, tivs_y, spσ, spϕ) ≈ overlap(R * tivd_x, tivd_y, dpσ, dpϕ) rtol = 1e-10
+    end
+    dpσ0, dpϕ0 = GMA.tiv_pairwise_consts(tivd_x, tivd_y, nothing)
+    spσ0, spϕ0 = GMA.tiv_pairwise_consts(tivs_x, tivs_y, nothing)
+    R = RotationVec(0.3, -0.2, 0.5)
+    @test overlap(R * tivs_x, tivs_y, spσ0, spϕ0) ≈ overlap(R * tivd_x, tivd_y, dpσ0, dpϕ0) rtol = 1e-10
+
+    # full TIV alignment recovers the self-overlap, matching the labeled model
+    res_stk = tiv_gogma_align(stk_x, stk_y; interactions, maxsplits = 2e3)
+    res_lab = tiv_gogma_align(lab_x, lab_y; interactions, maxsplits = 2e3)
+    @test res_stk.upperbound ≈ res_lab.upperbound rtol = 1e-6
+    @test res_stk.upperbound ≈ -overlap(stk_x, stk_x; interactions) rtol = 1e-4
+
+    # mixed stacked × labeled TIV alignment lifts the labeled side
+    res_mixed = tiv_gogma_align(stk_x, lab_y; interactions, maxsplits = 1e3)
+    @test isfinite(res_mixed.upperbound)
+end
+
+@testset "stacked GOGMA and local alignment" begin
+    pts = [SVector(0.0, 0.0, 0.0), SVector(3.0, 0.0, 0.0), SVector(0.0, 4.0, 0.0)]
+    feats = [
+        [(0.5, 1.0, :a), (0.8, 2.0, :b), (1.1, 0.5, :c)],
+        [(0.6, 1.5, :a), (0.9, 0.7, :c)],
+        [(1.0, 1.2, :b)],
+    ]
+    μs = eltype(pts)[]
+    σs, ϕs, labelss = Vector{Float64}[], Vector{Float64}[], Vector{Symbol}[]
+    for (p, fs) in zip(pts, feats)
+        push!(μs, p)
+        push!(σs, [f[1] for f in fs])
+        push!(ϕs, [f[2] for f in fs])
+        push!(labelss, [f[3] for f in fs])
+    end
+    stk_x = StackedLabeledIsotropicGMM(μs, σs, ϕs, labelss)
+    tform = AffineMap(RotationVec(0.3, -0.2, 0.5), SVector(1.0, -1.0, 2.0))
+    stk_y = tform(stk_x)
+    interactions = Dict((:a, :a) => 1.0, (:b, :b) => 0.5, (:a, :c) => -0.3)
+
+    res = gogma_align(stk_x, stk_y; interactions, maxsplits = 2e3)
+    @test res.upperbound ≈ -overlap(stk_x, stk_x; interactions) rtol = 1e-4
+
+    resr = GMA.rot_gogma_align(stk_x, stk_x; interactions, maxsplits = 500)
+    rest = GMA.trl_gogma_align(stk_x, stk_x; interactions, maxsplits = 500)
+    @test resr.upperbound ≈ -overlap(stk_x, stk_x; interactions) rtol = 1e-4
+    @test rest.upperbound ≈ -overlap(stk_x, stk_x; interactions) rtol = 1e-4
+
+    # rocs_align consumes the stacked weights/widths accessors
+    rres = rocs_align(stk_x, stk_y)
+    @test rres.minimum ≈ -overlap(stk_x, stk_x) atol = 1e-9
+
+    # autodiff: gradients through padded slots are finite and match the duplicated model
+    lab_equiv = LabeledIsotropicGMM(
+        [IsotropicGaussian(p, σ, ϕ) for (p, fs) in zip(pts, feats) for (σ, ϕ, _) in fs],
+        [lab for fs in feats for (_, _, lab) in fs]
+    )
+    lab_yequiv = tform(lab_equiv)
+    pσ, pϕ = GMA.pairwise_consts(stk_x, stk_y, interactions)
+    plσ, plϕ = GMA.pairwise_consts(lab_equiv, lab_yequiv, interactions)
+    X = [0.1, -0.2, 0.3, 0.5, -0.1, 0.2]
+    grad_stk = ForwardDiff.gradient(X -> overlapobj(X, stk_x, stk_y, pσ, pϕ), X)
+    grad_lab = ForwardDiff.gradient(X -> overlapobj(X, lab_equiv, lab_yequiv, plσ, plϕ), X)
+    @test all(isfinite, grad_stk)
+    @test grad_stk ≈ grad_lab rtol = 1e-8
+
+    res_ad = gogma_align(stk_x, stk_y; interactions, autodiff = AutoForwardDiff(), maxsplits = 100)
+    @test isfinite(res_ad.upperbound)
+end

@@ -96,6 +96,32 @@ function overlap(x::AbstractLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM;
 end
 
 """
+    ovlp = overlap(x::AbstractStackedLabeledIsotropicGMM, y::AbstractStackedLabeledIsotropicGMM; interactions=nothing)
+
+Calculate the unnormalized overlap between two stacked labeled GMMs: for each pair of
+stacked points, the sum over all pairings of their feature slots, evaluated at the single
+distance between the shared means. The optional keyword argument `interactions` weights
+slot pairs by label as for `AbstractLabeledIsotropicGMM`; when omitted, only slots with
+equal labels contribute, each with coefficient 1. A labeled GMM may be paired with a stacked
+one; it is lifted to a single-slot stacked model first.
+"""
+function overlap(x::AbstractStackedLabeledIsotropicGMM, y::AbstractStackedLabeledIsotropicGMM; interactions = nothing)
+    pσ, pϕ = pairwise_consts(x, y, interactions)
+    return overlap(x, y, pσ, pϕ)
+end
+overlap(x::AbstractStackedLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM; interactions = nothing) =
+    overlap(x, StackedLabeledIsotropicGMM(y); interactions)
+overlap(x::AbstractLabeledIsotropicGMM, y::AbstractStackedLabeledIsotropicGMM; interactions = nothing) =
+    overlap(StackedLabeledIsotropicGMM(x), y; interactions)
+
+# Gaussian-pair overlap for stacked Gaussians: the generic method's default `s`/`w`
+# expressions assume scalar σ and ϕ, so the slot-cross constants are built explicitly
+function overlap(x::StackedLabeledGaussian, y::StackedLabeledGaussian; interactions = nothing)
+    s, w = stacked_pair_consts(x, y, interactions)
+    return overlap(sum(abs2, x.μ .- y.μ), s, w)
+end
+
+"""
     ovlp = overlap(x::AbstractMultiGMM, y::AbstractMultiGMM; interactions=nothing)
 
 Calculate the unnormalized overlap between two `AbstractMultiGMM` objects. The optional
@@ -162,6 +188,18 @@ function force!(f::AbstractVector, x::AbstractVector, y::AbstractVector, s::Real
     return f .+= Δ / s * overlap(sum(abs2, Δ), s, w)
 end
 
+# multi-term kernel: sum the per-term forces at a single displacement, skipping zero-weight
+# (padded or non-interacting) terms as the multi-term `overlap` kernel does
+function force!(f::AbstractVector, x::AbstractVector, y::AbstractVector, s::AbstractVector, w::AbstractVector)
+    Δ = y - x
+    distsq = sum(abs2, Δ)
+    for k in eachindex(s, w)
+        iszero(w[k]) && continue
+        f .+= Δ / s[k] * overlap(distsq, s[k], w[k])
+    end
+    return f
+end
+
 function force!(
         f::AbstractVector, x::AbstractIsotropicGaussian, y::AbstractIsotropicGaussian,
         s = x.σ^2 + y.σ^2, w = x.ϕ * y.ϕ; coef = 1
@@ -200,6 +238,21 @@ function force!(f::AbstractVector, x::AbstractLabeledIsotropicGMM, y::AbstractLa
     end
     return
 end
+
+function force!(f::AbstractVector, x::AbstractStackedLabeledIsotropicGMM, y::AbstractStackedLabeledIsotropicGMM, pσ = nothing, pϕ = nothing; interactions = nothing, kwargs...)
+    if isnothing(pσ) && isnothing(pϕ)
+        pσ, pϕ = pairwise_consts(x, y, interactions)
+    end
+    for (i, gx) in enumerate(x.gaussians)
+        force!(f, gx, y, pσ[i, :], pϕ[i, :]; kwargs...)
+    end
+    return
+end
+
+force!(f::AbstractVector, x::AbstractStackedLabeledIsotropicGMM, y::AbstractLabeledIsotropicGMM, pσ = nothing, pϕ = nothing; kwargs...) =
+    force!(f, x, StackedLabeledIsotropicGMM(y), pσ, pϕ; kwargs...)
+force!(f::AbstractVector, x::AbstractLabeledIsotropicGMM, y::AbstractStackedLabeledIsotropicGMM, pσ = nothing, pϕ = nothing; kwargs...) =
+    force!(f, StackedLabeledIsotropicGMM(x), y, pσ, pϕ; kwargs...)
 
 function force!(f::AbstractVector, x::AbstractMultiGMM, y::AbstractMultiGMM; interactions = nothing)
     mpσ, mpϕ = pairwise_consts(x, y, interactions)

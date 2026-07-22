@@ -46,6 +46,42 @@ end
 
 Base.:-(x::TIVGMM, T::AbstractVector) = x + (-T)
 
+function Base.:*(R::AbstractMatrix{W}, g::StackedLabeledGaussian{N, V, L, K}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedLabeledGaussian{N, numtype, L, K}(R * g.μ, g.σ, g.ϕ, g.labels)
+end
+
+function Base.:+(g::StackedLabeledGaussian{N, V, L, K}, T::AbstractVector{W}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedLabeledGaussian{N, numtype, L, K}(g.μ .+ T, g.σ, g.ϕ, g.labels)
+end
+
+Base.:-(g::StackedLabeledGaussian, T::AbstractVector) = g + (-T)
+
+function Base.:*(R::AbstractMatrix{W}, x::AbstractStackedLabeledIsotropicGMM{N, V, L, K}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedLabeledIsotropicGMM{N, numtype, L, K}([R * g for g in x.gaussians])
+end
+
+function Base.:+(x::AbstractStackedLabeledIsotropicGMM{N, V, L, K}, T::AbstractVector{W}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedLabeledIsotropicGMM{N, numtype, L, K}([g + T for g in x.gaussians])
+end
+
+Base.:-(x::AbstractStackedLabeledIsotropicGMM, T::AbstractVector) = x + (-T)
+
+function Base.:*(R::AbstractMatrix{W}, x::StackedTIVGMM{N, V, L, K}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedTIVGMM{N, numtype, L, K}([R * g for g in x.gaussians], x.headσ, x.headϕ, x.headlabels, x.tailσ, x.tailϕ, x.taillabels)
+end
+
+function Base.:+(x::StackedTIVGMM{N, V, L, K}, T::AbstractVector{W}) where {N, V, L, K, W}
+    numtype = promote_type(V, W)
+    return StackedTIVGMM{N, numtype, L, K}([g + T for g in x.gaussians], x.headσ, x.headϕ, x.headlabels, x.tailσ, x.tailϕ, x.taillabels)
+end
+
+Base.:-(x::StackedTIVGMM, T::AbstractVector) = x + (-T)
+
 function Base.:*(R::AbstractMatrix{W}, x::IsotropicMultiGMM{N, V, K}) where {N, V, K, W}
     numtype = promote_type(V, W)
     gmmdict = Dict{K, IsotropicGMM{N, numtype}}()
