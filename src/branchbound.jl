@@ -3,11 +3,14 @@
 
 Abstract supertype for the results returned by the alignment functions.
 
-Every subtype carries the aligned models and the rigid transformation aligning the moving
-model onto the fixed one, accessible with `tform`. The branch-and-bound subtypes
-`GlobalAlignmentResult` and `TIVAlignmentResult` additionally support the accessors
+Every subtype carries the aligned models and the transformation aligning the moving model onto
+the fixed one, accessible with `tform`. The branch-and-bound subtypes `GlobalAlignmentResult`,
+`TIVAlignmentResult`, and `FlexibleAlignmentResult` additionally support the accessors
 `upperbound`, `lowerbound`, `obj_calls`, `num_splits`, `num_blocks`, `stagnant_splits`, and
 `progress`, and the `converged` predicate.
+
+For `FlexibleAlignmentResult`, `tform` is only the rigid part of the transform; the joint
+angles from `joint_angles` complete it, and `aligned` returns the fully posed moving model.
 """
 abstract type AlignmentResults end
 
