@@ -80,6 +80,24 @@ coords(gmm::AbstractSingleGMM) = reduce(hcat, [g.μ for g in gmm.gaussians])
 weights(gmm::AbstractSingleGMM) = [g.ϕ for g in gmm.gaussians]
 widths(gmm::AbstractSingleGMM) = [g.σ for g in gmm.gaussians]
 
+"""
+    nfeatures(g::AbstractIsotropicGaussian)
+    nfeatures(gmm::AbstractGMM)
+
+Number of features a model carries, which for stacked models is not its `length`: a
+[`StackedLabeledGaussian`](@ref) occupies `L` slots but only the amplitude-nonzero ones are
+features, the rest being padding. Counting features rather than components makes a quantity
+comparable across a stacked model and the mean-duplicated `LabeledIsotropicGMM` it
+represents, where `length` is not.
+
+`iszero` is false for a dual number carrying a nonzero partial, so a slot that is
+zero-valued but differentiated counts as a feature.
+"""
+nfeatures(::AbstractIsotropicGaussian) = 1
+nfeatures(gmm::AbstractSingleGMM) = sum(nfeatures, gmm.gaussians; init = 0)
+nfeatures(mgmm::AbstractMultiGMM) = sum(nfeatures, values(mgmm.gmms); init = 0)
+# the StackedLabeledGaussian method is defined with that type, below
+
 length(mgmm::AbstractMultiGMM) = length(mgmm.gmms)
 getindex(mgmm::AbstractMultiGMM, k) = mgmm.gmms[k]
 keys(mgmm::AbstractMultiGMM) = keys(mgmm.gmms)
@@ -167,6 +185,33 @@ end
 
 LabeledIsotropicGMM(gaussians::AbstractVector{IsotropicGaussian{N, T}}, labels::AbstractVector{K}) where {N, T, K} = LabeledIsotropicGMM{N, T, K}(gaussians, labels)
 LabeledIsotropicGMM(gmm::AbstractLabeledIsotropicGMM) = LabeledIsotropicGMM(gmm.gaussians, gmm.labels)
+
+"""
+    LabeledIsotropicGMM(gmm::AbstractStackedLabeledIsotropicGMM)
+
+Unstack a stacked labeled GMM into the mean-duplicated model it represents: each component
+contributes one `IsotropicGaussian` per slot, repeating the component's mean and carrying
+that slot's width, amplitude, and label. Components keep their order, and slots keep theirs
+within a component, so this inverts [`stackedgmm`](@ref) and
+`StackedLabeledIsotropicGMM(::AbstractLabeledIsotropicGMM)` up to the grouping they apply.
+
+Amplitude-zero slots are padding rather than features (see [`StackedLabeledGaussian`](@ref))
+and are dropped. Overlaps, bounds, and forces are unchanged by the round trip, since a
+zero-amplitude slot contributes nothing. As elsewhere, `iszero` is false for a dual number
+carrying a nonzero partial, so a slot that is zero-valued but differentiated is kept.
+"""
+function LabeledIsotropicGMM(gmm::AbstractStackedLabeledIsotropicGMM{N, T, L, K}) where {N, T, L, K}
+    gaussians = IsotropicGaussian{N, T}[]
+    labels = K[]
+    for g in gmm.gaussians
+        for k in eachindex(g.σ, g.ϕ, g.labels)
+            iszero(g.ϕ[k]) && continue
+            push!(gaussians, IsotropicGaussian{N, T}(g.μ, g.σ[k], g.ϕ[k]))
+            push!(labels, g.labels[k])
+        end
+    end
+    return LabeledIsotropicGMM{N, T, K}(gaussians, labels)
+end
 LabeledIsotropicGMM{N, T, K}() where {N, T, K} = LabeledIsotropicGMM{N, T, K}(IsotropicGaussian{N, T}[], K[])
 
 convert(::Type{GMM}, gmm::AbstractLabeledIsotropicGMM) where {GMM <: LabeledIsotropicGMM} = GMM(gmm.gaussians, gmm.labels)
@@ -333,6 +378,8 @@ promote_rule(::Type{StackedLabeledIsotropicGMM{N, T, L, K}}, ::Type{StackedLabel
 eltype(::Type{StackedLabeledIsotropicGMM{N, T, L, K}}) where {N, T, L, K} = StackedLabeledGaussian{N, T, L, K}
 
 (gmm::StackedLabeledIsotropicGMM)(pos::AbstractVector) = sum(g(pos) for g in gmm)
+
+nfeatures(g::StackedLabeledGaussian) = count(!iszero, g.ϕ)
 
 weights(gmm::AbstractStackedLabeledIsotropicGMM) = [sum(g.ϕ) for g in gmm.gaussians]
 # amplitude-weighted RMS width: reproduces the stack's total second moment Σₖ ϕₖσₖ² in the

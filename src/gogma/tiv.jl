@@ -221,13 +221,18 @@ end
 # endpoint slot pair's interaction coefficient and amplitude product. This enumerates
 # `2⋅Lx²⋅Ly²` terms per TIV pair — exactly the terms a mean-duplicated model produces, so
 # stacked and duplicated models give identical TIV overlaps, while the distance bounds are
-# evaluated once per TIV pair instead of once per slot pairing. The per-pair term count
-# grows as `L⁴`, so large stacking degrees are expensive.
+# evaluated once per TIV pair instead of once per slot pairing.
 #
-# A zero-amplitude slot is treated as an absent feature: a duplicated model has no TIV
-# ending on it, so every term whose split involves that slot is gated to zero weight — not
-# only the terms whose own amplitude product vanishes. Without the gate, a head term would
-# be counted once per padded tail pairing, with a width computed from the padding σ.
+# A zero-amplitude slot is an absent feature: a duplicated model has no TIV ending on one, so
+# no term whose split involves that slot is emitted at all — not only the terms whose own
+# amplitude product vanishes. Were such a term emitted, a head term would be counted once per
+# padded tail pairing, with a width computed from the padding σ. Iterating only the real slots
+# supplies that exclusion directly.
+#
+# Only terms with a nonzero weight are stored, so the `SVector` length is the largest such
+# count over all pairs rather than `2⋅Lx²⋅Ly²`. Term position carries no meaning — every
+# consumer reads `pσ[i,j][m]` and `pϕ[i,j][m]` together and sums over `m` — but the two must
+# be filled from the same terms, or a weight is silently paired with the wrong variance.
 function tiv_pairwise_consts(
         tivx::StackedTIVGMM{N, T, Lx, K}, tivy::StackedTIVGMM{N, S, Ly, K}, interactions::Dict{Tuple{K, K}, V}
     ) where {N, T, S, Lx, Ly, K, V <: Number}
@@ -242,11 +247,38 @@ function tiv_pairwise_consts(
     hiy = [map(l -> findfirst(isequal(l), uys)::Int, ls) for ls in tivy.headlabels]
     tiy = [map(l -> findfirst(isequal(l), uys)::Int, ls) for ls in tivy.taillabels]
 
-    P = 2 * Lx * Lx * Ly * Ly
-    pσ = Matrix{SVector{P, t}}(undef, length(tivx), length(tivy))
-    pϕ = Matrix{SVector{P, t}}(undef, length(tivx), length(tivy))
-    sbuf = MVector{P, t}(undef)
-    wbuf = MVector{P, t}(undef)
+    rxh = [findall(!iszero, ϕ) for ϕ in tivx.headϕ]
+    rxt = [findall(!iszero, ϕ) for ϕ in tivx.tailϕ]
+    ryh = [findall(!iszero, ϕ) for ϕ in tivy.headϕ]
+    ryt = [findall(!iszero, ϕ) for ϕ in tivy.tailϕ]
+
+    # Each head term is emitted once per real tail pairing and each tail term once per real
+    # head pairing, so the stored count follows from two `O(L²)` tallies rather than an
+    # `O(L⁴)` enumeration.
+    Q = 0
+    for i in eachindex(tivx.gaussians)
+        xhϕ, xtϕ, chx, ctx = tivx.headϕ[i], tivx.tailϕ[i], hix[i], tix[i]
+        for j in eachindex(tivy.gaussians)
+            yhϕ, ytϕ, chy, cty = tivy.headϕ[j], tivy.tailϕ[j], hiy[j], tiy[j]
+            nh = 0
+            for a in rxh[i], c in ryh[j]
+                iszero(coefs[chx[a], chy[c]] * xhϕ[a] * yhϕ[c]) || (nh += 1)
+            end
+            nt = 0
+            for b in rxt[i], d in ryt[j]
+                iszero(coefs[ctx[b], cty[d]] * xtϕ[b] * ytϕ[d]) || (nt += 1)
+            end
+            Q = max(Q, nh * length(rxt[i]) * length(ryt[j]) + nt * length(rxh[i]) * length(ryh[j]))
+        end
+    end
+    return stacked_tiv_consts(Val(Q), tivx, tivy, coefs, hix, tix, hiy, tiy, rxh, rxt, ryh, ryt, t)
+end
+
+function stacked_tiv_consts(::Val{Q}, tivx, tivy, coefs, hix, tix, hiy, tiy, rxh, rxt, ryh, ryt, ::Type{t}) where {Q, t}
+    pσ = Matrix{SVector{Q, t}}(undef, length(tivx), length(tivy))
+    pϕ = Matrix{SVector{Q, t}}(undef, length(tivx), length(tivy))
+    sbuf = MVector{Q, t}(undef)
+    wbuf = MVector{Q, t}(undef)
     for i in eachindex(tivx.gaussians)
         xhσ, xtσ, xhϕ, xtϕ = tivx.headσ[i], tivx.tailσ[i], tivx.headϕ[i], tivx.tailϕ[i]
         chx, ctx = hix[i], tix[i]
@@ -254,20 +286,30 @@ function tiv_pairwise_consts(
             yhσ, ytσ, yhϕ, ytϕ = tivy.headσ[j], tivy.tailσ[j], tivy.headϕ[j], tivy.tailϕ[j]
             chy, cty = hiy[j], tiy[j]
             m = 0
-            for a in 1:Lx, c in 1:Ly
+            for a in rxh[i], c in ryh[j]
                 s_h = xhσ[a]^2 + yhσ[c]^2
                 w_h = coefs[chx[a], chy[c]] * xhϕ[a] * yhϕ[c]
-                head_present = !(iszero(xhϕ[a]) || iszero(yhϕ[c]))
-                for b in 1:Lx, d in 1:Ly
+                for b in rxt[i], d in ryt[j]
                     s_t = xtσ[b]^2 + ytσ[d]^2
                     s_sum = s_h + s_t
-                    tail_present = !(iszero(xtϕ[b]) || iszero(ytϕ[d]))
-                    sbuf[m + 1] = s_sum^2 / s_h
-                    sbuf[m + 2] = s_sum^2 / s_t
-                    wbuf[m + 1] = tail_present ? w_h : zero(t)
-                    wbuf[m + 2] = head_present ? coefs[ctx[b], cty[d]] * xtϕ[b] * ytϕ[d] : zero(t)
-                    m += 2
+                    w_t = coefs[ctx[b], cty[d]] * xtϕ[b] * ytϕ[d]
+                    if !iszero(w_h)
+                        m += 1
+                        sbuf[m] = s_sum^2 / s_h
+                        wbuf[m] = w_h
+                    end
+                    if !iszero(w_t)
+                        m += 1
+                        sbuf[m] = s_sum^2 / s_t
+                        wbuf[m] = w_t
+                    end
                 end
+            end
+            # unused slots must carry a positive variance: they are never read, but a zero
+            # would divide by zero if one ever were
+            for k in (m + 1):Q
+                sbuf[k] = one(t)
+                wbuf[k] = zero(t)
             end
             pσ[i, j] = SVector(sbuf)
             pϕ[i, j] = SVector(wbuf)
