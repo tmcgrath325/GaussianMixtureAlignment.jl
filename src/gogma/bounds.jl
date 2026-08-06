@@ -21,11 +21,13 @@ inputs the results are dense matrices indexed by Gaussian; for `AbstractMultiGMM
 are nested dictionaries keyed by component label, with `interactions` weighting the
 cross-label terms.
 
-For `AbstractStackedLabeledIsotropicGMM` inputs the matrices hold one `SVector{Lx*Ly}` per
-pair of stacked points — one combined variance and one weight per pairing of feature slots —
+For `AbstractStackedLabeledIsotropicGMM` inputs the matrices hold one `SVector` per pair of
+stacked points — one combined variance and one weight per pairing of feature slots —
 consumed termwise by the multi-term `overlap` and `gauss_l2_bounds` kernels at the single
 distance between the shared means (the same layout `tiv_pairwise_consts` uses for the head
-and tail terms of a TIV pair).
+and tail terms of a TIV pair). Only pairings with a nonzero weight are stored, so the
+`SVector` length is the largest such count over all pairs rather than `Lx*Ly`; it therefore
+depends on run-time values, and the `*_align` entry points act as function barriers.
 
 These constants depend only on the Gaussians' widths and amplitudes, not on the relative
 transformation, so they are invariant under the rigid search. They are the per-pair inputs to
@@ -104,11 +106,13 @@ function pairwise_consts(gmmx::AbstractLabeledIsotropicGMM{N, T, K}, gmmy::Abstr
     return pσ, pϕ
 end
 
-# For stacked GMMs, a pair's overlap is the sum of one term per pairing of feature slots,
-# all sharing the mean pair's single distance: entry `m` of `pσ[i,j]`/`pϕ[i,j]` holds the
-# combined variance and weight of slot pair `(k, l) = fldmod1(m, Ly)`. Zero-amplitude
-# (padded) and non-interacting slot pairs get zero weight and are skipped by the multi-term
-# `overlap` and `gauss_l2_bounds` kernels.
+# For stacked GMMs, a pair's overlap is the sum of one term per pairing of feature slots, all
+# sharing the mean pair's single distance. Only the pairings with a nonzero weight are stored:
+# a padded slot or a non-interacting label pair contributes nothing to any consumer, all of
+# which skip zero weights, so storing such a pairing would only lengthen the scan. Term
+# position carries no meaning — every consumer reads `pσ[i,j][m]` and `pϕ[i,j][m]` together
+# and sums over `m` — but the two must be filled from the same pairings, or a weight is
+# silently paired with the wrong variance.
 function pairwise_consts(
         gmmx::AbstractStackedLabeledIsotropicGMM{N, T, Lx, K}, gmmy::AbstractStackedLabeledIsotropicGMM{N, S, Ly, K},
         interactions::Nothing = nothing
@@ -140,25 +144,45 @@ function pairwise_consts(
     ix = [map(l -> findfirst(isequal(l), uxs)::Int, g.labels) for g in gxs]
     iy = [map(l -> findfirst(isequal(l), uys)::Int, g.labels) for g in gys]
 
-    P = Lx * Ly
-    pσ = Matrix{SVector{P, t}}(undef, length(gmmx), length(gmmy))
-    pϕ = Matrix{SVector{P, t}}(undef, length(gmmx), length(gmmy))
+    Q = 0
     for i in eachindex(gxs)
         gx, cx = gxs[i], ix[i]
         for j in eachindex(gys)
             gy, cy = gys[j], iy[j]
-            pσ[i, j] = SVector{P, t}(
-                ntuple(Val(P)) do m
-                    k, l = fldmod1(m, Ly)
-                    gx.σ[k]^2 + gy.σ[l]^2
-                end
-            )
-            pϕ[i, j] = SVector{P, t}(
-                ntuple(Val(P)) do m
-                    k, l = fldmod1(m, Ly)
-                    coefs[cx[k], cy[l]] * gx.ϕ[k] * gy.ϕ[l]
-                end
-            )
+            n = 0
+            for k in eachindex(gx.ϕ), l in eachindex(gy.ϕ)
+                iszero(coefs[cx[k], cy[l]] * gx.ϕ[k] * gy.ϕ[l]) || (n += 1)
+            end
+            Q = max(Q, n)
+        end
+    end
+    return stacked_consts(Val(Q), gxs, gys, ix, iy, coefs, t)
+end
+
+function stacked_consts(::Val{Q}, gxs, gys, ix, iy, coefs, ::Type{t}) where {Q, t}
+    pσ = Matrix{SVector{Q, t}}(undef, length(gxs), length(gys))
+    pϕ = Matrix{SVector{Q, t}}(undef, length(gxs), length(gys))
+    sbuf, wbuf = MVector{Q, t}(undef), MVector{Q, t}(undef)
+    for i in eachindex(gxs)
+        gx, cx = gxs[i], ix[i]
+        for j in eachindex(gys)
+            gy, cy = gys[j], iy[j]
+            m = 0
+            for k in eachindex(gx.ϕ), l in eachindex(gy.ϕ)
+                w = coefs[cx[k], cy[l]] * gx.ϕ[k] * gy.ϕ[l]
+                iszero(w) && continue
+                m += 1
+                sbuf[m] = gx.σ[k]^2 + gy.σ[l]^2
+                wbuf[m] = w
+            end
+            # unused slots must carry a positive variance: they are never read, but a zero
+            # would divide by zero if one ever were
+            for n in (m + 1):Q
+                sbuf[n] = one(t)
+                wbuf[n] = zero(t)
+            end
+            pσ[i, j] = SVector(sbuf)
+            pϕ[i, j] = SVector(wbuf)
         end
     end
     return pσ, pϕ

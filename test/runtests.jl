@@ -1467,6 +1467,21 @@ end
     @test GMA.weights(allpad) == [0.0]
     @test GMA.widths(allpad) == [0.0]
 
+    # nfeatures counts amplitude-nonzero slots, so it is `length` for unstacked models but
+    # not for stacked ones, and it agrees across the two representations of one model
+    @test GMA.nfeatures(g) == 2 && GMA.nfeatures(g2) == 1
+    @test GMA.nfeatures(gmm) == 3 != length(gmm)
+    @test GMA.nfeatures(allpad) == 0
+    @test GMA.nfeatures(gmm) == length(LabeledIsotropicGMM(gmm))
+    @test GMA.nfeatures(StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}()) == 0
+    plain = IsotropicGMM([IsotropicGaussian([0.0, 0.0, 0.0], 0.5, 1.0)])
+    @test GMA.nfeatures(IsotropicGaussian([0.0, 0.0, 0.0], 0.5, 1.0)) == 1
+    @test GMA.nfeatures(plain) == length(plain) == 1
+    @test GMA.nfeatures(IsotropicMultiGMM(Dict(:a => plain, :b => plain))) == 2
+    # a zero-valued amplitude carrying a derivative is a feature, not padding
+    @test GMA.nfeatures(StackedLabeledGaussian([0.0, 0.0, 0.0], [1.0, 1.0],
+        [1.0, ForwardDiff.Dual(0.0, 1.0)], [:a, :b])) == 2
+
     # per-point construction with automatic padding
     padded = StackedLabeledIsotropicGMM(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
@@ -1491,6 +1506,20 @@ end
     @test length(grouped) == 1
     @test grouped.gaussians[1].σ == SVector(0.5, 0.8)
     @test grouped.gaussians[1].labels == SVector(:a, :b)
+
+    # unstacking recovers the mean-duplicated model, inverting both stacking constructors
+    unstacked = LabeledIsotropicGMM(grouped)
+    @test unstacked isa LabeledIsotropicGMM{3, Float64, Symbol}
+    @test unstacked.gaussians == labgmm.gaussians && unstacked.labels == labgmm.labels
+    @test LabeledIsotropicGMM(lifted_gmm).gaussians == labgmm.gaussians
+    @test stackedgmm(unstacked).gaussians == grouped.gaussians
+    # padding is dropped rather than emitted as a zero-amplitude Gaussian
+    @test LabeledIsotropicGMM(padded).labels == [:a, :b, :c]
+    @test isempty(LabeledIsotropicGMM(allpad))
+    @test isempty(LabeledIsotropicGMM(StackedLabeledIsotropicGMM{3, Float64, 2, Symbol}()))
+    # the round trip leaves overlap untouched, padding and all
+    @test overlap(padded, padded) ≈ overlap(LabeledIsotropicGMM(padded), LabeledIsotropicGMM(padded))
+    @test overlap(gmm, padded) ≈ overlap(LabeledIsotropicGMM(gmm), LabeledIsotropicGMM(padded))
 end
 
 @testset "stacked transformations" begin
@@ -1546,19 +1575,22 @@ end
     @test overlap(stk_x, stk_y; interactions) ≈ overlap(lab_x, lab_y; interactions) rtol = 1e-12
     @test overlap(stk_x, stk_y) ≈ overlap(lab_x, lab_y) rtol = 1e-12
 
-    # pairwise constants: one SVector{Lx*Ly} entry per mean pair, zero weight for padded
-    # and non-interacting slot pairs
+    # pairwise constants: one entry per mean pair, holding only the slot pairings whose
+    # weight is nonzero. Term position carries no meaning, so these assert content, not
+    # layout — the two vectors need only stay aligned with each other.
     pσ, pϕ = GMA.pairwise_consts(stk_x, stk_y, interactions)
-    @test pσ isa Matrix{SVector{9, Float64}} && pϕ isa Matrix{SVector{9, Float64}}
+    @test pσ isa Matrix{<:SVector{<:Any, Float64}} && pϕ isa Matrix{<:SVector{<:Any, Float64}}
+    @test length(eltype(pσ)) == length(eltype(pϕ)) == maximum(count.(!iszero, pϕ)) <= 9
     @test size(pσ) == (3, 3)
-    # point 3 has one feature (:b): against point 3 only the (1, 1) slot pair can interact
+    @test all(all(>(0), v) for v in pσ)   # padded slots keep a positive, never-read variance
+    # point 3 has one feature (:b): against point 3 only one slot pairing can interact
     @test count(!iszero, pϕ[3, 3]) == 1
-    @test pϕ[3, 3][1] ≈ 0.5 * 1.2 * 1.2
-    @test pσ[3, 3][1] ≈ 1.0^2 + 1.0^2
+    stored(i, j) = [(pσ[i, j][m], pϕ[i, j][m]) for m in eachindex(pϕ[i, j]) if !iszero(pϕ[i, j][m])]
+    @test only(stored(3, 3))[1] ≈ 1.0^2 + 1.0^2
+    @test only(stored(3, 3))[2] ≈ 0.5 * 1.2 * 1.2
     # slot-pair weights carry the interaction coefficients: (:a, :c) → -0.3
     g1, g1y = stk_x.gaussians[1], stk_y.gaussians[2]
-    m_ac = findfirst(m -> (fldmod1(m, 3) == (1, 2)), 1:9)  # slot 1 (:a) of x vs slot 2 (:c) of y
-    @test pϕ[1, 2][m_ac] ≈ -0.3 * g1.ϕ[1] * g1y.ϕ[2]
+    @test any(c -> c[1] ≈ g1.σ[1]^2 + g1y.σ[2]^2 && c[2] ≈ -0.3 * g1.ϕ[1] * g1y.ϕ[2], stored(1, 2))
 
     # the mean-pair distance bounds are shared, so bounds match the duplicated model exactly
     plσ, plϕ = GMA.pairwise_consts(lab_x, lab_y, interactions)
@@ -1648,7 +1680,13 @@ end
 
     dpσ, dpϕ = GMA.tiv_pairwise_consts(tivd_x, tivd_y, interactions)
     spσ, spϕ = GMA.tiv_pairwise_consts(tivs_x, tivs_y, interactions)
-    @test spσ isa Matrix{SVector{162, Float64}}  # 2 ⋅ 3² ⋅ 3² terms per TIV pair
+    # only nonzero-weight terms are stored, so the length is the largest per-pair count
+    # rather than the dense 2 ⋅ 3² ⋅ 3² = 162
+    @test spσ isa Matrix{<:SVector{<:Any, Float64}}
+    @test length(eltype(spσ)) == maximum(count.(!iszero, spϕ)) < 162
+    @test size(spσ) == size(spϕ) && length(eltype(spσ)) == length(eltype(spϕ))
+    # an unused slot carries zero weight and a positive variance (never read, never singular)
+    @test all(all(>(0), v) for v in spσ)
     for R in (RotationVec(0.0, 0.0, 0.0), RotationVec(0.3, -0.2, 0.5), RotationVec(-1.0, 0.4, 0.9))
         @test overlap(R * tivs_x, tivs_y, spσ, spϕ) ≈ overlap(R * tivd_x, tivd_y, dpσ, dpϕ) rtol = 1e-10
     end
@@ -1662,6 +1700,39 @@ end
     res_lab = tiv_gogma_align(lab_x, lab_y; interactions, maxsplits = 2e3)
     @test res_stk.upperbound ≈ res_lab.upperbound rtol = 1e-6
     @test res_stk.upperbound ≈ -overlap(stk_x, stk_x; interactions) rtol = 1e-4
+
+    # TIV alignment against a known rigid transform of the model recovers that transform.
+    # Only valid when self-alignment is optimal, which needs non-repulsive interactions:
+    # under a net-repulsive dict the models score best pushed apart, not superimposed.
+    attractive = Dict((:a, :a) => 1.0, (:b, :b) => 0.5, (:c, :c) => 0.25)
+    R0, T0 = RotationVec(0.5, -0.3, 0.8), SVector(2.0, -1.5, 3.0)
+    stk_moved = stackedgmm(AffineMap(RotationVec(R0), T0)(lab_x))
+    res = tiv_gogma_align(stk_x, stk_moved; interactions = attractive, maxsplits = 2e4)
+    recovered = GMA.tform(res)
+    @test recovered.linear ≈ RotationVec(R0) atol = 1e-5
+    @test recovered.translation ≈ T0 atol = 1e-5
+    @test overlap(recovered(stk_x), stk_moved; interactions = attractive) ≈
+        overlap(stk_x, stk_x; interactions = attractive) rtol = 1e-6
+
+    # compaction tracks how many weights actually vanish: a sparser interaction dict stores
+    # strictly fewer terms per pair. Even the dense dict stores fewer than the 2 ⋅ 3² ⋅ 3²
+    # slot pairings, because padded slots are excluded whatever the interactions are — these
+    # stacks are ragged (3, 2, and 1 features), so no TIV pair has four full endpoints.
+    sparse_ints = Dict((:a, :a) => 1.0)
+    dense_ints = Dict((p, q) => 1.0 for (i, p) in enumerate([:a, :b, :c]) for q in [:a, :b, :c][i:end])
+    nterms(ints) = length(eltype(GMA.tiv_pairwise_consts(tivs_x, tivs_y, ints)[2]))
+    @test nterms(sparse_ints) < nterms(interactions) < nterms(dense_ints) < 162
+
+    # with full stacks and every label pair interacting, nothing vanishes and compaction is
+    # a no-op: all 2 ⋅ Lx² ⋅ Ly² pairings are stored
+    full = StackedLabeledIsotropicGMM(
+        [SVector(0.0, 0.0, 0.0), SVector(2.0, 0.0, 0.0), SVector(0.0, 2.0, 0.0)],
+        [[0.5, 0.8], [0.6, 0.9], [0.7, 1.0]], [[1.0, 2.0], [1.5, 0.7], [1.2, 1.1]],
+        [[:a, :b], [:a, :b], [:b, :a]]
+    )
+    tiv_full = GMA.tivgmm(full, Inf)
+    all_pairs = Dict((:a, :a) => 1.0, (:b, :b) => 1.0, (:a, :b) => 1.0)
+    @test length(eltype(GMA.tiv_pairwise_consts(tiv_full, tiv_full, all_pairs)[2])) == 2 * 2^2 * 2^2
 
     # mixed stacked × labeled TIV alignment lifts the labeled side
     res_mixed = tiv_gogma_align(stk_x, lab_y; interactions, maxsplits = 1e3)
