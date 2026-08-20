@@ -1,6 +1,6 @@
 name = "GaussianMixtureAlignment"
 uuid = "f2431ed1-b9c2-4fdb-af1b-a74d6c93b3b3"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Tom McGrath <tmcgrath325@gmail.com> and contributors"]
 
 [deps]
@@ -34,7 +34,7 @@ Distances = "0.10"
 ExplicitImports = "1.15"
 FiniteDifferences = "0.12"
 ForwardDiff = "0.10, 1"
-GenericLinearAlgebra = "0.3"
+GenericLinearAlgebra = "0.3, 0.4"
 GeometryBasics = "0.5"
 Hungarian = "0.7"
 IntervalSets = "0.7"
