@@ -63,15 +63,15 @@ end
     fr = GMA.FlexibleRegion(ur, [0.0, 0.5], [Float64(π), 0.3])   # K = 2
 
     @test GMA.njoints(fr) == 2
-    @test length(center(fr)) == 8                        # 6 rigid + 2 joints
-    @test center(fr) == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5)
+    @test length(GMA.center(fr)) == 8                    # 6 rigid + 2 joints
+    @test GMA.center(fr) == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5)
     @test UncertaintyRegion(fr) === ur                   # projection to the rigid box
 
     # the K-argument form covers the full angular range and, at K = 0, is purely rigid
     frfull = GMA.FlexibleRegion(ur, 2)
     @test frfull.φ == SVector(0.0, 0.0) && frfull.σφ == SVector(Float64(π), Float64(π))
     fr0 = GMA.FlexibleRegion(ur, 0)
-    @test length(center(fr0)) == 6
+    @test length(GMA.center(fr0)) == 6
     @test UncertaintyRegion(fr0) === ur
 
     # the splitter subdivides only the widest scaled group, bounding the branching factor
