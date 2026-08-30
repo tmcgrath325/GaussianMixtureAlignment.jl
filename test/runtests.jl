@@ -37,6 +37,11 @@ end
     if VERSION >= v"1.11"
         for name in (
                 :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+                :FlexibleRegion, :ArticulatedGMM, :ArticulatedStackedGMM, :Joint,
+                :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
+                :flex_displacements, :flex_gauss_l2_bounds, :SelfOverlap, :penalty, :penalty_bounds,
+                :flex_branchbound, :flex_local_align, :flex_pose, :flex_target, :FlexibleAlignmentResult,
+                :joint_angles, :target_joint_angles, :aligned, :aligned_target,
                 :icp, :iterative_hungarian,
                 :converged, :tform, :upperbound, :lowerbound, :obj_calls,
                 :num_splits, :num_blocks, :stagnant_splits, :progress,
@@ -46,6 +51,8 @@ end
         end
     end
 end
+
+include("flexible.jl")
 
 @testset "search space bounds" begin
     μx = SVector(3, 0, 0)

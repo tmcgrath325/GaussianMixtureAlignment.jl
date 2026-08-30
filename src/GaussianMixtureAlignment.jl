@@ -31,6 +31,7 @@ export AbstractGaussian, AbstractGMM
 export IsotropicGaussian, IsotropicGMM, LabeledIsotropicGMM, IsotropicMultiGMM
 export StackedLabeledGaussian, StackedLabeledIsotropicGMM, stackedgmm
 export overlap, force!, force, gogma_align, rot_gogma_align, trl_gogma_align, tiv_gogma_align
+export flex_gogma_align
 export rocs_align
 export PointSet, MultiPointSet
 export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
@@ -49,6 +50,11 @@ export kabsch, goicp_align, goih_align, tiv_goicp_align, tiv_goih_align
         Expr(
             :public,
             :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
+            :FlexibleRegion, :ArticulatedGMM, :ArticulatedStackedGMM, :Joint,
+            :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
+            :flex_displacements, :flex_gauss_l2_bounds, :SelfOverlap, :penalty, :penalty_bounds,
+            :flex_branchbound, :flex_local_align, :flex_pose, :flex_target, :FlexibleAlignmentResult,
+            :joint_angles, :target_joint_angles, :aligned, :aligned_target,
             :icp, :iterative_hungarian,
             :converged, :tform, :upperbound, :lowerbound, :obj_calls,
             :num_splits, :num_blocks, :stagnant_splits, :progress
@@ -103,10 +109,15 @@ include("utils.jl")
 include("uncertaintyregion.jl")
 include("distancebounds.jl")
 
+include("flexible/articulated.jl")
+include("flexible/region.jl")
+
 include("gogma/combine.jl")
 include("gogma/transformation.jl")
 include("gogma/overlap.jl")
 include("gogma/bounds.jl")
+include("flexible/bounds.jl")
+include("flexible/selfoverlap.jl")
 
 include("goicp/bounds.jl")
 include("goicp/correspondence.jl")
@@ -120,6 +131,7 @@ include("branchbound.jl")
 
 include("gogma/tiv.jl")
 include("gogma/align.jl")
+include("flexible/align.jl")
 include("goicp/tiv.jl")
 include("goicp/align.jl")
 include("rocs/rocsalign.jl")
