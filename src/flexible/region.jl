@@ -7,6 +7,8 @@
 
 A search region over `(R, T, φ₁…φ_K)`: an `UncertaintyRegion` `rigid` for the rigid
 rotation/translation, plus per-joint angle centers `φ` and half-widths `σφ` (length `K`).
+When both models of an alignment are articulated, `K` counts the joints of both: the moving
+model's joints come first, followed by the target's.
 
 The `K`-argument form covers the full angular range of every joint (`φ = 0`, `σφ = π`). With
 `K = 0` the region carries no joints and projects to `rigid` unchanged.

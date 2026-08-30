@@ -74,9 +74,10 @@ ArticulatedGMM(gaussians::AbstractVector{IsotropicGaussian{N, T}}, joints::Abstr
 """
     njoints(model)
 
-Return the number of rotatable joints in an articulated `model`.
+Return the number of rotatable joints in an articulated `model`. A model that does not
+implement the articulated interface is rigid and has zero joints.
 """
-function njoints end
+njoints(::AbstractModel) = 0
 
 """
     joint_axis(model, b)
@@ -121,9 +122,15 @@ and the frames of its descendant joints about the joint's current axis by `φ[b]
 applied in stored order, so an ancestor's rotation carries its descendants' axes along before
 those are used.
 
-The base (unflexed) model is recovered by `φ = zeros`.
+The base (unflexed) model is recovered by `φ = zeros`. A rigid model (`njoints(model) == 0`)
+accepts only an empty `φ` and is returned unchanged.
 """
-function flex end
+function flex(model::AbstractModel, φ)
+    K = njoints(model)
+    K == 0 || throw(MethodError(flex, (model, φ)))
+    length(φ) == 0 || throw(DimensionMismatch("expected 0 joint angles, got $(length(φ))"))
+    return model
+end
 
 function flex(model::ArticulatedGMM{N, T}, φ) where {N, T}
     K = njoints(model)

@@ -1,18 +1,23 @@
 ## Flexible (articulated) bounds over a `FlexibleRegion`.
 ##
-## Over the region, the transformed position of feature g lies within δ_g of the
-## rigidly-transformed center-conformation point R·c_g + T, where c_g is g's position at the
-## block-center joint angles. The reachable set is thus a rigid-uncertainty image of the ball
-## B(c_g, δ_g): the rigid lower distance bound on c_g, loosened by δ_g, lower-bounds the true
-## distance, while the center distance stays a valid upper bound. Only δ_g is new; the rest
-## reuses the rigid `distance_bound_fun` and `overlap`.
+## Over the region, the transformed position of feature g of the moving model lies within δ_g
+## of the rigidly-transformed center-conformation point R·c_g + T, where c_g is g's position at
+## the block-center joint angles, and feature h of the target lies within ε_h of its own
+## center-conformation point d_h (the target is never rigidly transformed). The reachable sets
+## are thus a rigid-uncertainty image of the ball B(c_g, δ_g) and the ball B(d_h, ε_h): the
+## rigid lower distance bound on (c_g, d_h), loosened by δ_g + ε_h, lower-bounds the true
+## distance, while the center distance stays a valid upper bound. Only δ and ε are new; the
+## rest reuses the rigid `distance_bound_fun` and `overlap`.
 
 """
+    xc, δ = flex_displacements(x, φ, σφ)
     xc, δ = flex_displacements(x, block::FlexibleRegion)
 
-Return the center-conformation model `xc = flex(x, block.φ)` and a vector `δ` of per-feature
+Return the center-conformation model `xc = flex(x, φ)` and a vector `δ` of per-feature
 body-frame displacement radii: `δ[g]` upper-bounds how far feature `g` can move, in the
-model's frame, as the joint angles range over `block`.
+model's frame, as the joint angles range over the box of centers `φ` and half-widths `σφ`
+(one entry per joint of `x`). The `block` form uses the block's joint intervals, which must
+all belong to `x`.
 
 `δ[g]` accumulates one chord per joint on `g`'s root-to-feature path. A joint `b` of angular
 half-width `σ_b` rotating a point at perpendicular distance `ρ` from its axis moves it by at
@@ -21,64 +26,119 @@ most `2·sin(σ_b/2)·ρ`. The radius `ρ` is the center-conformation perpendicu
 feature) can already impart — so the sum is taken from the feature inward, carrying that
 displacement toward the root.
 """
-function flex_displacements(x, block::FlexibleRegion{T, K}) where {T, K}
-    njoints(x) == K || throw(DimensionMismatch("model has $(njoints(x)) joints but region has $K"))
-    xc = flex(x, block.φ)
+function flex_displacements(x, φ, σφ)
+    K = njoints(x)
+    length(φ) == K || throw(DimensionMismatch("model has $K joints but $(length(φ)) angle centers were given"))
+    length(σφ) == K || throw(DimensionMismatch("model has $K joints but $(length(σφ)) half-widths were given"))
+    xc = flex(x, φ)
     n = length(xc)
-    S = promote_type(numbertype(xc), T)
-    # features moved by each joint, gathered per feature in ascending (root→leaf) joint order
-    joints_of = [Int[] for _ in 1:n]
-    for b in 1:K
-        for g in joint_features(x, b)
-            push!(joints_of[g], b)
-        end
-    end
+    S = promote_type(numbertype(xc), eltype(φ), eltype(σφ))
+    joints_of = feature_joints(x)
     δ = zeros(S, n)
     for g in 1:n
-        μg = xc.gaussians[g].μ
-        acc = zero(S)
         # inward sweep: a distal joint's chord inflates the rotation radius of the joints
         # closer to the root, so accumulate from the feature toward the root
-        for b in Iterators.reverse(joints_of[g])
-            ax = joint_axis(xc, b)
-            o = joint_origin(xc, b)
-            d = μg - o
-            ρ = norm(d - dot(d, ax) * ax) + acc
-            acc += 2 * sin(min(block.σφ[b], S(π)) / 2) * ρ
-        end
-        δ[g] = acc
+        δ[g] = chord_sum(xc, xc.gaussians[g].μ, Iterators.reverse(joints_of[g]), σφ, S)
     end
     return xc, δ
 end
 
 """
+    joints_of = feature_joints(x)
+
+For each feature of `x`, the indices of the joints that move it, in ascending (root→leaf)
+order. Features moved by the same joints lie on the same rigid fragment of the model.
+"""
+function feature_joints(x)
+    joints_of = [Int[] for _ in 1:length(x)]
+    for b in 1:njoints(x)
+        for g in joint_features(x, b)
+            push!(joints_of[g], b)
+        end
+    end
+    return joints_of
+end
+
+# Bound on how far the point `μ` moves when the joints in `path` (taken in the order given,
+# which must run from the point toward the frame it is measured in) each rotate by up to
+# their half-width in `σφ`. Axes are read from the center conformation `xc`: each joint's
+# chord `2·sin(σ/2)·ρ` uses `μ`'s perpendicular distance to the axis inflated by the
+# displacement the joints already applied can impart.
+function chord_sum(xc, μ, path, σφ, ::Type{S}) where {S}
+    acc = zero(S)
+    for b in path
+        ax = joint_axis(xc, b)
+        o = joint_origin(xc, b)
+        d = μ - o
+        ρ = norm(d - dot(d, ax) * ax) + acc
+        acc += 2 * sin(min(σφ[b], S(π)) / 2) * ρ
+    end
+    return acc
+end
+
+function flex_displacements(x, block::FlexibleRegion{T, K}) where {T, K}
+    njoints(x) == K || throw(DimensionMismatch("model has $(njoints(x)) joints but region has $K"))
+    return flex_displacements(x, block.φ, block.σφ)
+end
+
+"""
+    xφ, xσφ, yφ, yσφ = joint_intervals(x, y, block::FlexibleRegion)
+
+Split the joint intervals of `block` between the moving model `x` (its first `njoints(x)`
+entries) and the target `y` (the remaining `njoints(y)`), as static vectors.
+"""
+function joint_intervals(x, y, block::FlexibleRegion{T, K}) where {T, K}
+    Kx, Ky = njoints(x), njoints(y)
+    Kx + Ky == K || throw(DimensionMismatch("models have $Kx + $Ky joints but region has $K"))
+    xφ = SVector{Kx, T}(ntuple(k -> block.φ[k], Kx))
+    xσφ = SVector{Kx, T}(ntuple(k -> block.σφ[k], Kx))
+    yφ = SVector{Ky, T}(ntuple(k -> block.φ[Kx + k], Ky))
+    yσφ = SVector{Ky, T}(ntuple(k -> block.σφ[Kx + k], Ky))
+    return xφ, xσφ, yφ, yσφ
+end
+
+"""
     lowerbound, upperbound = flex_gauss_l2_bounds(x, y, block::FlexibleRegion, pσ, pϕ; distance_bound_fun=tight_distance_bounds)
 
-Bounds on the negative-overlap objective between an articulated model `x` and a fixed single
-GMM `y` over the flexible search region `block`. `pσ` and `pϕ` are the transform-invariant
-pairwise constants from [`pairwise_consts`](@ref)`(x, y)`.
+Bounds on the negative-overlap objective between an articulated moving model `x` and a target
+GMM `y` over the search region `block`, whose `njoints(x) + njoints(y)` joint intervals are
+those of `x` followed by those of `y` (a rigid target has none). `pσ` and `pϕ` are the
+transform-invariant pairwise constants from [`pairwise_consts`](@ref)`(x, y)`.
 
-The rigid distance bounds are evaluated at the block-center conformation `flex(x, block.φ)`
-and loosened by the per-feature displacement radii of [`flex_displacements`](@ref): the lower
-distance bound is reduced by `δ` (increased, for repulsive `w < 0` pairs), while the upper
-bound — the distance at the block center, a feasible configuration — is unchanged.
+The rigid distance bounds are evaluated between the block-center conformations `flex(x, xφ)`
+and `flex(y, yφ)` and loosened by the per-feature displacement radii of
+[`flex_displacements`](@ref) for both models: the lower distance bound is reduced by `δ + ε`
+(increased, for repulsive `w < 0` pairs), while the upper bound — the distance at the block
+center, a feasible configuration — is unchanged.
+
+`penalties = (px, py)` adds the bounds of a [`SelfOverlap`](@ref) penalty on each model
+(`nothing` for none); see [`penalty_bounds`](@ref).
 """
-function flex_gauss_l2_bounds(x, y::AbstractSingleGMM, block::FlexibleRegion, pσ, pϕ; distance_bound_fun = tight_distance_bounds)
-    xc, δ = flex_displacements(x, block)
+function flex_gauss_l2_bounds(
+        x, y::AbstractSingleGMM, block::FlexibleRegion, pσ, pϕ;
+        distance_bound_fun = tight_distance_bounds, penalties = (nothing, nothing)
+    )
+    xφ, xσφ, yφ, yσφ = joint_intervals(x, y, block)
+    px, py = penalties
+    lbpx, ubpx = penalty_bounds(px, x, xφ, xσφ)
+    lbpy, ubpy = penalty_bounds(py, y, yφ, yσφ)
+    xc, δ = flex_displacements(x, xφ, xσφ)
+    yc, ε = flex_displacements(y, yφ, yσφ)
     R, Tr, σᵣ, σₜ = block.rigid.R, block.rigid.T, block.rigid.σᵣ, block.rigid.σₜ
     lb = 0.0
     ub = 0.0
     for (i, gx) in enumerate(xc.gaussians)
-        for (j, gy) in enumerate(y.gaussians)
+        for (j, gy) in enumerate(yc.gaussians)
             s = pσ[i, j]
             w = pϕ[i, j]
             # apply the block-center rigid transform, then bound over the residual box — the
             # same pre-transform the rigid `gauss_l2_bounds` uses
             (lbdist, ubdist) = distance_bound_fun(R * gx.μ, gy.μ - Tr, σᵣ, σₜ, w < 0)
-            lbdist = w < 0 ? lbdist + δ[i] : max(lbdist - δ[i], zero(lbdist))
+            slack = δ[i] + ε[j]
+            lbdist = w < 0 ? lbdist + slack : max(lbdist - slack, zero(lbdist))
             lb += -overlap(lbdist^2, s, w)
             ub += -overlap(ubdist^2, s, w)
         end
     end
-    return lb, ub
+    return lb + lbpx + lbpy, ub + ubpx + ubpy
 end

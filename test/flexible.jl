@@ -247,3 +247,229 @@ end
     @test early.terminated_by == "terminated early"
     @test !GMA.converged(early)
 end
+
+# objective at a concrete (R, T, φ, ψ) with both models articulated: x is flexed and posed,
+# y is flexed in place
+function _objective2(x, y, R, T, φ, ψ, pσ, pϕ)
+    tx = R * IsotropicGMM(GMA.flex(x, φ)) + T
+    ty = GMA.flex(y, ψ)
+    tot = 0.0
+    for (i, gx) in enumerate(tx.gaussians), (j, gy) in enumerate(ty.gaussians)
+        tot += -overlap(sum(abs2, gx.μ - gy.μ), pσ[i, j], pϕ[i, j])
+    end
+    return tot
+end
+
+@testset "flexible: articulated target (both models jointed)" begin
+    V3(a, b, c) = SVector(a, b, c)
+
+    # a rigid GMM is an articulated model with no joints
+    plain = IsotropicGMM([IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(1, 0, 0), 1.0, 1.0)])
+    @test GMA.njoints(plain) == 0
+    @test GMA.flex(plain, ()) === plain
+    @test_throws DimensionMismatch GMA.flex(plain, [0.0])
+
+    gs = [
+        IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(1, 0, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(2, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(2, 1, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(3, 0, 0), 1.0, 1.0),
+    ]
+    js = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    x = GMA.ArticulatedGMM(gs, js)
+    # the target: the same tree, differently placed, with one joint dropped (Kx = 2, Ky = 1)
+    ygs = [IsotropicGaussian(RotationVec(0.3, -0.2, 0.5) * g.μ + V3(1.0, -2.0, 0.5), g.σ, g.ϕ) for g in gs]
+    yj = GMA.Joint(RotationVec(0.3, -0.2, 0.5) * V3(0, 0, 1.0), RotationVec(0.3, -0.2, 0.5) * V3(1.0, 0, 0) + V3(1.0, -2.0, 0.5), [2, 3, 4, 5], Int[])
+    y = GMA.ArticulatedGMM(ygs, [yj])
+    pσ, pϕ = GMA.pairwise_consts(x, y)
+
+    # the block's joint intervals split between the models in order: x's first, then y's
+    fr = GMA.FlexibleRegion(UncertaintyRegion(), [0.1, 0.2, 0.3], [0.4, 0.5, 0.6])
+    xφ, xσφ, yφ, yσφ = GMA.joint_intervals(x, y, fr)
+    @test xφ == SVector(0.1, 0.2) && xσφ == SVector(0.4, 0.5)
+    @test yφ == SVector(0.3) && yσφ == SVector(0.6)
+    @test_throws DimensionMismatch GMA.joint_intervals(x, y, GMA.FlexibleRegion(UncertaintyRegion(), 2))
+    @test_throws DimensionMismatch GMA.flex_displacements(x, fr)   # 3 intervals, 2 joints
+
+    # lb ≤ objective at every sampled feasible (R, T, φ, ψ); ub == objective at the block
+    # center; lb ≤ ub — for attractive weights and a sign-flipped repulsive mix
+    rng = MersenneTwister(20260830)
+    for pϕtest in (pϕ, (m = copy(pϕ); m[1:2, :] .*= -1; m))
+        lb_ok = true
+        ub_ok = true
+        order_ok = true
+        for _ in 1:60
+            R0 = _randR(rng, RotationVec(0, 0, 0), 0.6)
+            T0 = _randT(rng, V3(0, 0, 0), 1.0)
+            σᵣ = 0.3 + 0.5rand(rng)
+            σₜ = 0.3 + rand(rng)
+            φc = [2π * rand(rng) - π for _ in 1:3]
+            σφ = [0.8 * rand(rng) for _ in 1:3]
+            block = GMA.FlexibleRegion(UncertaintyRegion(R0, T0, σᵣ, σₜ), φc, σφ)
+            lb, ub = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕtest)
+            order_ok &= lb <= ub + 1.0e-9
+            ub_ok &= isapprox(ub, _objective2(x, y, R0, T0, φc[1:2], φc[3:3], pσ, pϕtest); atol = 1.0e-8, rtol = 1.0e-8)
+            for _ in 1:60
+                angles = _randφ(rng, φc, σφ)
+                obj = _objective2(x, y, _randR(rng, R0, σᵣ), _randT(rng, T0, σₜ), angles[1:2], angles[3:3], pσ, pϕtest)
+                lb_ok &= lb <= obj + 1.0e-9
+            end
+        end
+        @test lb_ok
+        @test ub_ok
+        @test order_ok
+    end
+
+    # reductions: a frozen target joint matches the one-sided bounds against the flexed
+    # target, and a rigid target matches the one-sided bounds exactly
+    rigid = UncertaintyRegion(RotationVec(0.2, -0.1, 0.3), V3(0.5, -1.0, 0.2), 0.4, 0.7)
+    φ = [0.6, -0.9]
+    ψ = 0.4
+    lb2, ub2 = GMA.flex_gauss_l2_bounds(x, y, GMA.FlexibleRegion(rigid, [φ; ψ], [0.5, 0.3, 0.0]), pσ, pϕ)
+    lb1, ub1 = GMA.flex_gauss_l2_bounds(x, IsotropicGMM(GMA.flex(y, [ψ])), GMA.FlexibleRegion(rigid, φ, [0.5, 0.3]), pσ, pϕ)
+    @test lb2 ≈ lb1 && ub2 ≈ ub1
+    yr = IsotropicGMM(ygs)
+    lbr, ubr = GMA.flex_gauss_l2_bounds(x, yr, GMA.FlexibleRegion(rigid, φ, [0.5, 0.3]), pσ, pϕ)
+    lb0, ub0 = GMA.flex_gauss_l2_bounds(x, y, GMA.FlexibleRegion(rigid, [φ; 0.0], [0.5, 0.3, 0.0]), pσ, pϕ)
+    @test lbr ≈ lb0 && ubr ≈ ub0
+    # widening the target's joint interval can only loosen the lower bound
+    lbw, ubw = GMA.flex_gauss_l2_bounds(x, y, GMA.FlexibleRegion(rigid, [φ; ψ], [0.5, 0.3, 0.7]), pσ, pϕ)
+    @test lbw <= lb2 + 1.0e-12 && ubw ≈ ub2
+
+    # parameter layout: (rigid, x angles, y angles)
+    params = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+    @test GMA.flex_target(params, x, y).gaussians[3].μ ≈ GMA.flex(y, [0.9]).gaussians[3].μ
+    @test GMA.flex_pose(params, x).gaussians[3].μ ≈ GMA.flex_pose(params[1:8], x).gaussians[3].μ
+    @test_throws DimensionMismatch GMA.flex_target(params[1:8], x, y)
+
+    # alignment against a target that is itself a flexed, posed copy of x with one joint
+    planted = (0.5, -0.3, 0.9, 1.0, -1.5, 0.7, 0.8, -0.6, 0.5)
+    posed = GMA.flex_pose(planted, x)
+    target = GMA.flex_target(planted, x, y)
+    ideal = overlap(posed, target)
+    res = GMA.flex_gogma_align(x, y; maxsplits = 300)
+    # the search is at least as good as the (feasible) planted configuration, its bounds
+    # bracket the objective, and the reported parameters reproduce the reported objective
+    @test -res.upperbound >= ideal - 1.0e-6
+    @test res.lowerbound <= res.upperbound
+    @test overlap(GMA.aligned(res), GMA.aligned_target(res)) ≈ -res.upperbound atol = 1.0e-8
+    @test length(GMA.joint_angles(res)) == 2
+    @test length(GMA.target_joint_angles(res)) == 1
+    @test GMA.aligned_target(res) isa GMA.ArticulatedGMM{3, Float64}
+    @test length(res.tform_params) == 9
+    @test occursin("target joint angles", sprint(show, MIME"text/plain"(), res))
+
+    # a rigid target leaves the target-side interface empty
+    res1 = GMA.flex_gogma_align(x, yr; maxsplits = 50)
+    @test GMA.target_joint_angles(res1) == ()
+    @test GMA.aligned_target(res1) === yr
+    @test length(res1.tform_params) == 8
+
+    # the default search space covers the target's reachable extent, not just its base pose
+    stretched = GMA.ArticulatedGMM(
+        [IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(0, 0, 4.0), 1.0, 1.0)],
+        [GMA.Joint(V3(0, 1.0, 0), V3(0, 0, 0.0), [2], Int[])]
+    )
+    @test GMA.flex_extent(stretched) >= 8 - 1.0e-9
+    @test GMA.flex_extent(IsotropicGMM(stretched.gaussians)) == 4
+end
+
+@testset "flexible: self-overlap penalty" begin
+    V3(a, b, c) = SVector(a, b, c)
+    gs = [
+        IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(1, 0, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(2, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(2, 1, 0), 1.0, 1.0),
+        IsotropicGaussian(V3(3, 0, 0), 1.0, 1.0),
+    ]
+    # joint 1 moves 2..5 and reframes joint 2, which moves 4 and 5: three rigid fragments,
+    # {1}, {2, 3} and {4, 5}
+    js = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    x = GMA.ArticulatedGMM(gs, js)
+
+    @test GMA.feature_joints(x) == [Int[], [1], [1], [1, 2], [1, 2]]
+    p = GMA.SelfOverlap(x; weight = 2.0)
+    # pairs within a fragment are omitted: 10 pairs total minus (2,3) and (4,5)
+    @test length(p) == 8
+    @test (2, 3) ∉ p.pairs && (4, 5) ∉ p.pairs
+    pathof(g, h) = p.paths[findfirst(==((g, h)), p.pairs)]
+    @test pathof(1, 3) == [1]             # only joint 1 lies between fragments {1} and {2,3}
+    @test pathof(1, 4) == [2, 1]          # from feature 4 toward feature 1: joint 2, then 1
+    @test pathof(2, 4) == [2]             # the shared joint 1 drops out
+    @test p.s == fill(2.0, 8) && p.w == fill(1.0, 8)
+
+    # the penalty is the weighted self-overlap over those pairs, and ignores the rigid pose
+    φ = [0.7, -0.4]
+    xc = GMA.flex(x, φ)
+    expected = 2.0 * sum(overlap(sum(abs2, xc.gaussians[g].μ - xc.gaussians[h].μ), 2.0, 1.0) for (g, h) in p.pairs)
+    @test GMA.penalty(p, xc) ≈ expected
+    @test GMA.penalty(p, RotationVec(0.3, 0.2, -0.5) * xc + V3(1, 2, 3)) ≈ expected
+    @test GMA.penalty(nothing, xc) == 0
+    @test GMA.penalty_bounds(nothing, x, φ, [0.1, 0.1]) == (0, 0)
+
+    # over any joint box, each pair's distance stays within its path chord sum of the center
+    # distance, and the penalty bounds bracket the penalty at every sampled conformation
+    rng = MersenneTwister(20260831)
+    dist_ok = true
+    lb_ok = true
+    ub_ok = true
+    for _ in 1:60
+        φc = [2π * rand(rng) - π for _ in 1:2]
+        σφ = [0.9 * rand(rng) for _ in 1:2]
+        xcen = GMA.flex(x, φc)
+        lb, ub = GMA.penalty_bounds(p, x, φc, σφ)
+        ub_ok &= isapprox(ub, GMA.penalty(p, xcen); atol = 1.0e-10)
+        for _ in 1:60
+            xf = GMA.flex(x, _randφ(rng, φc, σφ))
+            lb_ok &= lb <= GMA.penalty(p, xf) + 1.0e-9
+            for (k, (g, h)) in enumerate(p.pairs)
+                dc = norm(xcen.gaussians[h].μ - xcen.gaussians[g].μ)
+                df = norm(xf.gaussians[h].μ - xf.gaussians[g].μ)
+                δ = GMA.chord_sum(xcen, xcen.gaussians[h].μ, p.paths[k], σφ, Float64)
+                dist_ok &= abs(df - dc) <= δ + 1.0e-9
+            end
+        end
+    end
+    @test dist_ok
+    @test lb_ok
+    @test ub_ok
+
+    # frozen joints: bounds collapse to the penalty value; a repulsive pair flips the bound
+    lbz, ubz = GMA.penalty_bounds(p, x, φ, [0.0, 0.0])
+    @test lbz ≈ ubz ≈ GMA.penalty(p, xc)
+    prep = GMA.SelfOverlap{Float64}(1.0, p.pairs, p.s, -p.w, p.paths)
+    lbr, ubr = GMA.penalty_bounds(prep, x, φ, [0.3, 0.3])
+    @test lbr <= ubr && ubr ≈ GMA.penalty(prep, xc)
+
+    # the penalized objective bounds still bracket the penalized objective; the penalty adds
+    # exactly its own bounds to the overlap bounds
+    y = RotationVec(0.3, -0.2, 0.5) * IsotropicGMM(GMA.flex(x, [0.7, -0.4])) + V3(1.0, -2.0, 0.5)
+    pσ, pϕ = GMA.pairwise_consts(x, y)
+    rigid = UncertaintyRegion(RotationVec(0.2, -0.1, 0.3), V3(0.5, -1.0, 0.2), 0.4, 0.7)
+    block = GMA.FlexibleRegion(rigid, φ, [0.5, 0.3])
+    lb0, ub0 = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ)
+    lbp, ubp = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ; penalties = (p, nothing))
+    plb, pub = GMA.penalty_bounds(p, x, φ, [0.5, 0.3])
+    @test lbp ≈ lb0 + plb && ubp ≈ ub0 + pub
+    params = (0.2, -0.1, 0.3, 0.5, -1.0, 0.2, 0.7, -0.4)
+    @test GMA.flex_overlapobj(params, x, y, pσ, pϕ; penalties = (p, nothing)) ≈ GMA.flex_overlapobj(params, x, y, pσ, pϕ) + GMA.penalty(p, xc)
+
+    # end to end: the reported objective is the penalized objective at the reported
+    # parameters, and it is bracketed by the bounds; weight 0 is the unpenalized search
+    res = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, maxsplits = 200)
+    xt = GMA.aligned(res)
+    p1 = GMA.SelfOverlap(x; weight = 1.0)
+    @test res.upperbound ≈ -overlap(xt, y) + GMA.penalty(p1, xt) atol = 1.0e-8
+    @test res.lowerbound <= res.upperbound
+    res0 = GMA.flex_gogma_align(x, y; selfoverlap = 0, maxsplits = 200)
+    resnone = GMA.flex_gogma_align(x, y; maxsplits = 200)
+    @test res0.upperbound == resnone.upperbound
+    @test_throws "nonnegative" GMA.flex_gogma_align(x, y; selfoverlap = -1)
+    # a rigid model gets no penalty object: the search is unchanged by the weight
+    xr = GMA.ArticulatedGMM(gs, GMA.Joint{3, Float64}[])
+    @test GMA.flex_gogma_align(xr, y; selfoverlap = 5.0, maxsplits = 20).upperbound ≈ GMA.flex_gogma_align(xr, y; maxsplits = 20).upperbound
+end
