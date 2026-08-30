@@ -593,3 +593,30 @@ _objective_stacked(x, y, R, T, φ, pσ, pϕ) = -overlap(R * GMA.flex(x, φ) + T,
     # a stacked model cannot be paired with an unlabeled target
     @test_throws "stacked" GMA.flex_gogma_align(x, IsotropicGMM(collect(dupy.gaussians)))
 end
+
+@testset "flexible: separate self-overlap interactions" begin
+    V3(a, b, c) = SVector(a, b, c)
+    SG(μ, ϕb) = StackedLabeledGaussian(V3(μ...), SVector(1.0, 0.8), SVector(1.0, ϕb), SVector(:a, :b))
+    gs = [SG((0, 0, 0), 0.0), SG((1, 0, 0), 0.6), SG((2, 0, 0), 0.0), SG((2, 1, 0), 0.9), SG((3, 0, 0), 0.4)]
+    js = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    x = GMA.ArticulatedStackedGMM(gs, js)
+    y = StackedLabeledIsotropicGMM(collect((RotationVec(0.3, -0.2, 0.5) * GMA.flex(x, [0.7, -0.4]) + V3(1.0, -2.0, 0.5)).gaussians))
+
+    # a label pair scored negatively between the models but positively within the model
+    inter = Dict((:a, :a) => 1.0, (:b, :b) => -0.5)
+    selfinter = Dict((:a, :a) => 1.0, (:b, :b) => 0.5)
+    res = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, interactions = inter, selfoverlap_interactions = selfinter, maxsplits = 100)
+    xt = GMA.aligned(res)
+    pσ, pϕ = GMA.pairwise_consts(x, y, inter)
+    p = GMA.SelfOverlap(x; interactions = selfinter)
+    @test res.upperbound ≈ -overlap(xt, y, pσ, pϕ) + GMA.penalty(p, xt) atol = 1.0e-8
+    # the penalty differs from the one the scoring interactions would build
+    @test GMA.penalty(p, xt) != GMA.penalty(GMA.SelfOverlap(x; interactions = inter), xt)
+    # by default the penalty follows the scoring interactions
+    res0 = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, interactions = inter, maxsplits = 100)
+    xt0 = GMA.aligned(res0)
+    @test res0.upperbound ≈ -overlap(xt0, y, pσ, pϕ) + GMA.penalty(GMA.SelfOverlap(x; interactions = inter), xt0) atol = 1.0e-8
+end
