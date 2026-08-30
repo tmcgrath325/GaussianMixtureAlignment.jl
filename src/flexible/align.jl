@@ -277,7 +277,8 @@ function flex_branchbound(
 end
 
 """
-    result = flex_gogma_align(x, y; interactions=nothing, selfoverlap=0, autodiff=AutoForwardDiff(), nsplits=2, kwargs...)
+    result = flex_gogma_align(x, y; interactions=nothing, selfoverlap=0, selfoverlap_interactions=interactions,
+                              autodiff=AutoForwardDiff(), nsplits=2, kwargs...)
 
 Find a globally optimal *flexible* transformation aligning the model `x` onto the target `y`:
 a rigid rotation and translation plus one rotation angle per joint of `x` and, if the target
@@ -291,14 +292,23 @@ units of the objective: with `selfoverlap = 1`, stacking two features costs as m
 target overlap it would gain. Without it, a model can raise its score by folding onto the
 target's dense regions.
 
+`selfoverlap_interactions` sets the label-interaction coefficients used inside the penalty,
+independently of the `interactions` that score the models against each other. The two
+legitimately differ: a label pair weighted negatively between models (a steric clash term)
+must still be charged positively within a model, or folding into self-clash would lower the
+penalty instead of raising it.
+
 Returns a [`FlexibleAlignmentResult`](@ref) whose `upperbound` is the penalized objective.
 Additional keyword arguments are forwarded to `flex_branchbound` (tolerances and iteration
 limits); see `?flex_branchbound`.
 """
-function flex_gogma_align(x, y; interactions = nothing, selfoverlap = 0, flextarget::Bool = false, autodiff = AutoForwardDiff(), nsplits = 2, kwargs...)
+function flex_gogma_align(
+        x, y; interactions = nothing, selfoverlap = 0, selfoverlap_interactions = interactions,
+        flextarget::Bool = false, autodiff = AutoForwardDiff(), nsplits = 2, kwargs...
+    )
     pσ, pϕ = pairwise_consts(x, y, interactions)
     selfoverlap >= 0 || throw(ArgumentError("selfoverlap weight must be nonnegative; got $selfoverlap"))
-    mkpenalty(m) = (selfoverlap > 0 && njoints(m) > 0) ? SelfOverlap(m; weight = selfoverlap, interactions) : nothing
+    mkpenalty(m) = (selfoverlap > 0 && njoints(m) > 0) ? SelfOverlap(m; weight = selfoverlap, interactions = selfoverlap_interactions) : nothing
     # a target held rigid has a constant self-overlap, which is left out of the objective
     penalties = (mkpenalty(x), flextarget ? mkpenalty(y) : nothing)
     boundsfun(a, b, block) = flex_gauss_l2_bounds(a, b, block, pσ, pϕ; penalties)
