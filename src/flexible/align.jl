@@ -27,11 +27,14 @@ end
     flexedy = flex_target(params, x, y)
 
 Flex the target `y` by its joint angles, the `njoints(y)` entries of `params` that follow the
-`6 + njoints(x)` entries used by [`flex_pose`](@ref). A rigid target is returned unchanged.
+`6 + njoints(x)` entries used by [`flex_pose`](@ref). With no such entries the target is held
+in its base conformation; a rigid target is returned unchanged either way.
 """
 function flex_target(params, x, y)
     Kx, Ky = njoints(x), njoints(y)
-    length(params) == 6 + Kx + Ky || throw(DimensionMismatch("expected $(6 + Kx + Ky) parameters, got $(length(params))"))
+    n = length(params)
+    n == 6 + Kx && return flex(y, ntuple(_ -> zero(eltype(params)), Ky))
+    n == 6 + Kx + Ky || throw(DimensionMismatch("expected $(6 + Kx) or $(6 + Kx + Ky) parameters, got $n"))
     ψ = ntuple(k -> params[6 + Kx + k], Ky)
     return flex(y, ψ)
 end
@@ -121,9 +124,14 @@ aligned(r::FlexibleAlignmentResult) = flex_pose(r.tform_params, r.x)
     aligned_target(result)
 
 Return the target of a flexible alignment flexed by its optimal joint angles, i.e.
-`flex(result.y, target_joint_angles(result))`. For a rigid target this is `result.y` itself.
+`flex(result.y, target_joint_angles(result))`. A target whose joints were not searched is
+returned in its base conformation, and a rigid target is `result.y` itself.
 """
-aligned_target(r::FlexibleAlignmentResult) = flex(r.y, r.target_angles)
+function aligned_target(r::FlexibleAlignmentResult)
+    Ky = njoints(r.y)
+    ψ = length(r.target_angles) == Ky ? r.target_angles : ntuple(_ -> zero(eltype(r.tform_params)), Ky)
+    return flex(r.y, ψ)
+end
 
 function Base.show(io::IO, ::MIME"text/plain", r::FlexibleAlignmentResult)
     println(io, "FlexibleAlignmentResult:")
@@ -139,7 +147,8 @@ function Base.show(io::IO, ::MIME"text/plain", r::FlexibleAlignmentResult)
 end
 
 function flexible_result(x, y, ub, lb, params, obj_calls, num_splits, num_blocks, stagnant_splits, progress, terminated_by)
-    Kx, Ky = njoints(x), njoints(y)
+    Kx = njoints(x)
+    Ky = length(params) - 6 - Kx     # zero when the target was held rigid
     R = RotationVec(params[1], params[2], params[3])
     T = SVector{3}(params[4], params[5], params[6])
     tform = AffineMap(R, T)
@@ -166,44 +175,39 @@ end
 
 # ordering weights for the splitter: convert each group's angular half-width to an approximate
 # displacement so the widest group is split first. Correctness is unaffected; only search order.
-function flex_split_scales(x, y)
+function flex_split_scales(x, y, flextarget::Bool)
     T = promote_type(numbertype(x), numbertype(y))
     rotscale = maximum((norm(g.μ) for g in x.gaussians); init = one(T))
-    return rotscale, one(T), (joint_radii(x)..., joint_radii(y)...)
-end
-
-# largest absolute coordinate any feature of `m` can reach over the full range of its joints:
-# the base coordinate extent plus the full-range displacement radius of `flex_displacements`
-function flex_extent(m)
-    K = njoints(m)
-    T = numbertype(m)
-    _, δ = flex_displacements(m, zero(SVector{K, T}), SVector{K, T}(ntuple(_ -> T(π), K)))
-    return maximum((maximum(abs, m.gaussians[g].μ) + δ[g] for g in 1:length(m)); init = zero(T))
+    jointscales = flextarget ? (joint_radii(x)..., joint_radii(y)...) : joint_radii(x)
+    return rotscale, one(T), jointscales
 end
 
 """
-    result = flex_branchbound(x, y; boundsfun, localfun, splitfun, kwargs...)
+    result = flex_branchbound(x, y; boundsfun, localfun, splitfun, flextarget=false, kwargs...)
 
 Branch-and-bound over the articulated search space for aligning `x` onto `y`, either or both
 of which may be articulated. `boundsfun(x, y, block)` and `localfun(x, y, block)` mirror their
 rigid counterparts; `splitfun(block)` returns the children of a `FlexibleRegion`. Returns a
 [`FlexibleAlignmentResult`](@ref).
 
+Which joints are searched is fixed by the search region: one with `njoints(x)` joint
+intervals holds an articulated target in its base conformation, one with `njoints(x) +
+njoints(y)` searches the target's joints too. The default `searchspace` is built accordingly
+from `flextarget`, covers every searched joint's full angular range, and takes its rigid box
+from `UncertaintyRegion(x, y)` as the rigid searches do.
+
 Keyword arguments follow `branchbound`: `searchspace`, `atol`, `rtol`, `maxblocks`, `maxsplits`,
-`maxevals`, `maxstagnant`. The default `searchspace` covers every joint's full angular range
-and a translation box sized to the largest coordinate either model can reach over its joints'
-full range.
+`maxevals`, `maxstagnant`.
 """
 function flex_branchbound(
         x, y;
-        nsplits = 2, searchspace = nothing,
+        nsplits = 2, searchspace = nothing, flextarget::Bool = false,
         boundsfun = flex_gauss_l2_bounds, localfun = flex_local_align, splitfun,
         atol = 0.1, rtol = 0, maxblocks = 5.0e8, maxsplits = Inf, maxevals = Inf, maxstagnant = Inf
     )
     t = promote_type(numbertype(x), numbertype(y))
     if isnothing(searchspace)
-        trlim = max(flex_extent(x), flex_extent(y))
-        searchspace = FlexibleRegion(UncertaintyRegion(t(trlim)), njoints(x) + njoints(y))
+        searchspace = FlexibleRegion(UncertaintyRegion(x, y), njoints(x) + (flextarget ? njoints(y) : 0))
     end
 
     lb, centerub = boundsfun(x, y, searchspace)
@@ -277,8 +281,9 @@ end
 
 Find a globally optimal *flexible* transformation aligning the model `x` onto the target `y`:
 a rigid rotation and translation plus one rotation angle per joint of `x` and, if the target
-is articulated too, one per joint of `y`. The target is flexed in place; only `x` is rigidly
-transformed. With neither model carrying joints this reduces to rigid GOGMA alignment.
+is articulated too and `flextarget = true`, one per joint of `y`. The target is flexed in
+place; only `x` is rigidly transformed. By default an articulated target is held in its base
+conformation. With no joints searched this reduces to rigid GOGMA alignment.
 
 `selfoverlap > 0` adds a [`SelfOverlap`](@ref) penalty of that weight to each articulated
 model, charging the overlap its joints let it acquire with itself. The penalty is in the
@@ -290,14 +295,15 @@ Returns a [`FlexibleAlignmentResult`](@ref) whose `upperbound` is the penalized 
 Additional keyword arguments are forwarded to `flex_branchbound` (tolerances and iteration
 limits); see `?flex_branchbound`.
 """
-function flex_gogma_align(x, y; interactions = nothing, selfoverlap = 0, autodiff = AutoForwardDiff(), nsplits = 2, kwargs...)
+function flex_gogma_align(x, y; interactions = nothing, selfoverlap = 0, flextarget::Bool = false, autodiff = AutoForwardDiff(), nsplits = 2, kwargs...)
     pσ, pϕ = pairwise_consts(x, y, interactions)
     selfoverlap >= 0 || throw(ArgumentError("selfoverlap weight must be nonnegative; got $selfoverlap"))
-    mkpenalty(m) = (selfoverlap > 0 && njoints(m) > 0) ? SelfOverlap(m; weight = selfoverlap) : nothing
-    penalties = (mkpenalty(x), mkpenalty(y))
+    mkpenalty(m) = (selfoverlap > 0 && njoints(m) > 0) ? SelfOverlap(m; weight = selfoverlap, interactions) : nothing
+    # a target held rigid has a constant self-overlap, which is left out of the objective
+    penalties = (mkpenalty(x), flextarget ? mkpenalty(y) : nothing)
     boundsfun(a, b, block) = flex_gauss_l2_bounds(a, b, block, pσ, pϕ; penalties)
     localfun(a, b, block) = flex_local_align(a, b, block, pσ, pϕ; autodiff, penalties)
-    rotscale, trlscale, jointscales = flex_split_scales(x, y)
+    rotscale, trlscale, jointscales = flex_split_scales(x, y, flextarget)
     splitfun(block) = subregions(block, nsplits; rotscale, trlscale, jointscales)
-    return flex_branchbound(x, y; nsplits, boundsfun, localfun, splitfun, kwargs...)
+    return flex_branchbound(x, y; nsplits, flextarget, boundsfun, localfun, splitfun, kwargs...)
 end

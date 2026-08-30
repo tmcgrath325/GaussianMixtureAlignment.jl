@@ -37,7 +37,7 @@ end
     if VERSION >= v"1.11"
         for name in (
                 :branchbound, :UncertaintyRegion, :RotationRegion, :TranslationRegion,
-                :FlexibleRegion, :ArticulatedGMM, :Joint,
+                :FlexibleRegion, :ArticulatedGMM, :ArticulatedStackedGMM, :Joint,
                 :njoints, :joint_axis, :joint_origin, :joint_features, :joint_children, :flex,
                 :flex_displacements, :flex_gauss_l2_bounds, :SelfOverlap, :penalty, :penalty_bounds,
                 :flex_branchbound, :flex_local_align, :flex_pose, :flex_target, :FlexibleAlignmentResult,

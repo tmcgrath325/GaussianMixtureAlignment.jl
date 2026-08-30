@@ -290,7 +290,7 @@ end
     xφ, xσφ, yφ, yσφ = GMA.joint_intervals(x, y, fr)
     @test xφ == SVector(0.1, 0.2) && xσφ == SVector(0.4, 0.5)
     @test yφ == SVector(0.3) && yσφ == SVector(0.6)
-    @test_throws DimensionMismatch GMA.joint_intervals(x, y, GMA.FlexibleRegion(UncertaintyRegion(), 2))
+    @test_throws DimensionMismatch GMA.joint_intervals(x, y, GMA.FlexibleRegion(UncertaintyRegion(), 1))
     @test_throws DimensionMismatch GMA.flex_displacements(x, fr)   # 3 intervals, 2 joints
 
     # lb ≤ objective at every sampled feasible (R, T, φ, ψ); ub == objective at the block
@@ -342,14 +342,14 @@ end
     params = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
     @test GMA.flex_target(params, x, y).gaussians[3].μ ≈ GMA.flex(y, [0.9]).gaussians[3].μ
     @test GMA.flex_pose(params, x).gaussians[3].μ ≈ GMA.flex_pose(params[1:8], x).gaussians[3].μ
-    @test_throws DimensionMismatch GMA.flex_target(params[1:8], x, y)
+    @test_throws DimensionMismatch GMA.flex_target(params[1:7], x, y)
 
     # alignment against a target that is itself a flexed, posed copy of x with one joint
     planted = (0.5, -0.3, 0.9, 1.0, -1.5, 0.7, 0.8, -0.6, 0.5)
     posed = GMA.flex_pose(planted, x)
     target = GMA.flex_target(planted, x, y)
     ideal = overlap(posed, target)
-    res = GMA.flex_gogma_align(x, y; maxsplits = 300)
+    res = GMA.flex_gogma_align(x, y; flextarget = true, maxsplits = 300)
     # the search is at least as good as the (feasible) planted configuration, its bounds
     # bracket the objective, and the reported parameters reproduce the reported objective
     @test -res.upperbound >= ideal - 1.0e-6
@@ -367,13 +367,19 @@ end
     @test GMA.aligned_target(res1) === yr
     @test length(res1.tform_params) == 8
 
-    # the default search space covers the target's reachable extent, not just its base pose
-    stretched = GMA.ArticulatedGMM(
-        [IsotropicGaussian(V3(0, 0, 0), 1.0, 1.0), IsotropicGaussian(V3(0, 0, 4.0), 1.0, 1.0)],
-        [GMA.Joint(V3(0, 1.0, 0), V3(0, 0, 0.0), [2], Int[])]
-    )
-    @test GMA.flex_extent(stretched) >= 8 - 1.0e-9
-    @test GMA.flex_extent(IsotropicGMM(stretched.gaussians)) == 4
+    # by default an articulated target is held in its base conformation: the search is the
+    # one-sided search against the rigid base model, split for split
+    frozen = GMA.flex_gogma_align(x, y; maxsplits = 50)
+    @test GMA.target_joint_angles(frozen) == ()
+    @test length(frozen.tform_params) == 8
+    @test frozen.upperbound == res1.upperbound && frozen.lowerbound == res1.lowerbound
+    @test GMA.aligned_target(frozen).gaussians[3].μ == y.gaussians[3].μ
+    # a region with only x's joint intervals freezes the target in the bounds too
+    fz = GMA.FlexibleRegion(UncertaintyRegion(), [0.1, 0.2], [0.4, 0.5])
+    xφ, xσφ, yφ, yσφ = GMA.joint_intervals(x, y, fz)
+    @test yφ == SVector(0.0) && yσφ == SVector(0.0)
+    @test GMA.flex_gauss_l2_bounds(x, y, fz, pσ, pϕ) == GMA.flex_gauss_l2_bounds(x, yr, fz, pσ, pϕ)
+    @test GMA.flex_target((0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8), x, y).gaussians[3].μ == y.gaussians[3].μ
 end
 
 @testset "flexible: self-overlap penalty" begin
@@ -441,7 +447,7 @@ end
     # frozen joints: bounds collapse to the penalty value; a repulsive pair flips the bound
     lbz, ubz = GMA.penalty_bounds(p, x, φ, [0.0, 0.0])
     @test lbz ≈ ubz ≈ GMA.penalty(p, xc)
-    prep = GMA.SelfOverlap{Float64}(1.0, p.pairs, p.s, -p.w, p.paths)
+    prep = GMA.SelfOverlap{Float64, Float64, Float64}(1.0, p.pairs, p.s, -p.w, p.paths)
     lbr, ubr = GMA.penalty_bounds(prep, x, φ, [0.3, 0.3])
     @test lbr <= ubr && ubr ≈ GMA.penalty(prep, xc)
 
@@ -472,4 +478,118 @@ end
     # a rigid model gets no penalty object: the search is unchanged by the weight
     xr = GMA.ArticulatedGMM(gs, GMA.Joint{3, Float64}[])
     @test GMA.flex_gogma_align(xr, y; selfoverlap = 5.0, maxsplits = 20).upperbound ≈ GMA.flex_gogma_align(xr, y; maxsplits = 20).upperbound
+end
+
+# objective for a stacked articulated model against a stacked target with given constants
+_objective_stacked(x, y, R, T, φ, pσ, pϕ) = -overlap(R * GMA.flex(x, φ) + T, y, pσ, pϕ)
+
+@testset "flexible: stacked articulated models" begin
+    V3(a, b, c) = SVector(a, b, c)
+    # two slots per feature: an :a slot everywhere, and a :b slot on features 2, 4 and 5
+    # (padded elsewhere with ϕ = 0, σ = 1)
+    SG(μ, ϕb) = StackedLabeledGaussian(V3(μ...), SVector(1.0, 0.8), SVector(1.0, ϕb), SVector(:a, :b))
+    gs = [SG((0, 0, 0), 0.0), SG((1, 0, 0), 0.6), SG((2, 0, 0), 0.0), SG((2, 1, 0), 0.9), SG((3, 0, 0), 0.4)]
+    js = [
+        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
+        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
+    ]
+    x = GMA.ArticulatedStackedGMM(gs, js)
+    @test x isa GMA.AbstractStackedLabeledIsotropicGMM{3, Float64, 2, Symbol}
+    @test GMA.njoints(x) == 2
+
+    # kinematics match the isotropic model's, and the type survives flexing and posing
+    xiso = GMA.ArticulatedGMM([IsotropicGaussian(g.μ, 1.0, 1.0) for g in gs], js)
+    φ = [0.7, -0.4]
+    xf = GMA.flex(x, φ)
+    @test xf isa GMA.ArticulatedStackedGMM{3, Float64, 2, Symbol}
+    @test all(xf.gaussians[i].μ ≈ GMA.flex(xiso, φ).gaussians[i].μ for i in 1:5)
+    @test all(xf.gaussians[i].σ == gs[i].σ && xf.gaussians[i].ϕ == gs[i].ϕ && xf.gaussians[i].labels == gs[i].labels for i in 1:5)
+    R0 = RotationVec(0.3, -0.2, 0.5)
+    posed = R0 * xf + V3(1.0, -2.0, 0.5)
+    @test posed isa GMA.ArticulatedStackedGMM{3, Float64, 2, Symbol}
+    @test GMA.joint_origin(posed, 2) ≈ R0 * GMA.joint_origin(xf, 2) + V3(1.0, -2.0, 0.5)
+    # flexing by duals promotes the number type
+    @test GMA.flex(x, ForwardDiff.Dual.(φ, 1.0)) isa GMA.ArticulatedStackedGMM{3, <:ForwardDiff.Dual, 2, Symbol}
+
+    y = StackedLabeledIsotropicGMM(collect(posed.gaussians))
+    # bounds validity against the label-aware objective, with equal-label interactions and
+    # with a repulsive cross-label term so some slot pairings carry negative weight
+    rng = MersenneTwister(20260901)
+    for interactions in (nothing, Dict((:a, :a) => 1.0, (:b, :b) => 1.0, (:a, :b) => -0.5))
+        pσ, pϕ = GMA.pairwise_consts(x, y, interactions)
+        @test eltype(pσ) <: SVector                     # stacked constants are per-pair term lists
+        lb_ok = true
+        ub_ok = true
+        for _ in 1:40
+            R = _randR(rng, RotationVec(0, 0, 0), 0.6)
+            T = _randT(rng, V3(0, 0, 0), 1.0)
+            σᵣ = 0.3 + 0.5rand(rng)
+            σₜ = 0.3 + rand(rng)
+            φc = [2π * rand(rng) - π for _ in 1:2]
+            σφ = [0.8 * rand(rng) for _ in 1:2]
+            block = GMA.FlexibleRegion(UncertaintyRegion(R, T, σᵣ, σₜ), φc, σφ)
+            lb, ub = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ)
+            ub_ok &= isapprox(ub, _objective_stacked(x, y, R, T, φc, pσ, pϕ); atol = 1.0e-8, rtol = 1.0e-8)
+            for _ in 1:40
+                obj = _objective_stacked(x, y, _randR(rng, R, σᵣ), _randT(rng, T, σₜ), _randφ(rng, φc, σφ), pσ, pϕ)
+                lb_ok &= lb <= obj + 1.0e-9
+            end
+        end
+        @test lb_ok
+        @test ub_ok
+    end
+
+    # the stacked bounds equal the isotropic bounds of the mean-duplicated model: each slot
+    # becomes its own Gaussian at the shared mean, with only equal labels interacting
+    dup = IsotropicGMM([IsotropicGaussian(g.μ, g.σ[k], g.ϕ[k]) for g in gs for k in 1:2 if g.ϕ[k] != 0])
+    duplabels = [g.labels[k] for g in gs for k in 1:2 if g.ϕ[k] != 0]
+    dupy = IsotropicGMM([IsotropicGaussian(g.μ, g.σ[k], g.ϕ[k]) for g in y.gaussians for k in 1:2 if g.ϕ[k] != 0])
+    dupylabels = [g.labels[k] for g in y.gaussians for k in 1:2 if g.ϕ[k] != 0]
+    # a mean-duplicated articulated model: joint feature lists map each stacked feature to
+    # its surviving slots
+    slotowner = [i for (i, g) in enumerate(gs) for k in 1:2 if g.ϕ[k] != 0]
+    dupjs = [GMA.Joint(j.axis, j.origin, findall(in(j.features), slotowner), j.children) for j in js]
+    dupx = GMA.ArticulatedGMM(collect(dup.gaussians), dupjs)
+    pσd = [a.σ^2 + b.σ^2 for a in dup.gaussians, b in dupy.gaussians]
+    pϕd = [duplabels[i] == dupylabels[j] ? a.ϕ * b.ϕ : 0.0 for (i, a) in enumerate(dup.gaussians), (j, b) in enumerate(dupy.gaussians)]
+    pσ, pϕ = GMA.pairwise_consts(x, y)
+    block = GMA.FlexibleRegion(UncertaintyRegion(RotationVec(0.2, -0.1, 0.3), V3(0.5, -1.0, 0.2), 0.4, 0.7), φ, [0.5, 0.3])
+    lbs, ubs = GMA.flex_gauss_l2_bounds(x, y, block, pσ, pϕ)
+    lbd, ubd = GMA.flex_gauss_l2_bounds(dupx, dupy, block, pσd, pϕd)
+    @test lbs ≈ lbd && ubs ≈ ubd
+
+    # self-overlap on a stacked model: per pair, the stacked Gaussian-pair overlap; and its
+    # bounds bracket the penalty over sampled conformations
+    p = GMA.SelfOverlap(x; weight = 1.5)
+    @test length(p) == 8
+    xc = GMA.flex(x, φ)
+    @test GMA.penalty(p, xc) ≈ 1.5 * sum(overlap(xc.gaussians[g], xc.gaussians[h]) for (g, h) in p.pairs)
+    prep = GMA.SelfOverlap(x; interactions = Dict((:a, :a) => 1.0, (:b, :b) => 1.0, (:a, :b) => -0.5))
+    @test GMA.penalty(prep, xc) ≈ sum(overlap(xc.gaussians[g], xc.gaussians[h]; interactions = prep_int) for (g, h) in prep.pairs for prep_int in (Dict((:a, :a) => 1.0, (:b, :b) => 1.0, (:a, :b) => -0.5),))
+    @test_throws "labeled" GMA.SelfOverlap(xiso; interactions = Dict((:a, :a) => 1.0))
+    for pen in (p, prep)
+        lb_ok = true
+        ub_ok = true
+        for _ in 1:40
+            φc = [2π * rand(rng) - π for _ in 1:2]
+            σφ = [0.9 * rand(rng) for _ in 1:2]
+            lb, ub = GMA.penalty_bounds(pen, x, φc, σφ)
+            ub_ok &= isapprox(ub, GMA.penalty(pen, GMA.flex(x, φc)); atol = 1.0e-10)
+            for _ in 1:40
+                lb_ok &= lb <= GMA.penalty(pen, GMA.flex(x, _randφ(rng, φc, σφ))) + 1.0e-9
+            end
+        end
+        @test lb_ok
+        @test ub_ok
+    end
+
+    # end to end on stacked models with the penalty: reported objective is the penalized
+    # objective at the reported parameters, bracketed by the bounds
+    res = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, maxsplits = 150)
+    xt = GMA.aligned(res)
+    @test xt isa GMA.ArticulatedStackedGMM
+    @test res.upperbound ≈ -overlap(xt, y) + GMA.penalty(GMA.SelfOverlap(x), xt) atol = 1.0e-8
+    @test res.lowerbound <= res.upperbound
+    # a stacked model cannot be paired with an unlabeled target
+    @test_throws "stacked" GMA.flex_gogma_align(x, IsotropicGMM(collect(dupy.gaussians)))
 end

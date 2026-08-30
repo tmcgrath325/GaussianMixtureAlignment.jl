@@ -85,13 +85,18 @@ end
     xφ, xσφ, yφ, yσφ = joint_intervals(x, y, block::FlexibleRegion)
 
 Split the joint intervals of `block` between the moving model `x` (its first `njoints(x)`
-entries) and the target `y` (the remaining `njoints(y)`), as static vectors.
+entries) and the target `y` (the remaining `njoints(y)`), as static vectors. A block with
+only `njoints(x)` intervals holds the target in its base conformation: its angle centers and
+half-widths are zero.
 """
 function joint_intervals(x, y, block::FlexibleRegion{T, K}) where {T, K}
     Kx, Ky = njoints(x), njoints(y)
-    Kx + Ky == K || throw(DimensionMismatch("models have $Kx + $Ky joints but region has $K"))
+    K == Kx || K == Kx + Ky || throw(DimensionMismatch("models have $Kx + $Ky joints but region has $K; expected $Kx (target held rigid) or $(Kx + Ky)"))
     xφ = SVector{Kx, T}(ntuple(k -> block.φ[k], Kx))
     xσφ = SVector{Kx, T}(ntuple(k -> block.σφ[k], Kx))
+    if K == Kx
+        return xφ, xσφ, zero(SVector{Ky, T}), zero(SVector{Ky, T})
+    end
     yφ = SVector{Ky, T}(ntuple(k -> block.φ[Kx + k], Ky))
     yσφ = SVector{Ky, T}(ntuple(k -> block.σφ[Kx + k], Ky))
     return xφ, xσφ, yφ, yσφ
@@ -125,20 +130,42 @@ function flex_gauss_l2_bounds(
     xc, δ = flex_displacements(x, xφ, xσφ)
     yc, ε = flex_displacements(y, yφ, yσφ)
     R, Tr, σᵣ, σₜ = block.rigid.R, block.rigid.T, block.rigid.σᵣ, block.rigid.σₜ
+    Base.require_one_based_indexing(xc.gaussians, yc.gaussians, pσ, pϕ)
     lb = 0.0
     ub = 0.0
     for (i, gx) in enumerate(xc.gaussians)
         for (j, gy) in enumerate(yc.gaussians)
-            s = pσ[i, j]
             w = pϕ[i, j]
+            iszero(w) && continue
             # apply the block-center rigid transform, then bound over the residual box — the
             # same pre-transform the rigid `gauss_l2_bounds` uses
-            (lbdist, ubdist) = distance_bound_fun(R * gx.μ, gy.μ - Tr, σᵣ, σₜ, w < 0)
-            slack = δ[i] + ε[j]
-            lbdist = w < 0 ? lbdist + slack : max(lbdist - slack, zero(lbdist))
-            lb += -overlap(lbdist^2, s, w)
-            ub += -overlap(ubdist^2, s, w)
+            lb, ub = (lb, ub) .+ flex_pair_bounds(R * gx.μ, gy.μ - Tr, σᵣ, σₜ, δ[i] + ε[j], pσ[i, j], w, distance_bound_fun)
         end
     end
     return lb + lbpx + lbpy, ub + ubpx + ubpy
+end
+
+# Rigid distance bounds for one Gaussian pair, loosened on the lower side by `slack` (the
+# pair's combined joint displacement), then turned into negative-overlap bounds. The
+# multi-term form serves stacked constants, where a pair carries one `(s, w)` per slot
+# pairing sharing the same distance; terms of either sign pick the matching distance bound.
+function flex_pair_bounds(xμ, yμ, σᵣ, σₜ, slack, s::Real, w::Real, distance_bound_fun)
+    (lbdist, ubdist) = distance_bound_fun(xμ, yμ, σᵣ, σₜ, w < 0)
+    lbdist = w < 0 ? lbdist + slack : max(lbdist - slack, zero(lbdist))
+    return -overlap(lbdist^2, s, w), -overlap(ubdist^2, s, w)
+end
+
+function flex_pair_bounds(xμ, yμ, σᵣ, σₜ, slack, s::AbstractVector, w::AbstractVector, distance_bound_fun)
+    (lbmin, ubdist) = distance_bound_fun(xμ, yμ, σᵣ, σₜ, false)
+    lbmin = max(lbmin - slack, zero(lbmin))
+    lbmax = any(wk -> wk < 0, w) ? distance_bound_fun(xμ, yμ, σᵣ, σₜ, true)[1] + slack : lbmin
+    lb = ub = zero(promote_type(eltype(s), eltype(w), typeof(ubdist)))
+    for k in eachindex(s, w)
+        wk = w[k]
+        iszero(wk) && continue
+        lbdist = wk < 0 ? lbmax : lbmin
+        lb -= overlap(lbdist^2, s[k], wk)
+        ub -= overlap(ubdist^2, s[k], wk)
+    end
+    return lb, ub
 end

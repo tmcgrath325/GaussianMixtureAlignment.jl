@@ -8,35 +8,40 @@
 ## region depend only on the joint intervals.
 
 """
-    SelfOverlap(x; weight=1)
+    SelfOverlap(x; weight=1, interactions=nothing)
 
-Penalty `weight · Σ overlap(|μ_g − μ_h|², σ_g² + σ_h², ϕ_g·ϕ_h)` over the pairs `(g, h)` of
-features of the articulated model `x` that lie on different rigid fragments, i.e. that at
-least one joint moves relative to each other. Evaluate it at a conformation with
-[`penalty`](@ref) and bound it over a box of joint angles with [`penalty_bounds`](@ref).
+Penalty `weight · Σ overlap(|μ_g − μ_h|², s_gh, w_gh)` over the pairs `(g, h)` of features of
+the articulated model `x` that lie on different rigid fragments, i.e. that at least one joint
+moves relative to each other. Evaluate it at a conformation with [`penalty`](@ref) and bound
+it over a box of joint angles with [`penalty_bounds`](@ref).
+
+The pair constants follow the model's own overlap convention: for plain isotropic Gaussians,
+`s = σ_g² + σ_h²` and `w = ϕ_g·ϕ_h`; for stacked labeled Gaussians, one term per slot
+pairing, weighted by the labels' interaction coefficient (`interactions`, as in
+`pairwise_consts`; by default only equal labels interact, so features of different kinds may
+occupy the same place without charge).
 
 For each pair the joints on the tree path between `g` and `h` are stored in the order that
 runs from `h` toward `g`, which is the order [`penalty_bounds`](@ref) accumulates chords in.
 """
-struct SelfOverlap{T}
+struct SelfOverlap{T, S, W}
     weight::T
     pairs::Vector{Tuple{Int, Int}}
-    s::Vector{T}
-    w::Vector{T}
+    s::Vector{S}
+    w::Vector{W}
     paths::Vector{Vector{Int}}
-    function SelfOverlap{T}(weight, pairs, s, w, paths) where {T}
+    function SelfOverlap{T, S, W}(weight, pairs, s, w, paths) where {T, S, W}
         length(pairs) == length(s) == length(w) == length(paths) || throw(DimensionMismatch("per-pair vectors must share length"))
-        return new{T}(weight, pairs, s, w, paths)
+        return new{T, S, W}(weight, pairs, s, w, paths)
     end
 end
 
-function SelfOverlap(x; weight = 1)
+function SelfOverlap(x; weight = 1, interactions = nothing)
     T = promote_type(numbertype(x), typeof(weight))
     joints_of = feature_joints(x)
     pairs = Tuple{Int, Int}[]
-    s = T[]
-    w = T[]
     paths = Vector{Int}[]
+    consts = []
     for h in 1:length(x), g in 1:(h - 1)
         jg, jh = joints_of[g], joints_of[h]
         jg == jh && continue
@@ -47,12 +52,21 @@ function SelfOverlap(x; weight = 1)
         honly = setdiff(jh, jg)
         push!(pairs, (g, h))
         push!(paths, vcat(reverse(honly), gonly))
-        gg, gh = x.gaussians[g], x.gaussians[h]
-        push!(s, gg.σ^2 + gh.σ^2)
-        push!(w, gg.ϕ * gh.ϕ)
+        push!(consts, self_pair_consts(x.gaussians[g], x.gaussians[h], interactions))
     end
-    return SelfOverlap{T}(T(weight), pairs, s, w, paths)
+    s = [c[1] for c in consts]
+    w = [c[2] for c in consts]
+    S = isempty(s) ? T : typeof(first(s))
+    W = isempty(w) ? T : typeof(first(w))
+    return SelfOverlap{T, S, W}(T(weight), pairs, convert(Vector{S}, s), convert(Vector{W}, w), paths)
 end
+
+# pair constants in the convention of the model's own overlap: scalar for isotropic
+# Gaussians, one term per slot pairing for stacked ones
+self_pair_consts(g::AbstractIsotropicGaussian, h::AbstractIsotropicGaussian, ::Nothing) = (g.σ^2 + h.σ^2, g.ϕ * h.ϕ)
+self_pair_consts(g::AbstractIsotropicGaussian, h::AbstractIsotropicGaussian, interactions) = throw(ArgumentError("interaction weights apply only to labeled (stacked) Gaussians; got $(typeof(g))"))
+self_pair_consts(g::StackedLabeledGaussian, h::StackedLabeledGaussian, ::Nothing) = stacked_pair_consts(g, h, nothing)
+self_pair_consts(g::StackedLabeledGaussian, h::StackedLabeledGaussian, interactions::Dict) = stacked_pair_consts(g, h, interactions)
 
 Base.length(p::SelfOverlap) = length(p.pairs)
 
@@ -77,8 +91,8 @@ Bounds on the self-overlap penalty of `x` as its joint angles range over the box
 `φ` and half-widths `σφ`. Over the box the distance between features `g` and `h` stays
 within `δ_gh` of its center-conformation value, where `δ_gh` is the chord sum over the joints
 on the path between them (evaluated in `g`'s frame, where the joints shared by both features
-have no effect). The overlap of an attractive pair falls with distance, so its lower bound
-is taken at distance `d + δ_gh` (at `max(d − δ_gh, 0)` for a repulsive `w < 0` pair); the
+have no effect). The overlap of an attractive term falls with distance, so its lower bound
+is taken at distance `d + δ_gh` (at `max(d − δ_gh, 0)` for a repulsive `w < 0` term); the
 upper bound is the value at the center, a feasible conformation.
 """
 function penalty_bounds(p::SelfOverlap, x, φ, σφ)
@@ -90,12 +104,24 @@ function penalty_bounds(p::SelfOverlap, x, φ, σφ)
         μg, μh = xc.gaussians[g].μ, xc.gaussians[h].μ
         d = norm(μh - μg)
         δ = chord_sum(xc, μh, p.paths[k], σφ, S)
-        w = p.w[k]
-        dlb = w < 0 ? max(d - δ, zero(d)) : d + δ
-        lb += overlap(dlb^2, p.s[k], w)
-        ub += overlap(d^2, p.s[k], w)
+        lb, ub = (lb, ub) .+ penalty_term_bounds(d, δ, p.s[k], p.w[k])
     end
     return p.weight * lb, p.weight * ub
+end
+
+function penalty_term_bounds(d, δ, s::Real, w::Real)
+    dlb = w < 0 ? max(d - δ, zero(d)) : d + δ
+    return overlap(dlb^2, s, w), overlap(d^2, s, w)
+end
+
+function penalty_term_bounds(d, δ, s::AbstractVector, w::AbstractVector)
+    lb = ub = zero(promote_type(eltype(s), eltype(w), typeof(d)))
+    for k in eachindex(s, w)
+        l, u = penalty_term_bounds(d, δ, s[k], w[k])
+        lb += l
+        ub += u
+    end
+    return lb, ub
 end
 
 # a `nothing` penalty contributes nothing

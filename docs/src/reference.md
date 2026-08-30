@@ -85,6 +85,7 @@ MolecularGaussians' `PharmacophoreGMM`, provide their own methods.
 
 ```@docs
 ArticulatedGMM
+ArticulatedStackedGMM
 Joint
 njoints
 joint_axis
