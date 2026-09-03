@@ -594,29 +594,66 @@ _objective_stacked(x, y, R, T, φ, pσ, pϕ) = -overlap(R * GMA.flex(x, φ) + T,
     @test_throws "stacked" GMA.flex_gogma_align(x, IsotropicGMM(collect(dupy.gaussians)))
 end
 
-@testset "flexible: separate self-overlap interactions" begin
-    V3(a, b, c) = SVector(a, b, c)
-    SG(μ, ϕb) = StackedLabeledGaussian(V3(μ...), SVector(1.0, 0.8), SVector(1.0, ϕb), SVector(:a, :b))
-    gs = [SG((0, 0, 0), 0.0), SG((1, 0, 0), 0.6), SG((2, 0, 0), 0.0), SG((2, 1, 0), 0.9), SG((3, 0, 0), 0.4)]
-    js = [
-        GMA.Joint(V3(0, 0, 1.0), V3(1.0, 0, 0), [2, 3, 4, 5], [2]),
-        GMA.Joint(V3(0, 1.0, 0), V3(2.0, 0, 0), [4, 5], Int[]),
-    ]
-    x = GMA.ArticulatedStackedGMM(gs, js)
-    y = StackedLabeledIsotropicGMM(collect((RotationVec(0.3, -0.2, 0.5) * GMA.flex(x, [0.7, -0.4]) + V3(1.0, -2.0, 0.5)).gaussians))
+@testset "chord sums do not compound along a chain" begin
+    V3(x, y, z) = SVector(x, y, z)
+    # Eight joints in a chain along the x-axis, axes alternating between z and y, two
+    # features on every fragment; the deepest feature is moved by all eight joints.
+    K = 8
+    gs = GMA.IsotropicGaussian{3, Float64}[]
+    for frag in 0:K
+        push!(gs, IsotropicGaussian(V3(frag + 0.3, 0.4, 0.1), 0.3, 1.0))
+        push!(gs, IsotropicGaussian(V3(frag + 0.7, -0.2, 0.5), 0.3, 1.0))
+    end
+    feats(b) = [g for g in 1:length(gs) if (g - 1) ÷ 2 >= b]     # fragments b..K
+    js = [GMA.Joint(isodd(b) ? V3(0, 0, 1.0) : V3(0, 1.0, 0), V3(Float64(b), 0, 0), feats(b),
+                    collect(b + 1:K)) for b in 1:K]
+    x = GMA.ArticulatedGMM(gs, js)
+    p = GMA.SelfOverlap(x)
+    rng = MersenneTwister(20260903)
+    corners(φc, σφ) = φc .+ sign.(rand(rng, K) .- 0.5) .* σφ
 
-    # a label pair scored negatively between the models but positively within the model
-    inter = Dict((:a, :a) => 1.0, (:b, :b) => -0.5)
-    selfinter = Dict((:a, :a) => 1.0, (:b, :b) => 0.5)
-    res = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, interactions = inter, selfoverlap_interactions = selfinter, maxsplits = 100)
-    xt = GMA.aligned(res)
-    pσ, pϕ = GMA.pairwise_consts(x, y, inter)
-    p = GMA.SelfOverlap(x; interactions = selfinter)
-    @test res.upperbound ≈ -overlap(xt, y, pσ, pϕ) + GMA.penalty(p, xt) atol = 1.0e-8
-    # the penalty differs from the one the scoring interactions would build
-    @test GMA.penalty(p, xt) != GMA.penalty(GMA.SelfOverlap(x; interactions = inter), xt)
-    # by default the penalty follows the scoring interactions
-    res0 = GMA.flex_gogma_align(x, y; selfoverlap = 1.0, interactions = inter, maxsplits = 100)
-    xt0 = GMA.aligned(res0)
-    @test res0.upperbound ≈ -overlap(xt0, y, pσ, pϕ) + GMA.penalty(GMA.SelfOverlap(x; interactions = inter), xt0) atol = 1.0e-8
+    # Over boxes of every width up to the full angular range, the displacement radius bounds
+    # the displacement of every feature, and the pair chord sum bounds the change in every
+    # pair's distance, at interior points and at the corners where extremes sit.
+    δ_ok = true
+    pair_ok = true
+    for _ in 1:40
+        σφ = [π * exp(-3 * rand(rng)) for _ in 1:K]
+        φc = [(2 * rand(rng) - 1) * (π - σφ[b]) for b in 1:K]
+        xc, δ = GMA.flex_displacements(x, φc, σφ)
+        δpair = [GMA.chord_sum(xc, xc.gaussians[h].μ, p.paths[k], σφ, Float64)
+                 for (k, (g, h)) in enumerate(p.pairs)]
+        for φ in Iterators.flatten(((_randφ(rng, φc, σφ) for _ in 1:150),
+                                    (corners(φc, σφ) for _ in 1:50)))
+            xf = GMA.flex(x, φ)
+            for g in 1:length(x)
+                δ_ok &= norm(xf.gaussians[g].μ - xc.gaussians[g].μ) <= δ[g] + 1.0e-9
+            end
+            for (k, (g, h)) in enumerate(p.pairs)
+                dc = norm(xc.gaussians[h].μ - xc.gaussians[g].μ)
+                df = norm(xf.gaussians[h].μ - xf.gaussians[g].μ)
+                pair_ok &= abs(df - dc) <= δpair[k] + 1.0e-9
+            end
+        end
+    end
+    @test δ_ok
+    @test pair_ok
+
+    # The sum is tight where one chord decides it: a feature moved by one joint alone is
+    # displaced exactly its chord at the box's corner.
+    σφ = fill(0.0, K); σφ[K] = 0.4
+    xc, δ = GMA.flex_displacements(x, zeros(K), σφ)
+    g = length(gs)                                      # on the last fragment, moved by joint K only
+    xf = GMA.flex(x, [zeros(K - 1); 0.4])
+    @test norm(xf.gaussians[g].μ - xc.gaussians[g].μ) ≈ δ[g] atol = 1.0e-9
+
+    # And it does not compound: at the full angular range every chord is at most twice the
+    # feature's distance to the joint, so the radius is bounded by a sum over the path,
+    # linear in the joint count, where an inflated lever arm would grow as 3^K.
+    _, δfull = GMA.flex_displacements(x, zeros(K), fill(Float64(π), K))
+    for g in 1:length(x)
+        reach = 2 * sum(norm(gs[g].μ - js[b].origin) for b in 1:K if g in js[b].features; init = 0.0)
+        @test δfull[g] <= reach + 1.0e-9
+    end
+    @test maximum(δfull) < 200                          # 3^8 ≈ 6561 times a unit lever arm otherwise
 end

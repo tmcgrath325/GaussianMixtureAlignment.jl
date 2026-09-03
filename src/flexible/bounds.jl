@@ -19,12 +19,11 @@ model's frame, as the joint angles range over the box of centers `φ` and half-w
 (one entry per joint of `x`). The `block` form uses the block's joint intervals, which must
 all belong to `x`.
 
-`δ[g]` accumulates one chord per joint on `g`'s root-to-feature path. A joint `b` of angular
+`δ[g]` sums one chord per joint on `g`'s root-to-feature path. A joint `b` of angular
 half-width `σ_b` rotating a point at perpendicular distance `ρ` from its axis moves it by at
-most `2·sin(σ_b/2)·ρ`. The radius `ρ` is the center-conformation perpendicular distance from
-`g` to the joint's axis, inflated by the displacement the joints distal to `b` (nearer the
-feature) can already impart — so the sum is taken from the feature inward, carrying that
-displacement toward the root.
+most `2·sin(σ_b/2)·ρ`, and `ρ` is the perpendicular distance from `g`'s center-conformation
+position to the joint's center-conformation axis. No term inflates another: see
+[`chord_sum`](@ref) for why the plain sum bounds the composed motion.
 """
 function flex_displacements(x, φ, σφ)
     K = njoints(x)
@@ -36,9 +35,7 @@ function flex_displacements(x, φ, σφ)
     joints_of = feature_joints(x)
     δ = zeros(S, n)
     for g in 1:n
-        # inward sweep: a distal joint's chord inflates the rotation radius of the joints
-        # closer to the root, so accumulate from the feature toward the root
-        δ[g] = chord_sum(xc, xc.gaussians[g].μ, Iterators.reverse(joints_of[g]), σφ, S)
+        δ[g] = chord_sum(xc, xc.gaussians[g].μ, joints_of[g], σφ, S)
     end
     return xc, δ
 end
@@ -59,18 +56,39 @@ function feature_joints(x)
     return joints_of
 end
 
-# Bound on how far the point `μ` moves when the joints in `path` (taken in the order given,
-# which must run from the point toward the frame it is measured in) each rotate by up to
-# their half-width in `σφ`. Axes are read from the center conformation `xc`: each joint's
-# chord `2·sin(σ/2)·ρ` uses `μ`'s perpendicular distance to the axis inflated by the
-# displacement the joints already applied can impart.
+"""
+    chord_sum(xc, μ, path, σφ, S) -> S
+
+Bound on how far the point `μ`, a feature position in the center conformation `xc`, moves
+when each joint in `path` turns by up to its half-width in `σφ`: the sum over the path of
+`2·sin(σ_b/2)·ρ_b`, with `ρ_b` the perpendicular distance from `μ` to joint `b`'s axis as
+`xc` carries it. The order of `path` does not matter.
+
+The plain sum is a bound, with no term inflating another, because the flexed position is a
+composition of rotations about fixed axes and the deviation of each from its center value can
+be taken against the *center* conformation of the joints beyond it. Writing the composition
+`A₁ ∘ ⋯ ∘ Aₘ` and its center `B₁ ∘ ⋯ ∘ Bₘ`, the difference telescopes through the hybrids
+`A₁ ∘ ⋯ ∘ A_j ∘ B_{j+1} ∘ ⋯ ∘ Bₘ`; the `j`-th step is `A₁ ∘ ⋯ ∘ A_{j-1}`, an isometry, applied
+to `A_j(z) - B_j(z)` with `z` the center position after the joints beyond `j`, and `A_j` and
+`B_j` turn about one axis, so that difference is a chord of `z` about it of angle at most
+`σ_j`. Its lever arm, the perpendicular distance of `z` to the base-frame axis, equals the
+perpendicular distance of the fully flexed center point to the axis as `xc` carries it,
+which is what is measured here. The same holds for a pair path through a shared ancestor,
+where the joints on one side are inverted: an inverted rotation turns about the same axis
+and preserves the distance to it.
+
+Accumulating the chords from the feature inward and inflating each lever arm by the
+displacement already accumulated is also a bound, but it compounds as `∏(1 + 2·sin(σ_b/2))`
+along the path and at full angular range exceeds the reachable displacement by `3^K` on a
+`K`-joint chain.
+"""
 function chord_sum(xc, μ, path, σφ, ::Type{S}) where {S}
     acc = zero(S)
     for b in path
         ax = joint_axis(xc, b)
         o = joint_origin(xc, b)
         d = μ - o
-        ρ = norm(d - dot(d, ax) * ax) + acc
+        ρ = norm(d - dot(d, ax) * ax)
         acc += 2 * sin(min(σφ[b], S(π)) / 2) * ρ
     end
     return acc
